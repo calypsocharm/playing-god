@@ -29,6 +29,7 @@ export function renderView(v) {
   L.push('');
   L.push('Your body:'); for (const f of v.felt) L.push(`- ${f}`);
   if (v.guidance) { L.push(''); L.push(`A quiet voice you have always had, underneath everything, says: "${v.guidance}"`); }
+  if (v.senses?.length) { L.push(''); L.push('What your senses tell you, that no one told you:'); for (const s of v.senses) L.push(`- ${s}`); }
   if (v.omen) { L.push(''); L.push(`Everyone saw it: ${v.omen} No one knows what it means. You may have a feeling about it.`); }
   if (v.notes?.length) { L.push(''); L.push('Written in the margin of your diary, in a hand that is not yours:'); for (const n of v.notes) L.push(`- "${n}"`); }
   if (v.diary?.length) { L.push(''); L.push('From your diary:'); for (const d of v.diary) L.push(`- ${d}`); }

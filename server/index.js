@@ -86,6 +86,7 @@ function describeGodAct(world, m, r) {
     case 'omen': return 'Everyone saw it. What it means is theirs to decide.';
     case 'destiny': return 'A destiny is spoken. They feel the pull; others sense the mark.';
     case 'gift': return `Something woke in ${r.name}: ${r.kind}. Watch who is glad of it and who is afraid.`;
+    case 'sense': return `${r.name} is ${r.kind} now. It is always on, and it costs them.`;
     case 'fulfil': return 'It has come to pass. The village remembers who did it.';
     case 'pause': return 'Time is stopped for everyone.';
     case 'resume': return 'Time moves again.';

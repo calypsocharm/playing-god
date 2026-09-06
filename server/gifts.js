@@ -13,3 +13,28 @@ export const GIFTS = {
 
 export const giftFor = (chart) => Object.keys(GIFTS).find(k => GIFTS[k].element === ELEMENT[chart.moon]) || 'farsight';
 export const COST = 'It costs you strength and breath. More than two in a day burns you.';
+
+// The clairs. Not cast: they are always on. Each is a way of knowing others that the body pays for.
+export const SENSES = {
+  empath:         { label: 'empath',         long: 'clairsentience', wakes: 'listening: comforting, long talks, long walks',
+                    felt: "Other people's weather moves through your own chest. When someone near you is tight, you are tight; when they ease, you ease.",
+                    what: 'You feel what the people near you feel, in your own body. Your comfort reaches deeper than anyone else\'s. It costs you: you carry what they carry.' },
+  clairaudient:   { label: 'clairaudient',   long: 'clairaudience',  wakes: 'singing: the ones who sing start to hear',
+                    felt: 'You hear things from far off: voices at the well when you are in the field, a prayer said under someone\'s breath.',
+                    what: 'You hear what is said anywhere in the village, and what people ask of the sky. It costs you: you sleep lightly.' },
+  clairvoyant:    { label: 'clairvoyant',    long: 'clairvoyance',   wakes: 'deep stillness, more than a gift takes',
+                    felt: "You see tomorrow's sky today, the way you see the back of your own hand.",
+                    what: 'You know what the weather will do tomorrow. It costs you: knowing is heavy, and joy runs out of you faster.' },
+  claircognizant: { label: 'claircognizant', long: 'claircognizance', wakes: 'a healed wound and stillness',
+                    felt: 'You know things about people you were never told: who trusts you, who does not, what old hurt they carry.',
+                    what: 'You know how each person near you truly stands toward you, and what runs them. It costs you: it is hard to stay open when you know.' },
+};
+// Which sense is ready to wake in this person, if any.
+export function senseReady(a) {
+  const sk = a.skills || {};
+  if ((sk.listening || 0) >= 10) return 'empath';
+  if ((sk.music || 0) >= 6) return 'clairaudient';
+  if (a.scars.length && (sk.stillness || 0) >= 6) return 'claircognizant';
+  if ((sk.stillness || 0) >= 14) return 'clairvoyant';
+  return null;
+}

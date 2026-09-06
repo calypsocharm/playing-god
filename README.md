@@ -462,3 +462,17 @@ Every cast costs strength and breath, and a third in one day drops the caster an
 village sees: guarded or distrustful people are afraid and pull back, the rest are lifted and
 believe a little more. Brained villagers get `cast` as an action once they carry a gift, with
 the felt sense of it; the autopilot uses a gift only when it plainly fits.
+
+## The clairs
+
+Some villagers come to know things they were never told. These are not cast; they are always
+on, and the body pays for them every day. An **empath** (clairsentience) feels what the people
+near them feel in their own chest, and their comfort reaches deeper than anyone's; it opens
+through listening, and they carry what others carry. A **clairaudient** hears what is said
+anywhere in the village and what people ask of the sky; it opens in the ones who sing, and
+they sleep lightly. A **clairvoyant** knows tomorrow's weather today; it opens through deep
+stillness, and joy runs out of them faster. A **claircognizant** knows how each person near
+them truly stands toward them and what old rule runs them; it opens in someone with a healed
+wound who sits still, and it is hard for them to stay open. The Creator can open a sense in
+someone for three attention. Brained villagers get what their senses tell them in the prompt,
+as knowledge no one gave them.

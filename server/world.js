@@ -118,9 +118,20 @@ export const simDate = (w, day = w.day) => w.startMs + day * DAY_MS;
 // ---------- the weather's attention ----------
 // A god who can do anything every tick has nothing to decide. Attention is scarce and refills
 // with the seasons. Where you spend it is what becomes real.
-export const GOD_COSTS = { weather: 2, traveler: 3, nudge: 1, wood: 1, destiny: 2, fulfil: 0, omen: 1, gift: 3, pause: 0, resume: 0 };
+export const GOD_COSTS = { weather: 2, traveler: 3, nudge: 1, wood: 1, destiny: 2, fulfil: 0, omen: 1, gift: 3, sense: 3, pause: 0, resume: 0 };
 
 // A gift wakes. `how` is a phrase: 'in the quiet at the creek', 'when the sky touched you'.
+// A sense opens. Always on from then; the body pays for it every day.
+export function openSense(w, a, kind, how) {
+  if (a.sense || !G.SENSES[kind]) return a.sense;
+  a.sense = { kind, day: w.day };
+  remember(w, a, `Something opened in you ${how}. ${G.SENSES[kind].felt}`, 1);
+  event(w, `${a.name} has started to ${kind === 'clairaudient' ? 'hear things others do not' : kind === 'empath' ? 'feel what others feel' : kind === 'clairvoyant' ? 'see tomorrow before it comes' : 'know things no one told them'}.`, 'wonder', [a.id]);
+  return a.sense;
+}
+function wakeSenses(w) {
+  for (const a of alive(w)) { if (a.sense) continue; const k = G.senseReady(a); if (k) openSense(w, a, k, `through ${G.SENSES[k].wakes.split(':')[0]}`); }
+}
 export function awaken(w, a, how) {
   if (a.gift) return a.gift;
   const kind = G.giftFor(a.chart);
@@ -800,7 +811,7 @@ function dayPhase(w, remoteActions) {
             const long = !!act.long;
             bumpTrust(a, tgt, long ? 0.1 : 0.04); bumpTrust(tgt, a, long ? 0.1 : 0.04);
             a.exposures.closeness = true; tgt.exposures.closeness = true;
-            if (long) { B.gladden(a.body, 0.08); B.gladden(tgt.body, 0.08); for (const g of [...(a.grief || []), ...(tgt.grief || [])]) { g.shared += 1; g.sharedToday = (g.sharedToday || 0) + 1; } }
+            if (long) { a.skills = a.skills || {}; a.skills.listening = (a.skills.listening || 0) + 1; B.gladden(a.body, 0.08); B.gladden(tgt.body, 0.08); for (const g of [...(a.grief || []), ...(tgt.grief || [])]) { g.shared += 1; g.sharedToday = (g.sharedToday || 0) + 1; } }
             remember(w, tgt, `${a.name} ${long ? 'talked with you a long time' : 'talked with you'}${a.lastSaid ? `: "${a.lastSaid}"` : ''}.`, long ? 0.5 : 0.3);
             if (long) remember(w, a, `You and ${tgt.name} talked a long time.`, 0.5);
             // Two grievers talking is grief shared, whatever the words were.
@@ -853,6 +864,8 @@ function dayPhase(w, remoteActions) {
             for (const g of tgt.grief || []) { g.sharedToday = (g.sharedToday || 0) + 1; g.shared += 1; }
             remember(w, tgt, `${a.name} stayed with you while it was bad. It helped.`, 0.8);
             remember(w, a, `You comforted ${tgt.name}.`, 0.5);
+            a.skills = a.skills || {}; a.skills.listening = (a.skills.listening || 0) + 1;
+            if (a.sense?.kind === 'empath') { B.soothe(tgt.body, 0.25); const r = tgt.wounds.slice().sort((x, y) => y.strength - x.strength)[0]; if (r) { r.strength = Math.max(0, r.strength - 0.05); r.contradictions += 1; } remember(w, tgt, `${a.name} seemed to feel it with you. You were not alone in it.`, 0.7); }
           }
         }
         break;
@@ -986,6 +999,7 @@ function dayPhase(w, remoteActions) {
           bumpTrust(a, companion, 0.08); bumpTrust(companion, a, 0.08);
           a.exposures.closeness = true; companion.exposures.closeness = true;
           for (const g of [...(a.grief || []), ...(companion.grief || [])]) { g.shared += 1; g.sharedToday = (g.sharedToday || 0) + 1; }
+          a.skills = a.skills || {}; a.skills.listening = (a.skills.listening || 0) + 1;
           event(w, `${a.name} and ${companion.name} walk a long way together${act.say ? `. ${a.name}: "${act.say}"` : '.'}`, 'comfort', [a.id, companion.id]);
           remember(w, a, `You walked a long way with ${companion.name}.${act.say ? ` You said: "${act.say}"` : ''}`, 0.6);
           remember(w, companion, `${a.name} walked a long way with you${act.say ? ` and said: "${act.say}"` : ''}.`, 0.6);
@@ -1063,6 +1077,12 @@ function dayPhase(w, remoteActions) {
     const myCold = a.inv.blanket > 0 ? cold * 0.5 : cold;
     const env = { cold: myCold, sheltered: a.location === 'home' || (hall && a.location === 'hearth'), warmFire: (a.location === 'hearth' && (fireBurning || hall)) || (a.location === 'camp' && campBurning) };
     B.tickBody(a.body, env);
+    if (a.sense) {
+      const k = a.sense.kind;
+      if (k === 'empath') { const tightNear = sameSpot(w, a).filter(o => o !== a && (o.body.tightness > 0.5 || (o.grief || []).length)).length; if (tightNear) a.body.tightness = B.clamp(a.body.tightness + 0.02 * tightNear); }
+      else if (k === 'clairvoyant') a.body.joy = B.clamp((a.body.joy ?? 0.5) - 0.006);
+      else if (k === 'claircognizant') a.body.openness = B.clamp(a.body.openness - 0.008);
+    }
     if (a.body.food < 0.45 && a.inv.bread >= 1) { a.inv.bread -= 1; B.eat(a.body, 0.5); }
     else if (a.body.food < 0.45 && a.inv.food >= 0.3) { a.inv.food -= 0.3; B.eat(a.body, 0.3); }
     if (a.body.hurt > 0.3 && a.inv.salve > 0) { a.inv.salve -= 1; a.body.hurt = B.clamp(a.body.hurt - 0.3); remember(w, a, 'You used your salve.', 0.3); }
@@ -1249,12 +1269,14 @@ function nightPhase(w) {
     a.location = 'home'; a.pos = { ...a.home };
   }
   griefNightly(w);   // may move mourners to the hearth for a wake
+  wakeSenses(w);     // the ones who listened, sang or sat still enough start to know things
   nightOwls(w);      // the young, the restless and the grieving sit up late at the fire
   F.familyNightly(w); // bonds hold or fray, children are born and grow
   trySplit(w);        // and sometimes a few people walk out to light their own fire
   for (const a of alive(w)) {
     if (a.body.food < 0.6 && a.inv.food >= 0.3) { a.inv.food -= 0.3; B.eat(a.body, 0.3); }
     B.sleep(a.body);
+    if (a.sense?.kind === 'clairaudient') a.body.energy = B.clamp(a.body.energy - 0.1);   // light sleepers
     const age = ageOf(w, a);
     if (age >= 80) a.body.energy = B.clamp(a.body.energy - 0.15);        // the old do not sleep it all off
     else if (age >= 65) a.body.energy = B.clamp(a.body.energy - 0.07);
@@ -1723,6 +1745,14 @@ export function godAct(w, msg) {
       event(w, 'The weather shifts.', 'god');
       return { ok: true };
     }
+    case 'sense': {
+      const a = byId(w, msg.a);
+      if (!a || !a.alive) return { error: 'name someone alive' };
+      if (a.sense) return { error: `${a.name} is already ${G.SENSES[a.sense.kind].label}` };
+      const kind = G.SENSES[msg.kind] ? msg.kind : (G.senseReady(a) || 'empath');
+      openSense(w, a, kind, 'when something reached down and touched you');
+      return { ok: true, kind, name: a.name };
+    }
     case 'gift': {
       const a = byId(w, msg.a);
       if (!a || !a.alive) return { error: 'name someone alive' };
@@ -1817,6 +1847,12 @@ export function viewFor(a, w) {
   const hobbyLines = Object.entries(a.skills || {}).filter(([k, n]) => I.HOBBIES[k] && n >= 8).map(([k]) => I.HOBBIES[k].line);
   if ((a.skills?.music || 0) >= 10) hobbyLines.push('You are the one who sings. People ask you to.');
   if (a.gift && G.GIFTS[a.gift.kind]) hobbyLines.push(`${G.GIFTS[a.gift.kind].felt} ${G.GIFTS[a.gift.kind].what}`);
+  if (a.sense && G.SENSES[a.sense.kind]) hobbyLines.push(`${G.SENSES[a.sense.kind].felt} ${G.SENSES[a.sense.kind].what}`);
+  const senses = [];
+  if (a.sense?.kind === 'empath') for (const n of s.near) { const o = byId(w, n.id); if (!o) continue; const g = (o.grief || []).length; senses.push(`${n.name}: ${o.body.tightness > 0.7 ? 'their chest is locked and yours clamps with it' : o.body.tightness > 0.45 ? 'a tightness in them you feel under your own ribs' : 'easy; you breathe easier near them'}${g ? '. Grief, heavy as a wet coat' : ''}${o.body.hurt > 0.3 ? '. Pain, somewhere in the body' : ''}${o.body.food < 0.3 ? '. Hunger, gnawing' : ''}.`); }
+  if (a.sense?.kind === 'clairaudient') { const nearIds = new Set(s.near.map(n => n.id)); for (const o of alive(w)) { if (o === a || nearIds.has(o.id) || !o.lastSaid) continue; senses.push(`From far off, ${o.name} at ${o.location === 'home' ? 'home' : (PLACES[o.location]?.label || o.location)}: "${o.lastSaid}"`); if (senses.length >= 4) break; } for (const p of (w.prayers || []).filter(p => p.day === w.day && p.from !== a.id).slice(-2)) senses.push(`You hear ${p.name} ask the sky, under their breath: "${p.text}"`); }
+  if (a.sense?.kind === 'clairvoyant') { const t = W.describe(w.day + 1, w.weather); senses.push(`Tomorrow: ${t.season}, ${t.sky}.`); }
+  if (a.sense?.kind === 'claircognizant') for (const n of s.near) { const o = byId(w, n.id); if (!o) continue; const t = trustOf(o, a); const r = o.wounds.slice().sort((x, y) => y.strength - x.strength)[0]; senses.push(`${n.name} ${t > 0.5 ? 'would take a blow for you' : t > 0.15 ? 'means you well' : t < -0.3 ? 'wishes you harm' : t < -0.1 ? 'does not trust you' : 'has not decided about you'}${r ? `, and is run by an old rule: ${r.belief}` : ', and nothing old runs them'}.`); }
   else if ((a.skills?.stillness || 0) >= 4) hobbyLines.push('When you sit still, something at the edge of you stirs. It is not finished yet.');
   const felt = [...ageFelt(age), ...B.feltSense(a.body), ...woundFeltSense(a, nearNames), ...griefFelt(a), ...F.familyFelt(w, a), ...hobbyLines,
     ...(a.destiny && !a.destiny.fulfilled ? [`There is a pull in you toward something. If you had to say it: ${a.destiny.text.replace(/^(this one|they|he|she|this person)\s+will\s+/i, 'you will ')}`] : a.destiny?.fulfilled ? ['You did the thing you were made for. Whatever comes now is extra.'] : [])];
@@ -1852,6 +1888,7 @@ export function viewFor(a, w) {
     diary: a.diary.slice(-3).map(d => `Day ${d.day}: ${d.text}`),
     notes: a.notes.filter(n => !n.read).map(n => n.text),
     guidance: a.guidance || '',
+    senses,
     omen: w.omen && w.omen.day >= w.day - 1 ? w.omen.text : '',
     actions: [
       'go {to: hearth|well|field|forest|meadow|quarry|home|<person name>}',
@@ -1914,7 +1951,7 @@ export function publicState(w) {
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
       body: a.body, visible: B.visibleState(a.body), branch: branch(a),
       chart: { summary: a.chart.summary, sun: a.chart.sun, moon: a.chart.moon, rising: a.chart.rising, birth: a.chart.birth },
-      traits: a.traits, upbringing: a.upbringing, inv: a.inv, wants: a.wants, upgrades: a.upgrades || {}, skills: a.skills || {}, gift: a.gift ? { ...a.gift, label: G.GIFTS[a.gift.kind]?.label, what: G.GIFTS[a.gift.kind]?.what } : null,
+      traits: a.traits, upbringing: a.upbringing, inv: a.inv, wants: a.wants, upgrades: a.upgrades || {}, skills: a.skills || {}, gift: a.gift ? { ...a.gift, label: G.GIFTS[a.gift.kind]?.label, what: G.GIFTS[a.gift.kind]?.what } : null, sense: a.sense ? { ...a.sense, label: G.SENSES[a.sense.kind]?.label, long: G.SENSES[a.sense.kind]?.long, what: G.SENSES[a.sense.kind]?.what } : null,
       age: Math.floor(ageOf(w, a)), stage: stageOf(ageOf(w, a)), ageAtDeath: a.ageAtDeath,
       family: F.familyPublic(w, a), settlement: fireOf(w, a) === 'camp' ? 'camp' : 'village', destiny: a.destiny || null, faith: +(a.faith || 0).toFixed(2), guidance: a.guidance || '',
       wounds: a.wounds.map(r => ({ trigger: r.trigger, belief: r.belief, strength: r.strength, from: r.from, day: r.day, contradictions: r.contradictions })),
@@ -1922,7 +1959,7 @@ export function publicState(w) {
       trust: a.trust,
       memories: a.memories.slice(-8),
       diary: a.diary, notes: a.notes, grief: a.grief || [], causeOfDeath: a.causeOfDeath,
-      felt: a.alive ? [...ageFelt(ageOf(w, a)), ...B.feltSense(a.body), ...woundFeltSense(a, sameSpot(w, a).map(o => o.name)), ...griefFelt(a), ...(a.gift && G.GIFTS[a.gift.kind] ? [G.GIFTS[a.gift.kind].felt] : [])] : [],
+      felt: a.alive ? [...ageFelt(ageOf(w, a)), ...B.feltSense(a.body), ...woundFeltSense(a, sameSpot(w, a).map(o => o.name)), ...griefFelt(a), ...(a.gift && G.GIFTS[a.gift.kind] ? [G.GIFTS[a.gift.kind].felt] : []), ...(a.sense && G.SENSES[a.sense.kind] ? [G.SENSES[a.sense.kind].felt] : [])] : [],
       near: a.alive ? sameSpot(w, a).map(o => o.id) : [],
       selfSummary: a.selfSummary, thought: a.thought, lastSaid: a.lastSaid,
       transits: a.transits.map(t => `${t.planet} ${t.aspect} ${t.point}`),
