@@ -112,7 +112,7 @@
 </header>
 <div id="stage">
   <canvas id="c"></canvas>
-  <div id="hint">click a villager · double-click to look closer · drag to look around · turn on Sound to hear the village</div>
+  <div id="hint">click a villager, a house, the store or any place to look closer · double-click a villager to stop time · drag to look around · turn on Sound to hear the village</div>
   <div id="ticker"></div>
   <div id="toasts"></div>
   <div id="dilemma" hidden>
@@ -223,6 +223,9 @@
     <div class="row" style="margin-top:6px"><input id="chatName" placeholder="your name" style="flex:0 0 110px"><input id="chatText" placeholder="say something about what you see" style="flex:1" maxlength="500"><button class="act" id="chatSend">Send</button></div>
   </div>
   <div class="tab" id="tab-brain">
+    <h3 style="margin-top:0">The people who are yours <span class="muted">· thinking with your model. Speak to any of them here.</span></h3>
+    <div id="owned" class="muted">None yet.</div>
+    <h3>Your model</h3>
     <div class="muted">Be someone's higher self. Your model becomes their mind; your key never leaves this browser; the server only sees the choices they make. You cannot move them. You can only be the voice underneath.</div>
     <label>Provider</label>
     <select id="provider"></select>
@@ -236,9 +239,7 @@
     <h3>Whisper to the unclaimed</h3>
     <div class="muted">Villagers nobody has claimed think with whatever models are lent right now, split among everyone lending. Good voices and bad ones both teach. Who whispered to whom is written down.</div>
     <div class="row" style="margin-top:6px"><input id="lendName" placeholder="a name for your whisper (shown on the villagers you voice)" style="flex:1"><label style="display:flex;gap:6px;align-items:center;margin:0;white-space:nowrap"><input type="checkbox" id="lendToggle" style="width:auto"> Lend my model</label></div>
-    <h3>The people who are yours</h3>
-    <div id="owned" class="muted">None yet.</div>
-    <h3>Adopt an unowned villager</h3>
+    <h3>Claim a villager</h3>
     <div id="adoptable"></div>
     <h3>Or birth a new one</h3>
     <div class="row"><a class="act" href="create.html" style="text-decoration:none;flex:1;text-align:center">Create a villager (guided: name, birth chart, childhood)</a></div>

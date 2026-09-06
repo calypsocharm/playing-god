@@ -1814,7 +1814,7 @@ export function publicState(w) {
     chat: (w.chat || []).slice(-60).map(({ token, ...m }) => m),   // never ship tokens to browsers
     mod: { muted: Object.keys(w.mod?.muted || {}).length, banned: Object.keys(w.mod?.bannedTokens || {}).length + Object.keys(w.mod?.bannedIps || {}).length },
     builds: w.builds, buildSpecs: I.BUILDS, itemSpecs: I.ITEMS, lessons: w.lessons || [], due: w.due || [],
-    map: MAP, places: visiblePlaces(w), found: w.found || {}, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
+    map: MAP, places: visiblePlaces(w), found: w.found || {}, forage: I.FORAGE, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
     agents: w.agents.map(a => ({
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
       body: a.body, visible: B.visibleState(a.body), branch: branch(a),

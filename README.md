@@ -433,3 +433,16 @@ panel, open the other village's create page, and paste it under "Bring someone f
 They arrive on the road with their name, chart, childhood, scars, diary, sense of self, and your
 conversations. Trust and belongings stay behind: new people, new life. The other village's server
 must be reachable from your browser; a village on your own machine counts.
+
+## Places you can open
+
+Click a house, the store, the hearth, the well, a field or any found place and time stops on a
+scene of it: who is there right now with their faces and what they are doing, what was said
+there, what happened there lately, and what the place holds. A house shows who lives in it,
+what it is built up to, and everything under its roof. The store shows the shelf with stock
+and prices, the ledger, loans out, and the project it is paying wages for. Click a face in the
+scene to look at that person instead.
+
+The Higher Self tab starts with the people who are yours, each with their own conversation box,
+so you can speak to any of them without hunting for them on the map. Taking a villager on is
+called claiming, and letting them go is releasing them; they go on autopilot, not away.

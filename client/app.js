@@ -55,7 +55,7 @@ function onMessage(m) {
     case 'result': toast(m.text, 'good'); addSkyAct(m.text); break;
     case 'dilemma': showDilemma(m); break;
     case 'communeView': onCommuneView(m); break;
-    case 'communeLog': communeThreads.set(m.agentId, m.thread || []); if (selected === m.agentId) renderInspector(); break;
+    case 'communeLog': communeThreads.set(m.agentId, m.thread || []); if (selected === m.agentId) renderInspector(); renderBrainTab(); break;
   }
 }
 
@@ -157,7 +157,7 @@ function updateBrainPill() {
   try { localStorage.setItem('playinggod.owned', JSON.stringify([...owned])); } catch {}
   const names = state ? [...owned].map(id => state.agents.find(a => a.id === id)?.name).filter(Boolean) : [];
   $('pillBrain').textContent = n ? (names.length && names.length <= 3 ? `higher self of ${names.join(' & ')}` : `higher self of ${n}`) : 'no one is yours yet';
-  $('pillBrain').title = names.length ? 'Yours: ' + names.join(', ') + '. Click to see them.' : 'Adopt or birth a villager in the Higher Self tab.';
+  $('pillBrain').title = names.length ? 'Yours: ' + names.join(', ') + '. Click to see them.' : 'Claim or birth a villager in the Higher Self tab.';
   $('pillBrain').style.cursor = 'pointer';
   $('pillBrain').onclick = () => showTab('brain');
   $('pillBrain').classList.toggle('on', n > 0);
@@ -411,6 +411,7 @@ canvas.addEventListener('pointerup', (e) => {
     const p = fromScreen(sx, sy);
     let best = null, bd = 1.2;
     for (const a of state.agents) { if (!a.alive) continue; const d = display.get(a.id) || a.pos; const dist = Math.hypot(d.x - p.x, d.y - p.y); if (dist < bd) { bd = dist; best = a; } }
+    if (!best) { const hit = placeAt(p); if (hit) { dragging = null; openPlace(hit); return; } }
     selected = best ? best.id : null; showTab('agent'); renderInspector();
   }
   dragging = null;
@@ -477,7 +478,7 @@ async function onCommuneView(m) {
   if (communeBusy.has(m.agentId)) return;
   communeBusy.add(m.agentId);
   communeThreads.set(m.agentId, m.thread || []);
-  renderInspector();
+  renderInspector(); renderBrainTab();
   try {
     const v = m.view;
     const recent = (m.thread || []).slice(-8).map(t => `${t.from === 'self' ? 'The voice' : v.you.name}: "${t.text}"`).join('\n');
@@ -504,18 +505,18 @@ Answer the voice in your own words, and answer what it actually said or asked. I
     if (text) send({ type: 'communed', agentId: m.agentId, text });
     else log(`${v.you.name} had no answer for the voice.`);
   } catch (e) { log(`commune failed: ${e.message}`); toast(`${m.view?.you?.name || 'They'} could not answer: ${e.message}`, 'bad'); }
-  finally { communeBusy.delete(m.agentId); }
+  finally { communeBusy.delete(m.agentId); renderBrainTab(); }
 }
-function renderCommune(a) {
+function renderCommune(a, compact = false) {
   if (!a.alive) return a.guidance ? `<div class="muted">Guided: "${esc(a.guidance)}"</div>` : '';
-  if (!owned.has(a.id)) return `<div class="muted" style="margin:6px 0">Only ${esc(a.name)}'s higher self can speak to them: the tab whose model runs them. ${a.brain === 'remote' ? 'Someone else is their higher self.' : 'Adopt them in the Higher Self tab to become theirs.'}${a.guidance ? ` They are guided: "${esc(a.guidance)}"` : ''}</div>`;
+  if (!owned.has(a.id)) return `<div class="muted" style="margin:6px 0">Only ${esc(a.name)}'s higher self can speak to them: the tab whose model runs them. ${a.brain === 'remote' ? 'Someone else is their higher self.' : 'Claim them in the Higher Self tab to become theirs.'}${a.guidance ? ` They are guided: "${esc(a.guidance)}"` : ''}</div>`;
   const thread = communeThreads.get(a.id) || [];
   const lines = thread.map(t => `<div class="mem" style="${t.from === 'self' ? 'color:var(--warm)' : ''}"><span class="muted">${t.from === 'self' ? 'you' : esc(a.name)} · d${t.day}</span><br>${esc(t.text)}</div>`).join('');
-  return `<h3>You are their higher self <span class="muted">· the voice they have always had. They answer as themselves.</span></h3>
-    <div id="communeLog-${a.id}" style="max-height:240px;overflow:auto;background:#0a0d12;border-radius:6px;padding:6px 8px">${lines || '<div class="muted">Nothing said yet. They do not know what you are. Say something, and they will answer.</div>'}${communeBusy.has(a.id) ? '<div class="muted">…' + esc(a.name) + ' is thinking</div>' : ''}</div>
+  return `<div data-communebox="${a.id}">${compact ? '' : '<h3>You are their higher self <span class="muted">· the voice they have always had. They answer as themselves.</span></h3>'}
+    <div class="communeLog" style="max-height:240px;overflow:auto;background:#0a0d12;border-radius:6px;padding:6px 8px">${lines || '<div class="muted">Nothing said yet. They do not know what you are. Say something, and they will answer.</div>'}${communeBusy.has(a.id) ? '<div class="muted">…' + esc(a.name) + ' is thinking</div>' : ''}</div>
     <div class="row" style="margin-top:6px"><input data-commune="${a.id}" placeholder="say anything; ${esc(a.name)} will answer" maxlength="500" style="flex:1"><button class="act" data-communesend="${a.id}">Speak</button></div>
     <div class="row" style="margin-top:4px;flex-wrap:wrap;gap:4px"><button class="act" data-communeask="${a.id}" data-q="What has happened to you since we last spoke? How are you, really?">What happened since?</button><button class="act" data-communeask="${a.id}" data-q="What do you want most right now?">What do you want?</button><button class="act" data-communeask="${a.id}" data-q="Who do you trust, and who hurt you?">Who do you trust?</button><button class="act" data-communeguide="${a.id}">Make what I said their standing intention</button></div>
-    <div class="muted" style="margin-top:4px">Standing intention${a.guidance ? `: "${esc(a.guidance)}" <button class="act" data-guideclear="${a.id}" style="padding:0 6px">clear</button>` : ': none. Speak, then press the button above and they carry it every day.'}</div>`;
+    <div class="muted" style="margin-top:4px">Standing intention${a.guidance ? `: "${esc(a.guidance)}" <button class="act" data-guideclear="${a.id}" style="padding:0 6px">clear</button>` : ': none. Speak, then press the button above and they carry it every day.'}</div></div>`;
 }
 
 // ---------- feedback ----------
@@ -549,7 +550,7 @@ function showDilemma(m) {
 function closeDilemma() { $('dilemma').hidden = true; if (dilemmaQueue.length) showDilemma(dilemmaQueue.shift()); }
 $('diSkip').onclick = closeDilemma;
 // A handle for debugging from the console: window.__pg.showDilemma({...})
-window.__pg = { showDilemma, toast };
+window.__pg = { showDilemma, toast, openPlace, placeAt };
 
 // ---------- the ticker ----------
 // The bottom of the map reads out what is happening, one line every few seconds.
@@ -663,7 +664,104 @@ let caption = null;
 // ---------- the moment ----------
 // Stop time for this viewer, slide the camera in, and show the whole of one person right now.
 let camTarget = null;
+// ---------- places ----------
+// Click a house, the store, the hearth, a field: time stops and the scene opens on what is going on there.
+function homeKeyOf(h) { return `${h.x},${h.y}`; }
+function placeAt(p) {
+  let best = null, bd = 1.3;
+  for (const a of state.agents) { if (!a.alive) continue; const d = Math.hypot(a.home.x - p.x, a.home.y - p.y); if (d < bd) { bd = d; best = { kind: 'home', key: homeKeyOf(a.home), pos: a.home }; } }
+  if (best) return best;
+  bd = 1.8;
+  for (const [k, pl] of Object.entries(state.places || {})) {
+    if (k === 'camp' && !state.camp?.founded) continue;
+    const d = Math.hypot(pl.x - p.x, pl.y - p.y); if (d < bd) { bd = d; best = { kind: 'place', key: k, pos: pl }; }
+  }
+  return best;
+}
+let placeOpen = null;
+function openPlace(hit) {
+  frozen = true; placeOpen = hit;
+  $('sky').textContent += ' · TIME STOPPED FOR YOU';
+  const scale = 2.6, r = canvas.getBoundingClientRect();
+  camTarget = { scale, x: (r.width * devicePixelRatio) / 2 - (hit.pos.x + 1) * TILE * scale, y: (r.height * devicePixelRatio) * 0.32 - (hit.pos.y + 1) * TILE * scale };
+  $('moment').hidden = false;
+  renderPlace(hit);
+}
+function setMoHeads(doing, said, felt, near, carry) {
+  const h = (id, text) => { const el = $(id).previousElementSibling; if (el && el.tagName === 'H3') el.textContent = text; };
+  h('moDoing', doing); h('moSaid', said); h('moFelt', felt); h('moNear', near); h('moCarry', carry);
+}
+function personRow(o, extra = '') {
+  return `<div class="mo-person" data-look="${o.id}" title="look at ${esc(o.name)}" style="cursor:pointer"><canvas width="76" height="76" data-face="${o.id}"></canvas><div><b>${esc(o.name)}</b> <span class="muted">${o.age} · ${esc(expressionOf(o))}${extra}</span>${o.doingText ? `<span class="muted">${esc(o.doingText)}</span>` : ''}${o.lastSaid ? `<span class="muted">"${esc(o.lastSaid)}"</span>` : ''}</div></div>`;
+}
+function wireFaces() {
+  for (const c of $('moNear').querySelectorAll('canvas[data-face]')) { const o = state.agents.find(x => x.id === c.dataset.face); if (o) drawFace(c.getContext('2d'), 38, 38, 33, o); }
+  for (const el of $('moNear').querySelectorAll('[data-look]')) el.onclick = () => { placeOpen = null; selected = el.dataset.look; const o = state.agents.find(x => x.id === selected); $('moFace').hidden = false; $('moDiary').hidden = false; setMoHeads('Doing', 'Just said', 'Feels', 'Here with them', 'Carrying'); renderMoment(o); renderInspector(); };
+}
+function renderPlace(hit) {
+  const s = state; if (!s) return;
+  const fc = $('moFace'); const g = fc.getContext('2d'); g.clearRect(0, 0, fc.width, fc.height); g.imageSmoothingEnabled = false;
+  $('moDiary').hidden = true; fc.hidden = false;
+  const alive = s.agents.filter(a => a.alive);
+  const evHere = (pred) => (s.events || []).filter(pred).slice(-6).map(e => `<div class="mem"><span class="muted">d${e.day}</span> ${esc(e.text)}</div>`).join('') || '<div class="muted">Nothing lately.</div>';
+  const inv = (obj) => describeInv(obj) || 'nothing';
+  const sumInv = (people) => { const t = {}; for (const p of people) for (const [k, v] of Object.entries(p.inv || {})) if (v > 0) t[k] = (t[k] || 0) + v; return t; };
+  if (hit.kind === 'home') {
+    const residents = alive.filter(a => homeKeyOf(a.home) === hit.key);
+    const inside = residents.filter(a => a.location === 'home');
+    const ups = residents.reduce((acc, b) => Object.assign(acc, b.upgrades || {}), {});
+    PX.blit(g, ups.bighouse ? PX.BIGHOUSE : PX.HOUSE, 10, 20, 140);
+    const names = residents.map(r => r.name);
+    $('moName').textContent = names.length ? `${names.slice(0, -1).join(', ')}${names.length > 1 ? ' and ' : ''}${names.slice(-1)}'s house` : 'An empty house';
+    $('moMeta').textContent = `${ups.bighouse ? 'a big house' : 'a small house'}${ups.garden ? ' with a garden' : ''}${ups.fence ? ', fenced' : ''} · ${residents.length} live${residents.length === 1 ? 's' : ''} here`;
+    $('moExpr').textContent = inside.length ? `${inside.map(i => i.name).join(' and ')} ${inside.length === 1 ? 'is' : 'are'} inside right now.` : 'Nobody home right now.';
+    setMoHeads('Inside the house', 'Said under this roof', 'The household', 'Here now', 'What the house holds');
+    $('moDoing').textContent = inside.length ? inside.map(i => i.doingText || `${i.name} is home.`).join(' ') : residents.map(r => `${r.name} is ${r.location === 'home' ? 'home' : 'out at ' + (s.places[r.location]?.label || r.location)}.`).join(' ');
+    $('moSaid').textContent = residents.filter(r => r.lastSaid).map(r => `${r.name}: "${r.lastSaid}"`).join(' ') || 'Quiet.';
+    $('moFelt').innerHTML = residents.map(r => `<div class="mem"><b>${esc(r.name)}</b> <span class="muted">${r.age} · ${r.stage}${r.family?.partner ? ' · with ' + esc(s.agents.find(x => x.id === r.family.partner)?.name || 'someone') : ''} · looks ${esc(r.visible)}</span></div>`).join('') || '<div class="muted">No one lives here any more.</div>';
+    $('moNear').innerHTML = inside.length ? inside.map(o => personRow(o)).join('') : '<div class="muted">Empty. The fire is banked.</div>';
+    $('moCarry').textContent = inv(sumInv(residents)) + (Object.keys(ups).length ? `. Built: ${Object.keys(ups).map(k => s.upgradeSpecs?.[k]?.label || k).join(', ')}.` : '');
+  } else {
+    const k = hit.key, pl = hit.pos, label = pl.label || k;
+    const here = alive.filter(a => a.location === k);
+    const sprite = k === 'hearth' ? (s.hearth.wood > 0 ? PX.fire(0) : PX.FIRE_OUT) : k === 'camp' ? (s.camp?.wood > 0 ? PX.fire(0) : PX.FIRE_OUT) : k === 'well' ? PX.WELL : k === 'field' ? PX.FIELD : k === 'forest' ? PX.PINE : k === 'road' ? PX.ROAD : k === 'meadow' ? PX.MEADOW : k === 'quarry' ? PX.ROCKS : k === 'creek' ? PX.WATER[0] : k === 'grove' ? PX.GROVE : k === 'claypit' ? PX.CLAY : k === 'store' ? PX.STORE : null;
+    if (sprite) PX.blit(g, sprite, 10, 10, 140);
+    $('moName').textContent = label.replace(/^the /, '').replace(/^\w/, c => c.toUpperCase());
+    $('moExpr').textContent = here.length ? `${here.length} here right now.` : 'No one here right now.';
+    const buildsHere = Object.entries(s.buildSpecs || {}).filter(([, spec]) => spec.at === k).map(([bk, spec]) => { const b = s.builds?.[bk]; if (b?.done) return `${spec.label || bk}: built`; const have = b?.have || {}; return `${spec.label || bk}: ${Object.entries(spec.cost || {}).map(([m, n]) => `${m} ${have[m] || 0}/${n}`).join(', ')}`; });
+    if (k === 'store') {
+      const st = s.store;
+      $('moMeta').textContent = `the village shelf · ${st.coin} coin in the till${st.project ? ` · paying wages for the ${st.project}` : ''}`;
+      setMoHeads('On the shelf', 'The ledger', 'Loans out', 'Here now', 'The project');
+      $('moDoing').innerHTML = Object.entries(st.prices || {}).map(([item, pr]) => `<div class="mem"><b>${esc(item)}</b> <span class="muted">${st.shelf?.[item] || 0} in stock · buy ${pr.buy} · sells for ${pr.sell}</span></div>`).join('');
+      $('moSaid').innerHTML = (st.ledger || []).slice(-8).reverse().map(l => `<div class="mem"><span class="muted">d${l.day ?? ''}</span> ${esc(l.who || 'someone')} ${l.bought ? 'bought' : 'sold'} ${l.n} ${esc(l.bought || l.sold || '')} for ${l.coin} coin</div>`).join('') || '<div class="muted">No trade yet.</div>';
+      $('moFelt').innerHTML = (st.loans || []).length ? st.loans.map(l => `<div class="mem">${esc(l.name || 'someone')} owes ${l.owed} coin <span class="muted">· since day ${l.since}</span></div>`).join('') : '<div class="muted">No one owes the store.</div>';
+      $('moCarry').textContent = st.project ? `Commissioning the ${st.project}: a coin per material carried in.${buildsHere.length ? ' ' + buildsHere.join('; ') : ''}` : (buildsHere.join('; ') || 'No project right now.');
+    } else if (k === 'hearth' || k === 'camp') {
+      const fire = k === 'hearth' ? s.hearth : s.camp;
+      $('moMeta').textContent = `${fire.wood > 0 ? 'the fire is lit' : 'the fire is OUT'} · ${fire.wood || 0} wood on the pile`;
+      setMoHeads('The fire', 'Said around the fire', 'Lately here', 'Here now', k === 'camp' ? 'Who lives at the camp' : 'Built here');
+      $('moDoing').textContent = fire.wood > 0 ? `Warm. ${fire.wood} wood left; it burns a little every tick and someone has to feed it.` : 'Cold ashes. Someone needs to bring wood or the night will hurt.';
+      $('moSaid').textContent = here.filter(h => h.lastSaid).map(h => `${h.name}: "${h.lastSaid}"`).join(' ') || 'Quiet.';
+      $('moFelt').innerHTML = evHere(e => new RegExp(label, 'i').test(e.text) || (e.who || []).some(id => here.some(h => h.id === id)));
+      $('moCarry').textContent = k === 'camp' ? (alive.filter(a => a.settlement === 'camp').map(a => a.name).join(', ') || 'no one') : (buildsHere.join('; ') || 'Nothing built here yet.');
+    } else {
+      const gives = s.forage?.[k];
+      $('moMeta').textContent = gives ? `gives ${Object.entries(gives).map(([m, n]) => `${m} (${n})`).join(', ')} to whoever forages` : k === 'field' ? 'the village grain: work here fills the larder' : k === 'road' ? (s.builds?.road?.done ? 'the road is built; the market cart comes this way' : 'a dirt track; build the road and a market cart will come') : k === 'well' ? 'water, and the place people cross paths' : k === 'edge' ? 'where scouts walk out into the unknown' : '';
+      setMoHeads('Going on', 'Said here', 'Lately here', 'Here now', 'Built here');
+      $('moDoing').textContent = here.length ? here.map(h => h.doingText || `${h.name} is here.`).join(' ') : 'Nothing. Wind, mostly.';
+      $('moSaid').textContent = here.filter(h => h.lastSaid).map(h => `${h.name}: "${h.lastSaid}"`).join(' ') || 'Quiet.';
+      $('moFelt').innerHTML = evHere(e => new RegExp(label, 'i').test(e.text) || (e.who || []).some(id => here.some(h => h.id === id)));
+      $('moCarry').textContent = buildsHere.join('; ') || 'Nothing built here.';
+    }
+    $('moNear').innerHTML = here.length ? here.map(o => personRow(o)).join('') : '<div class="muted">No one.</div>';
+  }
+  $('moWhen').textContent = `Year ${s.year}, day ${s.day}, ${s.tickName}. ${s.weather.season}, ${s.weather.sky}.`;
+  wireFaces();
+}
+
 function openMoment(id) {
+  placeOpen = null; $('moFace').hidden = false; $('moDiary').hidden = false; setMoHeads('Doing', 'Just said', 'Feels', 'Here with them', 'Carrying');
   const a = state?.agents.find(x => x.id === id);
   if (!a || !a.alive) return;
   frozen = true; selected = id;
@@ -676,7 +774,7 @@ function openMoment(id) {
   renderMoment(a);
 }
 async function closeMoment() {
-  frozen = false; $('moment').hidden = true; camTarget = { scale: 1, x: 0, y: 0 };
+  frozen = false; placeOpen = null; $('moment').hidden = true; camTarget = { scale: 1, x: 0, y: 0 };
   if (heldState) { state = heldState; heldState = null; renderPanels(); }
   // Catch up right now rather than waiting for the next tick to arrive.
   try { const r = await fetch('/api/state'); if (r.ok && !frozen) { state = await r.json(); renderPanels(); } } catch {}
@@ -826,18 +924,18 @@ function noteBox(a) {
     <div class="row" style="margin-top:4px"><input data-note="${a.id}" placeholder="a few words only they will see" maxlength="400" style="flex:1"><button class="act" data-notesend="${a.id}">Leave it</button></div>`;
 }
 // Delegate clicks so the buttons survive re-renders.
-$('inspector').addEventListener('click', (e) => {
+for (const host of [$('inspector'), $('owned')]) host.addEventListener('click', (e) => {
   const look = e.target.closest('[data-moment]');
   if (look) { openMoment(look.dataset.moment); return; }
   const step = e.target.closest('[data-diary]');
   if (step) { const id = step.dataset.diary; const a = state.agents.find(x => x.id === id); const cur = diaryPage.has(id) ? diaryPage.get(id) : a.diary.length - 1; diaryPage.set(id, cur + Number(step.dataset.step)); renderInspector(); return; }
   const cBtn = e.target.closest('[data-communesend]');
-  if (cBtn) { const id = cBtn.dataset.communesend; const inp = document.querySelector(`[data-commune="${id}"]`); const text = inp.value.trim(); if (text) { send({ type: 'commune', agentId: id, text }); inp.value = ''; inp.blur(); } return; }
+  if (cBtn) { const id = cBtn.dataset.communesend; const inp = cBtn.closest('[data-communebox]').querySelector('[data-commune]'); const text = inp.value.trim(); if (text) { send({ type: 'commune', agentId: id, text }); inp.value = ''; inp.blur(); } return; }
   const askBtn = e.target.closest('[data-communeask]');
   if (askBtn) { send({ type: 'commune', agentId: askBtn.dataset.communeask, text: askBtn.dataset.q }); return; }
   const mkBtn = e.target.closest('[data-communeguide]');
   if (mkBtn) {
-    const id = mkBtn.dataset.communeguide; const inp = document.querySelector(`[data-commune="${id}"]`);
+    const id = mkBtn.dataset.communeguide; const inp = mkBtn.closest('[data-communebox]').querySelector('[data-commune]');
     const last = (communeThreads.get(id) || []).filter(t => t.from === 'self').slice(-1)[0];
     const text = (inp.value.trim() || last?.text || '').slice(0, 300);
     if (!text) { toast('Say something first; then it can become their intention.', 'bad'); return; }
@@ -856,10 +954,10 @@ $('inspector').addEventListener('input', (e) => {
   const s = e.target.closest('[data-diaryslider]');
   if (s) { diaryPage.set(s.dataset.diaryslider, Number(s.value)); renderInspector(); }
 });
-$('inspector').addEventListener('keydown', (e) => {
+for (const host of [$('inspector'), $('owned')]) host.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.target.matches('[data-note]')) { e.preventDefault(); document.querySelector(`[data-notesend="${e.target.dataset.note}"]`)?.click(); }
   if (e.key === 'Enter' && e.target.matches('[data-guide]')) { e.preventDefault(); document.querySelector(`[data-guidesend="${e.target.dataset.guide}"]`)?.click(); }
-  if (e.key === 'Enter' && e.target.matches('[data-commune]')) { e.preventDefault(); document.querySelector(`[data-communesend="${e.target.dataset.commune}"]`)?.click(); }
+  if (e.key === 'Enter' && e.target.matches('[data-commune]')) { e.preventDefault(); e.target.closest('[data-communebox]').querySelector('[data-communesend]')?.click(); }
 });
 
 function renderInspector() {
@@ -1032,9 +1130,9 @@ function renderBrainTab() {
   const mine = state.agents.filter(a => owned.has(a.id));
   const per = brainCfg.perAgent || {};
   const provOpts = (sel) => `<option value="">(default brain)</option>` + Object.entries(Brain.PROVIDERS).map(([k, p]) => `<option value="${k}" ${sel === k ? 'selected' : ''}>${esc(p.label.split(' (')[0])}</option>`).join('');
-  const ownedHtml = mine.length ? mine.map(a => `<div class="agentrow" style="flex-wrap:wrap;gap:6px"><span style="flex:1 1 100%"><b>${esc(a.name)}</b> ${a.alive ? `<button class="act" data-talkto="${a.id}" style="margin-left:6px">Talk to ${esc(a.name)}</button>` : ''} <span class="muted">${a.alive ? a.branch : 'dead'}${a.autopilot ? ' · autopilot' : ''} · mind: ${esc(cfgFor(a.id).provider)} ${esc(cfgFor(a.id).model || '')}</span></span><select data-pa-prov="${a.id}" style="flex:1">${provOpts(per[a.id]?.provider || '')}</select><input data-pa-model="${a.id}" placeholder="model for ${esc(a.name)}" value="${esc(per[a.id]?.model || '')}" style="flex:1"><button class="act" data-release="${a.id}">Release</button></div>`).join('') : '<span class="muted">None yet. Adopt one below, or birth a new villager.</span>';
+  const ownedHtml = mine.length ? mine.map(a => `<div class="agentrow" style="flex-wrap:wrap;gap:6px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px"><span style="flex:1 1 100%"><b style="font-size:15px">${esc(a.name)}</b> ${a.alive ? `<button class="act" data-talkto="${a.id}" style="margin-left:6px">Open ${esc(a.name)}'s page</button>` : ''} <span class="muted">${a.alive ? `${a.age} · ${a.branch}` : 'dead'}${a.autopilot ? ' · autopilot' : ''} · mind: ${esc(cfgFor(a.id).provider)} ${esc(cfgFor(a.id).model || '')}</span></span>${a.alive ? `<div style="flex:1 1 100%">${renderCommune(a, true)}</div>` : ''}<select data-pa-prov="${a.id}" style="flex:1">${provOpts(per[a.id]?.provider || '')}</select><input data-pa-model="${a.id}" placeholder="model for ${esc(a.name)}" value="${esc(per[a.id]?.model || '')}" style="flex:1"><button class="act" data-release="${a.id}" title="stop being their higher self; they go on autopilot">Release</button></div>`).join('') : '<span class="muted">None yet. Claim one below, or birth a new villager.</span>';
   const free = state.agents.filter(a => a.alive && !a.owned);
-  const freeHtml = free.length ? free.map(a => `<div class="agentrow"><span>${esc(a.name)} <span class="muted">${a.branch} · raised ${a.upbringing}</span></span><button class="act" data-adopt="${a.id}">Adopt</button></div>`).join('') : '<span class="muted">Everyone has an owner.</span>';
+  const freeHtml = free.length ? free.map(a => `<div class="agentrow"><span>${esc(a.name)} <span class="muted">${a.branch} · raised ${a.upbringing}</span></span><button class="act" data-adopt="${a.id}">Claim</button></div>`).join('') : '<span class="muted">Everyone has an owner.</span>';
   // Only touch the DOM when the lists actually change, so buttons stay clickable between ticks.
   // Leave the list alone while someone is editing a villager's mind.
   const editing = document.activeElement && $('owned').contains(document.activeElement);
