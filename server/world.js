@@ -691,7 +691,8 @@ function dayPhase(w, remoteActions) {
         const item = act.item, n = Math.max(1, Math.min(10, Math.floor(act.n || 1)));
         const price = I.sellPrice(w.store, item);
         if (price == null || a.location !== 'store') break;
-        const can = Math.min(n, Math.floor(a.inv[item] || 0), price > 0 ? Math.floor(w.store.coin / price) : 0);
+        // The store keeps a float of 10 so it can always pay a wage or two.
+        const can = Math.min(n, Math.floor(a.inv[item] || 0), price > 0 ? Math.floor(Math.max(0, w.store.coin - 10) / price) : 0);
         if (can >= 1 && price > 0) {
           a.inv[item] -= can; a.inv.coin = (a.inv.coin || 0) + can * price; w.store.coin -= can * price; w.store.shelf[item] = (w.store.shelf[item] || 0) + can;
           w.store.ledger.push({ day: w.day, who: a.name, sold: item, n: can, coin: can * price }); if (w.store.ledger.length > 200) w.store.ledger.shift();
@@ -1143,6 +1144,28 @@ function nightPhase(w) {
 // With money in the till the store commissions the village's next project and pays wages for it.
 function storeNight(w) {
   const st = w.store;
+  // A market beyond the edge. Once the road is laid, a cart comes now and then: it buys the store's
+  // surplus for coin and, when the till is fat, sells the village things it cannot make. This is
+  // how coin enters from outside, and why a glut of food is worth something.
+  if (w.builds.road?.done && Math.random() < 0.5) {
+    const sold = [];
+    let earned = 0;
+    for (const [item, n] of Object.entries(st.shelf)) {
+      const keep = item === 'food' ? 20 : 8;
+      const excess = Math.floor((n || 0) - keep);
+      if (excess >= 3 && I.STORE_PRICES[item] != null) {
+        const price = Math.max(1, Math.round(I.STORE_PRICES[item] * 0.6));
+        st.shelf[item] -= excess; earned += excess * price; sold.push(`${excess} ${item}`);
+      }
+    }
+    if (earned > 0) { st.coin += earned; event(w, `A cart from beyond the edge buys ${sold.join(', ')} from the store for ${earned} coin.`, 'trade'); }
+    if (st.coin >= 120) {
+      const bring = { blanket: 2, salve: 2, rope: 3, pot: 1 };
+      let spent = 0; const got = [];
+      for (const [item, n] of Object.entries(bring)) { const cost = I.STORE_PRICES[item] * n; if (st.coin - spent - cost >= 60 && (st.shelf[item] || 0) < 3) { st.shelf[item] = (st.shelf[item] || 0) + n; spent += cost; got.push(`${n} ${item}`); } }
+      if (spent > 0) { st.coin -= spent; event(w, `The cart leaves ${got.join(', ')} on the store's shelf for ${spent} coin.`, 'trade'); }
+    }
+  }
   const unbuilt = Object.keys(I.BUILDS).filter(k => !w.builds[k]?.done && (I.BUILDS[k].at !== 'creek' || isFound(w, 'creek')));
   if (st.project && (w.builds[st.project]?.done || !unbuilt.includes(st.project))) { event(w, `The store's project, the ${st.project}, is done. It paid ${st.wagesPaid || 0} coin in wages.`, 'trade'); st.project = null; }
   if (!st.project && st.coin >= 60 && unbuilt.length) {
@@ -1368,7 +1391,7 @@ function narrate(w, a, act) {
     case 'borrow': return s('at the store', `${a.name} asks the store for a loan.`, 'work');
     case 'repay': return s('at the store', `${a.name} pays the store back.`, 'work');
     case 'upgrade': return s(`building a ${act.what}`, `${a.name} works on a ${I.UPGRADES[act.what]?.label || act.what} at home.`, 'work');
-    case 'build': return s(`building`, `${a.name} works on the ${act.what} at the hearth.`, 'work');
+    case 'build': return s(`building`, `${a.name} works on the ${act.what} at ${place(I.BUILDS[act.what]?.at || 'hearth')}.`, 'work');
     case 'talk': return s(`talking to ${tn}`, `${a.name} says to ${tn}: "${act.say || '...'}"`, 'talk');
     case 'share': return s(`feeding ${tn}`, `${a.name} gives ${tn} something to eat.`, 'care');
     case 'give': return s(`giving to ${tn}`, `${a.name} gives ${tn} a ${I.ITEMS[act.item]?.label || act.item}.`, 'care');

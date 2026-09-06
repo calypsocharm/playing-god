@@ -123,9 +123,21 @@ export function scriptedDecide(a, s) {
 
   // Coin. Sell what piles up, buy what you lack, build for the house when you can.
   const store = s.store;
-  // Paid work: when the store posts wages, bring wood and stone to the project.
-  if (store?.project && isDay && ((inv.wood || 0) >= 3 || (inv.stone || 0) >= 3) && Math.random() < 0.6) return { type: 'build', what: store.project, thought: 'Paid work.' };
-  if (store?.project && isDay && (inv.wood || 0) < 3 && (inv.stone || 0) < 3 && Math.random() < 0.3) return { type: 'forage', to: Math.random() < 0.5 ? 'forest' : 'quarry', thought: `Wood and stone for the ${store.project}. It pays.` };
+  // Paid work: when the store posts wages, bring the project what it still lacks, not what it has.
+  if (store?.project && isDay) {
+    const spec = I.BUILDS[store.project]; const have = s.builds?.[store.project]?.have || {};
+    const lacking = spec ? Object.entries(spec.cost).filter(([m, n]) => m !== 'coin' && (have[m] || 0) < n).map(([m]) => m) : [];
+    const carry = lacking.find(m => (inv[m] || 0) >= 3);
+    if (carry && Math.random() < 0.6) return { type: 'build', what: store.project, thought: `${carry} for the ${store.project}. It pays.` };
+    // Rope is made, not found: twist fiber into it, or go get fiber.
+    if (lacking.includes('rope')) {
+      if (I.canCraft(inv, 'rope')) return { type: 'craft', item: 'rope', thought: `Rope for the ${store.project}.` };
+      if ((inv.fiber || 0) < 2 && Math.random() < 0.4) return { type: 'forage', to: 'meadow', thought: `Fiber for rope for the ${store.project}.` };
+    }
+    const need = lacking.find(m => Object.values(I.FORAGE).some(t => t[m]) && (!['creek', 'grove', 'claypit'].includes(sourceOf(m)) || s.found?.[sourceOf(m)]));
+    if (need && Math.random() < 0.35) return { type: 'forage', to: sourceOf(need), thought: `${need} for the ${store.project}. It pays.` };
+    if (lacking.includes('wood') && Math.random() < 0.3) return { type: 'work', to: 'forest', thought: `Wood for the ${store.project}.` };
+  }
   // Borrow when hungry and broke; pay back when flush.
   if (store && isDay && b.food < 0.35 && inv.food < 0.3 && (inv.coin || 0) < 2 && !store.loans?.some(l => l.name === a.name)) return { type: 'borrow', n: 6, thought: 'I will pay it back.' };
   if (store && isDay && (inv.coin || 0) >= 8 && store.loans?.some(l => l.name === a.name)) return { type: 'repay', n: 4, thought: 'Owe less.' };

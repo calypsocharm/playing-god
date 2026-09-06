@@ -361,3 +361,11 @@ their chest), a card appears: the situation and three to six ways through it, ea
 costs. Pick one and they do it; the village answers; you see what it cost. Or let them decide.
 Each kind of moment asks once a day. Your choice is written in their diary margin as their higher
 self's.
+
+## A market beyond the edge
+
+Once the road is laid, a cart comes now and then from beyond the edge. It buys the store's surplus
+(food above 20, anything else above 8) for coin, which is how coin enters the village from outside
+and why a glut is worth something. When the till is fat it also leaves blankets, salve, rope, and
+pots on the shelf. Workers on a store project bring what it still lacks, make rope for it, and go
+to the clay pit for clay, rather than hauling more of what is already there.
