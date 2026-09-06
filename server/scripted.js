@@ -92,6 +92,22 @@ export function scriptedDecide(a, s) {
     if (inv.fiber < 5) return { type: 'forage', to: 'meadow', thought: 'Fiber. Not like them.' };
   }
 
+  // Something that is not work. When the larder allows and the body is dry, joy comes first.
+  const joy = b.joy ?? 0.5;
+  if (isDay && inv.food >= 1 && b.food > 0.4 && (joy < 0.35 || (joy < 0.6 && Math.random() < 0.25))) {
+    const friend = s.near.find(n => n.trust > 0.4 && !n.isChild);
+    const roll = Math.random();
+    if (friend && roll < 0.3) return { type: 'walk', target: friend.id, say: pick(WALK_TALK), thought: 'A long walk with someone.' };
+    if (s.near.length >= 2 && a.location === 'hearth' && roll < 0.45) return { type: 'sing', say: pick(SONG_LINES), thought: 'A song.' };
+    if (roll < 0.55) { const mine = a.hobby || (a.hobby = pick(Object.keys(I.HOBBIES))); return { type: 'hobby', what: mine, thought: `${mine}. For me.` }; }
+    if (roll < 0.8) return { type: 'sit', to: s.found?.creek ? 'creek' : s.found?.grove ? 'grove' : 'meadow', thought: 'Sit by the water.' };
+    return { type: 'walk', to: s.found?.creek ? 'creek' : 'meadow', thought: 'Walk it off.' };
+  }
+  if (isDay && a.hobby && (a.skills?.[a.hobby] || 0) >= 8 && Math.random() < 0.12 && I.canCraft(inv, I.HOBBIES[a.hobby].item)) return { type: 'hobby', what: a.hobby, thought: 'The hands want to work.' };
+  // Share a pie with someone you like; give a toy to a child.
+  if ((inv.pie || 0) >= 1) { const f = s.near.find(n => n.trust > 0.3 && !n.isChild); if (f) return { type: 'share', target: f.id, thought: 'Pie.' }; }
+  if ((inv.toy || 0) >= 1) { const c = s.near.find(n => n.isChild); if (c) return { type: 'give', target: c.id, item: 'toy', thought: 'For the little one.' }; }
+
   // Bread before things. Nobody forages for a charm on an empty larder.
   if (isDay && inv.food < foodFloor && s.yieldToday > 0.1) return { type: 'work', to: 'field', thought: lessons.includes('hunger') ? 'Never again.' : 'Food first.' };
 
@@ -196,6 +212,8 @@ const OLD_TALK = [
   'I remember when the field gave twice this.', 'You young ones work too hard.', 'Sit. Tell me something.',
   'My hands are no good in the cold anymore.', 'I have buried better people than me.', 'Winter was worse when I was young. Or I was.',
 ];
+const WALK_TALK = ['Come walk with me. I need to get out of here for a while.', 'Walk with me to the water?', 'I do not want to talk. Just walk.', 'Show me the grove again.'];
+const SONG_LINES = ['Oh the winter is long and the fire is low', 'Down by the creek where the cold water runs', 'My mother sang this when the snow came', 'Carry me home when the field is done'];
 const SMALL_TALK = [
   'Cold one.', 'The field was thin today.', 'You look tired.', 'Sit a while.', 'Did you sleep?',
   'There is wood left.', 'I saw you at the well.', 'Long day.', 'Stay by the fire.', 'I found stone at the quarry.',

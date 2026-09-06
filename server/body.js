@@ -13,6 +13,7 @@ export function newBody(seed = {}) {
     openness: 0.6,   // willingness to be near others
     hurt: 0.0,       // accumulated damage. 1 = death
     overwhelmed: 0,  // ticks remaining where the body has taken over
+    joy: 0.5,        // what is left when the work is done. Fed by rest, music, making, walking with someone. Starves on work alone.
     ...seed,
   };
 }
@@ -41,8 +42,13 @@ export function tickBody(b, env) {
   if (b.hurt > 0 && b.food > 0.4 && b.warmth > 0.4) b.hurt = clamp(b.hurt - 0.02);
 
   if (b.overwhelmed > 0) b.overwhelmed -= 1;
+  // Joy leaks a little every moment. A life that only works runs dry, and a dry life closes.
+  b.joy = clamp((b.joy ?? 0.5) - 0.012);
+  if (b.joy < 0.2) { b.openness = clamp(b.openness - 0.01); b.tightness = clamp(b.tightness + 0.01); }
+  if (b.joy > 0.7) { b.openness = clamp(b.openness + 0.005); b.tightness = clamp(b.tightness - 0.01); }
   return b;
 }
+export function gladden(b, amount) { b.joy = clamp((b.joy ?? 0.5) + amount); b.tightness = clamp(b.tightness - amount * 0.5); b.breath = clamp(b.breath + amount * 0.3); return b; }
 
 export function sleep(b) {
   b.energy = clamp(b.energy + 0.5);
@@ -73,6 +79,8 @@ export function physicalHit(b, amount) {
   return b;
 }
 
+// A body settled by joy heals its rules faster; a starved one slower.
+export const healRate = (b) => 0.7 + (b.joy ?? 0.5) * 0.6;
 export function soothe(b, amount) {
   b.tightness = clamp(b.tightness - amount);
   b.breath = clamp(b.breath + amount * 0.6);
@@ -98,6 +106,9 @@ export function feltSense(b) {
   if (b.openness < 0.3) s.push('You want to be left alone.');
   else if (b.openness > 0.75) s.push('You feel open to people.');
   if (b.overwhelmed > 0) s.push('Your body has taken over. You cannot act right now.');
+  if ((b.joy ?? 0.5) < 0.15) s.push('Nothing has felt good in a long time. Work, eat, sleep. You cannot remember the last time you laughed.');
+  else if ((b.joy ?? 0.5) < 0.35) s.push('The days run together. You could use something that is not work.');
+  else if ((b.joy ?? 0.5) > 0.75) s.push('There is a lightness in you today.');
   if (!s.length) s.push('Your body feels alright.');
   return s;
 }

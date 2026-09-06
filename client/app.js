@@ -862,7 +862,8 @@ function renderInspector() {
     ${a.thought ? `<div class="muted" style="margin-top:4px">Thinking: ${esc(a.thought)}</div>` : ''}
     <h3>Body</h3>
     ${dial('warmth', b.warmth, b.warmth < 0.3 ? 'cold' : '')}${dial('food', b.food, b.food < 0.3 ? 'bad' : '')}${dial('energy', b.energy)}
-    ${dial('tightness', b.tightness, b.tightness > 0.6 ? 'bad' : '')}${dial('breath', b.breath, b.breath < 0.5 ? 'bad' : '')}${dial('openness', b.openness)}${dial('hurt', b.hurt, 'bad')}
+    ${dial('tightness', b.tightness, b.tightness > 0.6 ? 'bad' : '')}${dial('breath', b.breath, b.breath < 0.5 ? 'bad' : '')}${dial('openness', b.openness)}${dial('hurt', b.hurt, 'bad')}${dial('joy', b.joy ?? 0.5, (b.joy ?? 0.5) < 0.25 ? 'cold' : '')}
+    ${Object.keys(a.skills || {}).length ? `<div class="muted">Takes up: ${Object.entries(a.skills).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${esc(k)} (${n})`).join(', ')}</div>` : ''}
     <div class="muted">Looks ${esc(a.visible)}${b.overwhelmed ? ' · OVERWHELMED' : ''}</div>
     <h3>Carries</h3>
     <div class="muted">${esc(describeInv(a.inv))}</div>

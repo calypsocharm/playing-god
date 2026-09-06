@@ -57,7 +57,7 @@ export function processExposures(agent, exposures, day) {
     }
     // Safe exposure. Open bodies heal faster. Fresh wounds resist.
     const age = Math.max(1, day - rule.day);
-    const rate = 0.03 + agent.body.openness * 0.04 + Math.min(0.03, age * 0.002);
+    const rate = (0.03 + agent.body.openness * 0.04 + Math.min(0.03, age * 0.002)) * (0.7 + (agent.body.joy ?? 0.5) * 0.6);
     rule.strength -= rate;
     rule.contradictions += 1;
     if (rule.strength <= 0) {

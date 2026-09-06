@@ -13,7 +13,7 @@ const counts = new Map();
 
 function snapshot(w, a) {
   const trust = Object.values(a.trust || {}).reduce((s, v) => s + v, 0);
-  return { tightness: a.body.tightness, hurt: a.body.hurt, food: a.body.food, warmth: a.body.warmth, breath: a.body.breath, openness: a.body.openness, trust, alive: a.alive, wounds: a.wounds.reduce((s, r) => s + r.strength, 0), grief: (a.grief || []).reduce((s, g) => s + g.intensity, 0) };
+  return { tightness: a.body.tightness, hurt: a.body.hurt, food: a.body.food, warmth: a.body.warmth, breath: a.body.breath, openness: a.body.openness, joy: a.body.joy ?? 0.5, trust, alive: a.alive, wounds: a.wounds.reduce((s, r) => s + r.strength, 0), grief: (a.grief || []).reduce((s, g) => s + g.intensity, 0) };
 }
 
 // How the body scores what followed. Negative when it hurt, positive when it settled.
@@ -26,6 +26,7 @@ export function reward(before, after) {
   r += (after.warmth - before.warmth) * 1.0;
   r += (after.breath - before.breath) * 1.0;
   r += (after.openness - before.openness) * 0.5;
+  r += ((after.joy ?? 0.5) - (before.joy ?? 0.5)) * 1.5;   // what fed the life, not only what kept it
   r += (after.trust - before.trust) * 0.8;
   r += (before.wounds - after.wounds) * 2.0;
   r += (before.grief - after.grief) * 1.0;

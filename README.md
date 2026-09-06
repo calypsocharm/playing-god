@@ -405,3 +405,17 @@ always had, underneath everything. Your model answers as them, in their body, wi
 and the last thing they wrote in their diary, in one to four plain sentences. They may agree,
 argue, ask you something, or refuse. They do not know what the voice is. Every exchange is kept as
 an inner dialogue in their life record, and both sides become memories they carry.
+
+## Joy: a life that is not only work
+
+Every body has a joy dial. It leaks a little each moment, and a life of work, eat, sleep runs it
+dry: a dry body closes and tightens, and its wounds heal slower. Joy is fed by things that are
+not work: sitting still (deeper by water or trees), a long walk alone or with someone (which is a
+long talk with your feet moving, and shares grief), a long talk marked as such, singing at the
+hearth (everyone listening is lifted; the singer gets better and in time is the one people ask),
+and hobbies practised for their own sake: baking, sewing, brewing, carving. Hobbies build skill,
+and skilled hands turn out pies, quilts, tonics, and toys. A shared pie is a small feast. A toy
+given to a child is kept for life. A quilt is warmer than a blanket and made for someone. A tonic
+settles a tight chest. The autopilot brain reaches for these when the larder allows and the body
+is dry; brained villagers have them all as actions. Joy is in the training reward: what fed the
+life counts, not only what kept it.

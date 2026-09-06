@@ -29,6 +29,10 @@ export const ITEMS = {
   charm:   { label: 'charm',   recipe: { stone: 1, fiber: 1 },              value: 5, need: false, use: 'does nothing, and people want it anyway' },
   bread:   { label: 'bread',   recipe: { food: 1, wood: 1 },                value: 2, need: true,  use: 'the staple. Feeds well, keeps, and breaking it with someone means something' },
   pot:     { label: 'pot',     recipe: { clay: 2, wood: 1 },                value: 3, need: false, use: 'stored food spoils slower; cooked fish feeds better' },
+  pie:     { label: 'pie',     recipe: { berries: 3, food: 1, wood: 1 },    value: 4, need: false, use: 'a pie. Feeds, and sharing one is a small feast', hobby: 'baking' },
+  quilt:   { label: 'quilt',   recipe: { fiber: 4, rope: 1 },               value: 6, need: false, use: 'warmer than a blanket, and made by hand for someone', hobby: 'sewing' },
+  tonic:   { label: 'tonic',   recipe: { herbs: 2, berries: 1 },            value: 4, need: false, use: 'a brewed tonic: settles the chest when drunk', hobby: 'brewing' },
+  toy:     { label: 'toy',     recipe: { wood: 1 },                         value: 2, need: false, use: 'a carved toy. A child who is given one remembers it for life', hobby: 'carving' },
 };
 
 // What a Venus sign longs for. Fire wants to be seen, earth wants tools, air wants to be tied to others, water wants warmth.
@@ -45,7 +49,14 @@ export const BUILDS = {
 // ---------- coin and the store ----------
 // Coin is how surplus becomes something you can keep and spend. The store is the village's
 // shared shelf: it buys what you bring and sells what it holds, and prices move with the shelf.
-export const STORE_PRICES = { food: 2, bread: 4, wood: 1, stone: 1, fiber: 1, herbs: 2, berries: 1, fish: 2, clay: 1, rope: 3, axe: 8, hoe: 8, blanket: 10, salve: 5, charm: 12, pot: 7 };
+export const STORE_PRICES = { food: 2, bread: 4, wood: 1, stone: 1, fiber: 1, herbs: 2, berries: 1, fish: 2, clay: 1, rope: 3, axe: 8, hoe: 8, blanket: 10, salve: 5, charm: 12, pot: 7, pie: 6, quilt: 14, tonic: 6, toy: 3 };
+// Hobbies: what the hands learn. Each has a craft and a felt line as skill grows.
+export const HOBBIES = {
+  baking:  { verb: 'bakes', item: 'pie',   line: 'Your hands know dough now. The kitchen is where your mind goes quiet.' },
+  sewing:  { verb: 'sews',  item: 'quilt', line: 'Needle and thread. Hours pass and you do not notice them.' },
+  brewing: { verb: 'brews', item: 'tonic', line: 'You know which herbs want which. People come to you when they ache.' },
+  carving: { verb: 'carves', item: 'toy',  line: 'Wood answers your knife. Children watch you work.' },
+};
 export function newStore() {
   return { shelf: { food: 6, bread: 2, wood: 8, stone: 4, fiber: 4, rope: 2, blanket: 1, salve: 1 }, coin: 200, day: 0, ledger: [], loans: {}, project: null, wagesPaid: 0 };
 }

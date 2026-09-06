@@ -523,6 +523,10 @@ function dayPhase(w, remoteActions) {
     if (act.type === 'buy' || act.type === 'sell' || act.type === 'borrow' || act.type === 'repay') dest = 'store';
     if (act.type === 'upgrade') dest = 'home';
     if (act.type === 'craft') dest = null;   // you make things where you stand
+    if (act.type === 'sit') dest = act.to && (PLACES[act.to] || act.to === 'home') ? act.to : null;
+    if (act.type === 'walk') dest = act.to && PLACES[act.to] ? act.to : (isFound(w, 'creek') ? 'creek' : 'meadow');
+    if (act.type === 'sing') dest = 'hearth';
+    if (act.type === 'hobby') dest = 'home';
     // People who are going to a place move first; people going to a person follow afterwards,
     // so you end up where they went, not where they were.
     if (dest && !byId(w, dest)) moveTo(w, a, dest);
@@ -610,6 +614,8 @@ function dayPhase(w, remoteActions) {
           a.inv[item] -= 1; tgt.inv[item] = (tgt.inv[item] || 0) + 1;
           const wanted = tgt.wants === item;
           const val = I.ITEMS[item].value;
+          if (item === 'toy' && F.isChild(w, tgt)) { B.gladden(tgt.body, 0.3); remember(w, tgt, `${a.name} carved you a toy. You will keep it always.`, 1); tgt.tended = tgt.tended || {}; tgt.tended[a.id] = (tgt.tended[a.id] || 0) + 3; }
+          if (item === 'quilt') { B.gladden(tgt.body, 0.15); remember(w, tgt, `${a.name} made you a quilt with their own hands.`, 0.9); }
           bumpTrust(tgt, a, 0.08 + val * 0.04 + (wanted ? 0.2 : 0)); bumpTrust(a, tgt, 0.05);
           tgt.exposures.closeness = true; tgt.exposures.asking = true;
           if (wanted) B.soothe(tgt.body, 0.3);
@@ -777,9 +783,12 @@ function dayPhase(w, remoteActions) {
             bumpTrust(a, tgt, -0.05);
             remember(w, a, `You spoke to ${tgt.name} and they turned away.`, 0.6);
           } else {
-            bumpTrust(a, tgt, 0.04); bumpTrust(tgt, a, 0.04);
+            const long = !!act.long;
+            bumpTrust(a, tgt, long ? 0.1 : 0.04); bumpTrust(tgt, a, long ? 0.1 : 0.04);
             a.exposures.closeness = true; tgt.exposures.closeness = true;
-            remember(w, tgt, `${a.name} talked with you${a.lastSaid ? `: "${a.lastSaid}"` : ''}.`, 0.3);
+            if (long) { B.gladden(a.body, 0.08); B.gladden(tgt.body, 0.08); for (const g of [...(a.grief || []), ...(tgt.grief || [])]) { g.shared += 1; g.sharedToday = (g.sharedToday || 0) + 1; } }
+            remember(w, tgt, `${a.name} ${long ? 'talked with you a long time' : 'talked with you'}${a.lastSaid ? `: "${a.lastSaid}"` : ''}.`, long ? 0.5 : 0.3);
+            if (long) remember(w, a, `You and ${tgt.name} talked a long time.`, 0.5);
             // Two grievers talking is grief shared, whatever the words were.
             if (a.grief?.length && tgt.grief?.length) for (const g of [...a.grief, ...tgt.grief]) { g.sharedToday = (g.sharedToday || 0) + 1; g.shared += 1; }
           }
@@ -787,6 +796,15 @@ function dayPhase(w, remoteActions) {
         break;
       }
       case 'share': {
+        // A pie shared is a small feast; both are gladdened and everyone near notices.
+        if (tgt && (a.inv.pie || 0) >= 1) {
+          a.inv.pie -= 1; B.eat(tgt.body, 0.4); B.eat(a.body, 0.3); B.gladden(a.body, 0.12); B.gladden(tgt.body, 0.15);
+          bumpTrust(tgt, a, 0.2); bumpTrust(a, tgt, 0.08);
+          for (const o of near) if (o !== tgt) { B.gladden(o.body, 0.04); }
+          event(w, `${a.name} shares a pie with ${tgt.name}.`, 'share', [a.id, tgt.id]);
+          remember(w, tgt, `${a.name} shared a pie with you. A good afternoon.`, 0.8); remember(w, a, `You shared your pie with ${tgt.name}.`, 0.5);
+          break;
+        }
         // Breaking bread counts for more than handing over a portion.
         if (tgt && a.inv.bread >= 1) {
           a.inv.bread -= 1; B.eat(tgt.body, 0.45); B.eat(a.body, 0.15);
@@ -868,6 +886,59 @@ function dayPhase(w, remoteActions) {
         }
         break;
       }
+      case 'sit': {
+        // Stillness. By water or under trees it goes deeper. With someone near, it is shared.
+        const deep = ['creek', 'grove', 'meadow'].includes(a.location) ? 0.12 : 0.07;
+        B.gladden(a.body, deep); a.body.breath = B.clamp(a.body.breath + 0.15);
+        a.body.energy = B.clamp(a.body.energy + 0.05);
+        if (near.length) { a.exposures.closeness = true; }
+        remember(w, a, `You sat still ${a.location === 'home' ? 'at home' : 'at ' + (PLACES[a.location]?.label || a.location)} and let your breath slow.`, 0.3);
+        break;
+      }
+      case 'walk': {
+        // A long walk. Alone it clears the head; with someone it is a long talk with your feet moving.
+        const companion = tgt;
+        B.gladden(a.body, 0.1); a.body.energy = B.clamp(a.body.energy - 0.04);
+        if (companion) {
+          B.gladden(companion.body, 0.1);
+          bumpTrust(a, companion, 0.08); bumpTrust(companion, a, 0.08);
+          a.exposures.closeness = true; companion.exposures.closeness = true;
+          for (const g of [...(a.grief || []), ...(companion.grief || [])]) { g.shared += 1; g.sharedToday = (g.sharedToday || 0) + 1; }
+          event(w, `${a.name} and ${companion.name} walk a long way together${act.say ? `. ${a.name}: "${act.say}"` : '.'}`, 'comfort', [a.id, companion.id]);
+          remember(w, a, `You walked a long way with ${companion.name}.${act.say ? ` You said: "${act.say}"` : ''}`, 0.6);
+          remember(w, companion, `${a.name} walked a long way with you${act.say ? ` and said: "${act.say}"` : ''}.`, 0.6);
+          if (act.say) a.lastSaid = String(act.say).slice(0, 200);
+        } else {
+          remember(w, a, `You walked alone to ${PLACES[a.location]?.label || a.location} and back. Your head is clearer.`, 0.35);
+        }
+        break;
+      }
+      case 'sing': {
+        // Music at the hearth. The singer is lifted; everyone near is lifted a little.
+        B.gladden(a.body, 0.14);
+        a.skills = a.skills || {}; a.skills.music = (a.skills.music || 0) + 1;
+        const lift = 0.05 + Math.min(0.08, a.skills.music * 0.005);
+        for (const o of near) { B.gladden(o.body, lift); bumpTrust(o, a, 0.03); o.exposures.closeness = true; }
+        a.lastSaid = act.say ? String(act.say).slice(0, 200) : '';
+        event(w, `${a.name} sings at the hearth${near.length ? ` and ${near.map(o => o.name).join(', ')} listen` : ', alone'}${act.say ? `: "${act.say}"` : '.'}`, 'comfort', [a.id, ...near.map(o => o.id)]);
+        remember(w, a, near.length ? `You sang and ${near.map(o => o.name).join(' and ')} listened.` : 'You sang alone at the fire.', 0.5);
+        for (const o of near) remember(w, o, `${a.name} sang at the hearth. It eased something.`, 0.5);
+        if (a.skills.music === 10) event(w, `People have started asking ${a.name} to sing.`, 'healed', [a.id]);
+        break;
+      }
+      case 'hobby': {
+        // Practice a craft for its own sake. The hands learn; the thing made is a bonus.
+        const h = I.HOBBIES[act.what]; if (!h) break;
+        a.skills = a.skills || {}; a.skills[act.what] = (a.skills[act.what] || 0) + 1;
+        const skill = a.skills[act.what];
+        B.gladden(a.body, 0.1 + Math.min(0.08, skill * 0.004));
+        a.body.energy = B.clamp(a.body.energy - 0.03);
+        const made = I.canCraft(a.inv, h.item) && Math.random() < Math.min(0.9, 0.4 + skill * 0.05) ? I.craft(a.inv, h.item) : false;
+        if (made) { event(w, `${a.name} ${h.verb} a ${I.ITEMS[h.item].label}.`, 'craft', [a.id]); remember(w, a, `You made a ${I.ITEMS[h.item].label}. It came out well.`, 0.5); }
+        else remember(w, a, `You spent the afternoon ${act.what}. ${skill < 5 ? 'Clumsy still, but it quieted your mind.' : 'The work knows your hands.'}`, 0.35);
+        if (skill === 8) { event(w, `${a.name} has taken up ${act.what}.`, 'healed', [a.id]); remember(w, a, h.line, 0.8); }
+        break;
+      }
       case 'withdraw': {
         a.body.openness = B.clamp(a.body.openness - 0.05);
         break;
@@ -913,6 +984,8 @@ function dayPhase(w, remoteActions) {
     if (a.body.food < 0.45 && a.inv.bread >= 1) { a.inv.bread -= 1; B.eat(a.body, 0.5); }
     else if (a.body.food < 0.45 && a.inv.food >= 0.3) { a.inv.food -= 0.3; B.eat(a.body, 0.3); }
     if (a.body.hurt > 0.3 && a.inv.salve > 0) { a.inv.salve -= 1; a.body.hurt = B.clamp(a.body.hurt - 0.3); remember(w, a, 'You used your salve.', 0.3); }
+    if (a.body.tightness > 0.6 && (a.inv.tonic || 0) > 0) { a.inv.tonic -= 1; B.soothe(a.body, 0.25); B.gladden(a.body, 0.05); remember(w, a, 'You drank a tonic. Your chest let go a little.', 0.3); }
+    if ((a.inv.quilt || 0) > 0 && a.location === 'home') a.body.warmth = B.clamp(a.body.warmth + 0.03);
     // Age: the cold finds the old first, and they tire.
     const age = ageOf(w, a);
     if (age >= 65 && !env.sheltered) a.body.warmth = B.clamp(a.body.warmth - myCold * (age >= 80 ? 0.08 : 0.04));
@@ -1406,6 +1479,10 @@ function narrate(w, a, act) {
     case 'leave': return s('leaving', `${a.name} leaves their partner.`, 'hurt');
     case 'split': return s('leaving the village', `${a.name} walks out of the village.`, 'hurt');
     case 'pray': return s('praying', `${a.name} speaks to the sky: "${act.say || ''}"`, 'talk');
+    case 'sit': return s('sitting still', `${a.name} sits still ${where}, breathing.`, 'care');
+    case 'walk': return T ? s(`walking with ${tn}`, `${a.name} and ${tn} walk a long way together.`, 'care') : s('walking', `${a.name} walks alone to ${place(act.to || a.location)}.`, 'quiet');
+    case 'sing': return s('singing', `${a.name} sings at the hearth${act.say ? `: "${act.say}"` : '.'}`, 'care');
+    case 'hobby': return s(act.what, `${a.name} spends the afternoon ${act.what} at home.`, 'care');
     case 'withdraw': return s('alone at home', `${a.name} goes home to be alone.`, 'quiet');
     case 'rest': return s('resting', `${a.name} rests ${where}.`, 'quiet');
     case 'go': {
@@ -1645,7 +1722,9 @@ export function viewFor(a, w) {
   const s = snapshotFor(a, w);
   const nearNames = s.near.map(n => n.name);
   const age = ageOf(w, a);
-  const felt = [...ageFelt(age), ...B.feltSense(a.body), ...woundFeltSense(a, nearNames), ...griefFelt(a), ...F.familyFelt(w, a),
+  const hobbyLines = Object.entries(a.skills || {}).filter(([k, n]) => I.HOBBIES[k] && n >= 8).map(([k]) => I.HOBBIES[k].line);
+  if ((a.skills?.music || 0) >= 10) hobbyLines.push('You are the one who sings. People ask you to.');
+  const felt = [...ageFelt(age), ...B.feltSense(a.body), ...woundFeltSense(a, nearNames), ...griefFelt(a), ...F.familyFelt(w, a), ...hobbyLines,
     ...(a.destiny && !a.destiny.fulfilled ? [`There is a pull in you toward something. If you had to say it: ${a.destiny.text.replace(/^(this one|they|he|she|this person)\s+will\s+/i, 'you will ')}`] : a.destiny?.fulfilled ? ['You did the thing you were made for. Whatever comes now is extra.'] : [])];
   const feelings = s.others.map(o => {
     const t = o.trust;
@@ -1695,7 +1774,11 @@ export function viewFor(a, w) {
       'sell {item: <thing>, n: <how many>}  (at the store, for coin; it pays less for what it already has plenty of)',
       'upgrade {what: garden|bighouse|fence}  (at home, with coin and materials; yours for life and shared with your partner)',
       'take {target: <person name>, item: <thing they carry>}  (steal. they will know.)',
-      'talk {target: <person name>, say: "<what you say>"}',
+      'talk {target: <person name>, say: "<what you say>", long: true}  (long: a real conversation, worth more, shares grief)',
+      'sit {to: creek|grove|meadow|hearth|home}  (be still, breathe; deeper by water or trees)',
+      'walk {target: <person name>, say: "<words>"}  (a long walk together) or walk {to: <place>} alone',
+      'sing {say: "<a line of the song>"}  (at the hearth; lifts everyone listening; you get better)',
+      'hobby {what: baking|sewing|brewing|carving}  (at home, for its own sake; makes pie/quilt/tonic/toy when the hands are ready)',
       'share {target: <person name>}  (give food)',
       'comfort {target: <person name>}  (stay with them while it is bad)',
       'bond {target: <person name>}  (ask them to be yours and share a roof; they may pull back)',
@@ -1736,7 +1819,7 @@ export function publicState(w) {
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
       body: a.body, visible: B.visibleState(a.body), branch: branch(a),
       chart: { summary: a.chart.summary, sun: a.chart.sun, moon: a.chart.moon, rising: a.chart.rising, birth: a.chart.birth },
-      traits: a.traits, upbringing: a.upbringing, inv: a.inv, wants: a.wants, upgrades: a.upgrades || {},
+      traits: a.traits, upbringing: a.upbringing, inv: a.inv, wants: a.wants, upgrades: a.upgrades || {}, skills: a.skills || {},
       age: Math.floor(ageOf(w, a)), stage: stageOf(ageOf(w, a)), ageAtDeath: a.ageAtDeath,
       family: F.familyPublic(w, a), settlement: fireOf(w, a) === 'camp' ? 'camp' : 'village', destiny: a.destiny || null, faith: +(a.faith || 0).toFixed(2), guidance: a.guidance || '',
       wounds: a.wounds.map(r => ({ trigger: r.trigger, belief: r.belief, strength: r.strength, from: r.from, day: r.day, contradictions: r.contradictions })),
@@ -1787,6 +1870,19 @@ export function normaliseAction(w, raw) {
     if (!act.to) return null;
   } else if (type === 'work') {
     act.to = place === 'forest' ? 'forest' : 'field';
+  } else if (type === 'sit' || type === 'meditate' || type === 'rest_by') {
+    act.type = 'sit'; act.to = PLACES[place] || place === 'home' ? place : null;
+  } else if (type === 'walk' || type === 'stroll') {
+    act.type = 'walk'; act.target = resolveTarget(w, raw.target) || (raw.with ? resolveTarget(w, raw.with) : null);
+    if (act.target) act.to = act.target; else act.to = PLACES[place] ? place : null;
+    act.say = typeof raw.say === 'string' ? raw.say : '';
+  } else if (type === 'sing' || type === 'music' || type === 'play_music') {
+    act.type = 'sing'; act.say = typeof raw.say === 'string' ? raw.say : '';
+  } else if (type === 'hobby' || type === 'practice' || type === 'bake' || type === 'sew' || type === 'brew' || type === 'carve') {
+    const map = { bake: 'baking', sew: 'sewing', brew: 'brewing', carve: 'carving' };
+    const what = map[type] || String(raw.what || raw.item || raw.craft || '').toLowerCase().replace(/^bake$/, 'baking').replace(/^sew$/, 'sewing').replace(/^brew$/, 'brewing').replace(/^carve$/, 'carving');
+    if (!I.HOBBIES[what]) return null;
+    act.type = 'hobby'; act.what = what;
   } else if (type === 'leave' || type === 'split') {
     // fine
   } else if (type === 'pray') {
@@ -1799,7 +1895,7 @@ export function normaliseAction(w, raw) {
       return null;
     }
     act.to = act.target;
-    if (type === 'talk') act.say = typeof raw.say === 'string' ? raw.say : '';
+    if (type === 'talk') { act.say = typeof raw.say === 'string' ? raw.say : ''; act.long = !!raw.long || /\blong\b/i.test(String(raw.kind || '')); }
   } else if (type === 'scout' || type === 'explore') {
     act.type = 'scout';
   } else if (type === 'forage') {
