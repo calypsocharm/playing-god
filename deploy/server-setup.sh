@@ -5,6 +5,7 @@
 # Idempotent: safe to run again. Never edits files under /opt/playing-god by hand afterwards;
 # update.sh resets to origin/main.
 set -euo pipefail
+trap 'echo "!! setup failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 DOMAIN="${DOMAIN:-clawkeep.io}"
 APP_DIR="/opt/playing-god"
@@ -33,10 +34,12 @@ fi
 cd "$APP_DIR"
 npm ci --omit=dev --no-audit --no-fund
 mkdir -p data
+echo "-- installed"
 
 # 3. The Creator password: minted here, once, never in the repo.
 if [ ! -f "$APP_DIR/.god_token" ]; then
-  tr -dc 'a-z0-9' </dev/urandom | head -c 20 > "$APP_DIR/.god_token"
+  ( openssl rand -hex 10 2>/dev/null || head -c 200 /dev/urandom | tr -dc 'a-z0-9' | cut -c1-20 ) | tr -d '
+' > "$APP_DIR/.god_token"
   chmod 600 "$APP_DIR/.god_token"
   echo "-- minted a Creator password"
 fi
