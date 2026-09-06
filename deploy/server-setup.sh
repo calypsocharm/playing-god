@@ -38,8 +38,7 @@ echo "-- installed"
 
 # 3. The Creator password: minted here, once, never in the repo.
 if [ ! -f "$APP_DIR/.god_token" ]; then
-  ( openssl rand -hex 10 2>/dev/null || head -c 200 /dev/urandom | tr -dc 'a-z0-9' | cut -c1-20 ) | tr -d '
-' > "$APP_DIR/.god_token"
+  ( openssl rand -hex 10 2>/dev/null || head -c 200 /dev/urandom | tr -dc 'a-z0-9' | cut -c1-20 ) | tr -d '\n' > "$APP_DIR/.god_token"
   chmod 600 "$APP_DIR/.god_token"
   echo "-- minted a Creator password"
 fi
