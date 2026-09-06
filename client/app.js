@@ -418,12 +418,14 @@ let chatSeen = 0;
 function appendChat(msg) {
   const el = $('chatLog');
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
-  el.insertAdjacentHTML('beforeend', `<div class="mem"><span class="muted">d${msg.day} · ${esc(msg.name)}:</span> ${esc(msg.text)}</div>`);
+  const tools = godOk && msg.who ? ` <span class="muted" style="font-size:10px">[${esc(msg.who)}] <a href="#" data-mod="mute" data-who="${esc(msg.who)}" style="color:var(--dim)">mute</a> · <a href="#" data-mod="boot" data-who="${esc(msg.who)}" style="color:var(--dim)">boot</a> · <a href="#" data-mod="ban" data-who="${esc(msg.who)}" style="color:var(--bad)">ban</a> · <a href="#" data-mod="delchat" data-ts="${msg.ts}" style="color:var(--dim)">remove</a></span>` : '';
+  el.insertAdjacentHTML('beforeend', `<div class="mem"><span class="muted">d${msg.day} · ${esc(msg.name)}:</span> ${esc(msg.text)}${tools}</div>`);
   if (atBottom) el.scrollTop = el.scrollHeight;
 }
 function renderWatchers(s) {
   // chat backlog once, then live appends
   if (s.chat && chatSeen === 0) { $('chatLog').innerHTML = ''; for (const m of s.chat) appendChat(m); chatSeen = s.chat.length; if (!s.chat.length) $('chatLog').innerHTML = '<div class="muted">Nobody has said anything yet.</div>'; }
+  if (s.mod && godOk) $('modInfo').textContent = `· as Creator you can mute, boot, or ban from any line${s.mod.muted ? ` · ${s.mod.muted} muted` : ''}${s.mod.banned ? ` · ${s.mod.banned} banned` : ''}`;
   const r = s.readouts; if (!r) return;
   const fmt = (v) => v === Infinity || v === null ? '∞' : v;
   const verdict = [];
@@ -451,6 +453,14 @@ function sendChat() {
   send({ type: 'chat', name, text }); $('chatText').value = '';
 }
 $('chatSend').onclick = sendChat;
+// The Creator's door: mute, boot, ban, remove, from any line in the gallery.
+$('chatLog').addEventListener('click', (e) => {
+  const a = e.target.closest('[data-mod]'); if (!a) return; e.preventDefault();
+  const op = a.dataset.mod;
+  if (op === 'ban' && !confirm('Ban this watcher by token and address, and release their villagers?')) return;
+  send({ type: 'god', op, who: a.dataset.who, ts: a.dataset.ts });
+  if (op === 'delchat') a.closest('.mem')?.remove();
+});
 $('chatText').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChat(); } });
 
 // ---------- feedback ----------

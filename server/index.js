@@ -92,24 +92,64 @@ function describeGodAct(world, m, r) {
   }
 }
 
+// The Creator's door. Costs no attention: keeping the gallery civil is not an act of the sky.
+function moderate(m) {
+  const who = String(m.who || '');                     // a short id from a chat line, or a token
+  const tokens = [...clients.values()].map(x => x.token).filter(Boolean);
+  const token = tokens.find(t => t === who || shortId(t) === who) || (world.chat || []).find(x => x.who === who)?.token || null;
+  const conns = [...clients.entries()].filter(([, x]) => x.token && x.token === token);
+  const releaseAll = () => { for (const a of world.agents) if (a.owner && a.owner === token) { a.owner = null; a.brain = 'scripted'; a.connected = false; a.guidance = ''; } for (const [, x] of conns) { x.owned.clear(); x.lend = false; } };
+  switch (m.op) {
+    case 'mute':   if (!token) return { error: 'no such watcher' }; world.mod.muted[token] = Date.now(); return { text: 'Muted. They can watch and play, not talk.' };
+    case 'unmute': if (!token) return { error: 'no such watcher' }; delete world.mod.muted[token]; return { text: 'Unmuted.' };
+    case 'boot':   if (!token) return { error: 'no such watcher' }; releaseAll(); for (const [ws] of conns) ws.close(4001, 'booted'); return { text: 'Booted. Their villagers are released to the village; they can come back.' };
+    case 'ban':    { if (!token) return { error: 'no such watcher' }; releaseAll(); world.mod.bannedTokens[token] = Date.now(); for (const [ws, x] of conns) { if (x.ip) world.mod.bannedIps[x.ip] = Date.now(); ws.close(4003, 'banned'); } return { text: 'Banned, by token and address. Their villagers are released.' }; }
+    case 'unban':  { delete world.mod.bannedTokens[who]; delete world.mod.bannedIps[who]; for (const t of Object.keys(world.mod.bannedTokens)) if (shortId(t) === who) delete world.mod.bannedTokens[t]; return { text: 'Unbanned.' }; }
+    case 'delchat': { const n = (world.chat || []).length; world.chat = (world.chat || []).filter(x => x.ts !== Number(m.ts)); return { text: n !== world.chat.length ? 'Removed.' : 'Nothing to remove.' }; }
+  }
+  return { error: 'unknown' };
+}
+
 // ---------- websockets ----------
 const wss = new WebSocketServer({ server });
 const send = (ws, msg) => { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); };
 const broadcast = (msg) => { const s = JSON.stringify(msg); for (const ws of clients.keys()) if (ws.readyState === 1) ws.send(s); };
 
-wss.on('connection', (ws) => {
-  const c = { role: 'spectator', godOk: false, owned: new Set(), token: null };
+// ---------- guardrails ----------
+// Who is on the other end, how fast they may talk, and who has been shown the door.
+const shortId = (s) => { let h = 2166136261; for (const ch of String(s || '')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h.toString(36).slice(0, 6); };
+const ipOf = (req) => (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+world.mod = world.mod || { bannedIps: {}, bannedTokens: {}, muted: {} };
+const perIp = new Map();   // ip -> open connections
+function allow(c, kind, limit, windowMs) {
+  // token bucket per connection per kind: at most `limit` in `windowMs`
+  const now = Date.now(); c.rates = c.rates || {};
+  const r = c.rates[kind] = (c.rates[kind] || []).filter(t => now - t < windowMs);
+  if (r.length >= limit) return false;
+  r.push(now); return true;
+}
+
+wss.on('connection', (ws, req) => {
+  const ip = ipOf(req);
+  if (world.mod.bannedIps[ip]) { ws.close(4003, 'banned'); return; }
+  const open = (perIp.get(ip) || 0) + 1; perIp.set(ip, open);
+  if (open > 6) { ws.close(4008, 'too many connections'); perIp.set(ip, open - 1); return; }
+  const c = { role: 'spectator', godOk: false, owned: new Set(), token: null, ip, since: Date.now() };
   clients.set(ws, c);
   send(ws, { type: 'welcome', godRequired: true });
   send(ws, { type: 'state', state: World.publicState(world) });
 
   ws.on('message', (buf) => {
+    if (buf.length > 64 * 1024) return;                                   // nothing legitimate is this big
+    if (!allow(c, 'any', 60, 10000)) return;                              // 60 messages per 10s, silently dropped past that
     let m; try { m = JSON.parse(buf); } catch { return; }
+    if (c.token && world.mod.bannedTokens[c.token]) { ws.close(4003, 'banned'); return; }
     try { handle(ws, c, m); } catch (e) { send(ws, { type: 'error', error: String(e.message || e) }); }
   });
   ws.on('close', () => {
     for (const id of c.owned) { const a = World.byId(world, id); if (a) a.connected = false; }
     clients.delete(ws);
+    perIp.set(ip, Math.max(0, (perIp.get(ip) || 1) - 1));
   });
 });
 
@@ -117,19 +157,25 @@ function handle(ws, c, m) {
   switch (m.type) {
     case 'hello': {
       if (m.godToken !== undefined) { c.godOk = m.godToken === GOD_TOKEN; send(ws, { type: 'god', ok: c.godOk }); }
-      if (m.token) c.token = String(m.token);
+      if (m.token) c.token = String(m.token).slice(0, 40);
+      if (c.token && world.mod.bannedTokens[c.token]) { ws.close(4003, 'banned'); return; }
       // Reconnect any agents this token owns.
       if (c.token) for (const a of world.agents) if (a.owner === c.token && a.alive) { a.connected = true; c.owned.add(a.id); send(ws, { type: 'adopted', agentId: a.id, token: c.token }); }
       break;
     }
     case 'god': {
       if (!c.godOk) return send(ws, { type: 'error', error: 'not the weather' });
+      if (['mute', 'unmute', 'boot', 'ban', 'unban', 'delchat'].includes(m.op)) {
+        const r = moderate(m); if (r.error) return send(ws, { type: 'error', error: r.error });
+        send(ws, { type: 'result', text: r.text }); broadcast({ type: 'state', state: World.publicState(world) }); return;
+      }
       if (m.op === 'reset') { world = World.createWorld(null); remoteActions.clear(); for (const cc of clients.values()) cc.owned.clear(); Mem.save(world); }
       else { const r = World.godAct(world, m); if (r.error) return send(ws, { type: 'error', error: r.error }); send(ws, { type: 'result', text: r.text || describeGodAct(world, m, r) }); }
       broadcast({ type: 'state', state: World.publicState(world) });
       break;
     }
     case 'adopt': {
+      if (!allow(c, 'claim', 3, 60000)) return send(ws, { type: 'error', error: 'slow down: three claims a minute' });
       const a = World.byId(world, m.agentId);
       if (!a || !a.alive) return send(ws, { type: 'error', error: 'no such villager' });
       if (a.owner && a.owner !== c.token) return send(ws, { type: 'error', error: `${a.name} already has an owner` });
@@ -145,6 +191,8 @@ function handle(ws, c, m) {
       break;
     }
     case 'birth': {
+      if (!allow(c, 'claim', 3, 60000)) return send(ws, { type: 'error', error: 'slow down: three births a minute' });
+      if (World.alive(world).length >= 60) return send(ws, { type: 'error', error: 'the village is full for now' });
       c.token = c.token || uid();
       // A chosen birth must land the villager between 16 and 60 in sim years.
       let birthMs;
@@ -204,6 +252,7 @@ function handle(ws, c, m) {
       // Anyone present may lend their model to villagers nobody has claimed. The unclaimed are
       // split among all the lenders, so the village thinks with whoever shows up.
       c.token = c.token || uid();
+      if (m.on && [...clients.values()].filter(x => x.lend && x !== c).length >= 8) return send(ws, { type: 'error', error: 'eight people are already lending; the unclaimed have voices enough' });
       c.lend = !!m.on;
       c.lendName = String(m.name || '').slice(0, 24);
       for (const a of world.agents) if (!a.owner) a.lent = [...clients.values()].some(x => x.lend);
@@ -227,7 +276,9 @@ function handle(ws, c, m) {
       const now = Date.now();
       if (c.lastChat && now - c.lastChat < 3000) return send(ws, { type: 'error', error: 'slow down' });
       c.lastChat = now;
-      const msg = World.chat(world, m.name, m.text);
+      c.token = c.token || uid();
+      if (world.mod.muted[c.token]) return send(ws, { type: 'error', error: 'you have been muted here' });
+      const msg = World.chat(world, m.name, m.text, shortId(c.token), c.token);
       if (msg) broadcast({ type: 'chat', msg });
       break;
     }

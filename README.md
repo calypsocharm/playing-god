@@ -383,3 +383,17 @@ served the name before), gets a certificate with certbot's nginx authenticator, 
 hourly self-update. After that, a push to `main` is live within the hour, or run
 `playing-god-update` on the box for instant. Never hand-edit files under `/opt/playing-god`; the
 updater resets to `origin/main`. `data/` on the server is the village and is never touched.
+
+## Guardrails
+
+Every connection is metered: at most 60 messages per 10 seconds (the rest are dropped), messages
+over 64 KB are ignored, six open connections per address, three claims (adopt or birth) a minute,
+a chat line every three seconds, eight lenders at once, five owned villagers per person, and the
+village stops taking births at sixty alive. Chat is scrubbed of control characters and each line
+carries a short id of who said it. Banned addresses and tokens are refused at the door.
+
+The Creator moderates from the gallery itself, at no cost in attention: every chat line shows
+mute, boot, ban, and remove. Mute keeps them watching and playing but silent. Boot drops their
+connection and releases their villagers to the village (they can return). Ban does that and
+refuses their token and address from then on. `unban` exists as a god op for when you change
+your mind. Tokens are never sent to browsers; only the short ids are.

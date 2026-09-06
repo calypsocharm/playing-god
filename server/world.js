@@ -82,6 +82,7 @@ export function createWorld(saved) {
     saved.chapters = saved.chapters || [];
     backfillChapters(saved);
     saved.store = saved.store || I.newStore();
+    saved.mod = saved.mod || { bannedIps: {}, bannedTokens: {}, muted: {} };
     saved.store.loans = saved.store.loans || {}; saved.store.project = saved.store.project ?? null; saved.store.wagesPaid = saved.store.wagesPaid || 0;
     if (saved.store.coin < 120 && !saved.store.funded) { saved.store.coin += 200; saved.store.funded = true; }
     for (const a of saved.agents) { if (a.inv && a.inv.coin == null) a.inv.coin = 3; a.upgrades = a.upgrades || {}; }
@@ -98,6 +99,7 @@ export function createWorld(saved) {
     camp: { founded: false, name: '', wood: 0, leader: null, day: null },
     god: newGod(),
     store: I.newStore(),
+    mod: { bannedIps: {}, bannedTokens: {}, muted: {} },
     goals: {},           // question key -> { done: day }
     prayers: [],         // what the villagers ask of the sky
     chronicle: [],       // one paragraph a night, in the village's voice
@@ -1246,9 +1248,10 @@ export function readouts(w) {
 
 // ---------- the watchers' channel ----------
 // Commentary. The villagers never see it. Kept with the world so a later watcher can read back.
-export function chat(w, name, text) {
+export function chat(w, name, text, who = '', token = '') {
   w.chat = w.chat || [];
-  const msg = { day: w.day, tick: w.tick, ts: Date.now(), name: String(name || 'a watcher').slice(0, 24), text: String(text || '').slice(0, 500) };
+  const clean = (s, n) => String(s || '').replace(/[\u0000-\u001f\u007f]/g, '').slice(0, n);
+  const msg = { day: w.day, tick: w.tick, ts: Date.now(), name: clean(name || 'a watcher', 24), text: clean(text, 500), who, token };
   if (!msg.text.trim()) return null;
   w.chat.push(msg); if (w.chat.length > 500) w.chat.shift();
   return msg;
@@ -1725,7 +1728,8 @@ export function publicState(w) {
     chronicle: w.chronicle.slice(-10),
     chapters: (w.chapters || []).slice(-3),
     stats: (w.stats || []).slice(-12), readouts: readouts(w),
-    chat: (w.chat || []).slice(-60),
+    chat: (w.chat || []).slice(-60).map(({ token, ...m }) => m),   // never ship tokens to browsers
+    mod: { muted: Object.keys(w.mod?.muted || {}).length, banned: Object.keys(w.mod?.bannedTokens || {}).length + Object.keys(w.mod?.bannedIps || {}).length },
     builds: w.builds, buildSpecs: I.BUILDS, itemSpecs: I.ITEMS, lessons: w.lessons || [], due: w.due || [],
     map: MAP, places: visiblePlaces(w), found: w.found || {}, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
     agents: w.agents.map(a => ({
