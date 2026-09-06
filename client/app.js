@@ -155,7 +155,11 @@ function log(s) {
 function updateBrainPill() {
   const n = owned.size;
   try { localStorage.setItem('playinggod.owned', JSON.stringify([...owned])); } catch {}
-  $('pillBrain').textContent = n ? `higher self of ${n}` : 'no one is yours yet';
+  const names = state ? [...owned].map(id => state.agents.find(a => a.id === id)?.name).filter(Boolean) : [];
+  $('pillBrain').textContent = n ? (names.length && names.length <= 3 ? `higher self of ${names.join(' & ')}` : `higher self of ${n}`) : 'no one is yours yet';
+  $('pillBrain').title = names.length ? 'Yours: ' + names.join(', ') + '. Click to see them.' : 'Adopt or birth a villager in the Higher Self tab.';
+  $('pillBrain').style.cursor = 'pointer';
+  $('pillBrain').onclick = () => showTab('brain');
   $('pillBrain').classList.toggle('on', n > 0);
 }
 
@@ -1028,7 +1032,7 @@ function renderBrainTab() {
   const mine = state.agents.filter(a => owned.has(a.id));
   const per = brainCfg.perAgent || {};
   const provOpts = (sel) => `<option value="">(default brain)</option>` + Object.entries(Brain.PROVIDERS).map(([k, p]) => `<option value="${k}" ${sel === k ? 'selected' : ''}>${esc(p.label.split(' (')[0])}</option>`).join('');
-  const ownedHtml = mine.length ? mine.map(a => `<div class="agentrow" style="flex-wrap:wrap;gap:6px"><span style="flex:1 1 100%">${esc(a.name)} <span class="muted">${a.alive ? a.branch : 'dead'}${a.autopilot ? ' · autopilot' : ''} · mind: ${esc(cfgFor(a.id).provider)} ${esc(cfgFor(a.id).model || '')}</span></span><select data-pa-prov="${a.id}" style="flex:1">${provOpts(per[a.id]?.provider || '')}</select><input data-pa-model="${a.id}" placeholder="model for ${esc(a.name)}" value="${esc(per[a.id]?.model || '')}" style="flex:1"><button class="act" data-release="${a.id}">Release</button></div>`).join('') : '<span class="muted">None yet. Adopt one below, or birth a new villager.</span>';
+  const ownedHtml = mine.length ? mine.map(a => `<div class="agentrow" style="flex-wrap:wrap;gap:6px"><span style="flex:1 1 100%"><b>${esc(a.name)}</b> ${a.alive ? `<button class="act" data-talkto="${a.id}" style="margin-left:6px">Talk to ${esc(a.name)}</button>` : ''} <span class="muted">${a.alive ? a.branch : 'dead'}${a.autopilot ? ' · autopilot' : ''} · mind: ${esc(cfgFor(a.id).provider)} ${esc(cfgFor(a.id).model || '')}</span></span><select data-pa-prov="${a.id}" style="flex:1">${provOpts(per[a.id]?.provider || '')}</select><input data-pa-model="${a.id}" placeholder="model for ${esc(a.name)}" value="${esc(per[a.id]?.model || '')}" style="flex:1"><button class="act" data-release="${a.id}">Release</button></div>`).join('') : '<span class="muted">None yet. Adopt one below, or birth a new villager.</span>';
   const free = state.agents.filter(a => a.alive && !a.owned);
   const freeHtml = free.length ? free.map(a => `<div class="agentrow"><span>${esc(a.name)} <span class="muted">${a.branch} · raised ${a.upbringing}</span></span><button class="act" data-adopt="${a.id}">Adopt</button></div>`).join('') : '<span class="muted">Everyone has an owner.</span>';
   // Only touch the DOM when the lists actually change, so buttons stay clickable between ticks.
@@ -1036,6 +1040,7 @@ function renderBrainTab() {
   const editing = document.activeElement && $('owned').contains(document.activeElement);
   if ($('owned').innerHTML !== ownedHtml && !editing) {
     $('owned').innerHTML = ownedHtml;
+    for (const b of document.querySelectorAll('[data-talkto]')) b.onclick = () => { selected = b.dataset.talkto; showTab('agent'); renderInspector(); setTimeout(() => document.querySelector(`[data-commune="${selected}"]`)?.focus(), 50); };
     for (const b of document.querySelectorAll('[data-release]')) b.onclick = () => { send({ type: 'release', agentId: b.dataset.release }); owned.delete(b.dataset.release); updateBrainPill(); renderBrainTab(); };
     const savePer = (id) => {
       const prov = document.querySelector(`[data-pa-prov="${id}"]`).value, model = document.querySelector(`[data-pa-model="${id}"]`).value.trim();
