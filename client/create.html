@@ -53,6 +53,12 @@
     <p class="lead">Naming is the first collapse. Before a name, a villager could be anyone.</p>
     <label>Name</label><input id="name" placeholder="Wren, Ash, Marlow… or leave blank and the village will name them" maxlength="24">
     <div class="row"><a href="/" class="muted">← back to the village</a><span class="spacer"></span><button class="primary" data-next>Next</button></div>
+    <details style="margin-top:18px"><summary class="muted" style="cursor:pointer">Bring someone from another world</summary>
+      <p class="lead">A villager from another village (your laptop's, say) can walk in here with their name, chart, childhood, scars, diary and who they think they are. Trust and belongings stay behind. Paste their life-record link (the "life record (json)" link at the bottom of their panel in the other village, e.g. http://localhost:3333/api/agent/xxxx.json) or the JSON itself.</p>
+      <textarea id="carryIn" rows="3" style="width:100%;box-sizing:border-box" placeholder="http://localhost:3333/api/agent/…json  or  {&quot;name&quot;:…}"></textarea>
+      <div class="err" id="carryErr"></div>
+      <div class="row"><span class="spacer"></span><button class="primary" id="carry">Let them in</button></div>
+    </details>
   </section>
 
   <!-- 2 birth -->
@@ -162,6 +168,27 @@ function fillSummary() {
   const up = { warm: 'a warm house', cold: 'a cold house', inconsistent: 'a house that changed with the weather', '': 'a rolled childhood' }[upbringing];
   $('summary').innerHTML = `<b>${esc(name)}</b><br>${esc(chartData.chart.summary)}<br>Raised in ${up}.`;
 }
+
+// Carrying someone in: fetch or parse the record, then send it over the socket.
+$('carry').onclick = async () => {
+  const raw = $('carryIn').value.trim(); $('carryErr').textContent = '';
+  if (!raw) { $('carryErr').textContent = 'Paste a life-record link or its JSON first.'; return; }
+  let record;
+  try {
+    if (/^https?:\/\//i.test(raw)) { const r = await fetch(raw); if (!r.ok) throw new Error('could not fetch that link (' + r.status + ')'); record = await r.json(); }
+    else record = JSON.parse(raw);
+  } catch (e) { $('carryErr').textContent = e.message + '. If the link is on your own machine, that village must be running; or open the link, copy the whole page, and paste it here.'; return; }
+  const token = localStorage.getItem('playinggod.token') || null;
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+  $('carry').disabled = true;
+  ws.onopen = () => { ws.send(JSON.stringify({ type: 'hello', token })); ws.send(JSON.stringify({ type: 'carry', record })); };
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'adopted' && m.born) { localStorage.setItem('playinggod.token', m.token); ws.close(); location.href = '/?select=' + encodeURIComponent(m.agentId); }
+    if (m.type === 'error') { $('carryErr').textContent = m.error; $('carry').disabled = false; }
+  };
+  ws.onerror = () => { $('carryErr').textContent = 'Could not reach the village.'; $('carry').disabled = false; };
+};
 
 // Birth goes over the same socket the village uses, with the same claim token, so the new villager is yours.
 $('birth').onclick = () => {

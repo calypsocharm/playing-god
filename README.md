@@ -419,3 +419,17 @@ given to a child is kept for life. A quilt is warmer than a blanket and made for
 settles a tight chest. The autopilot brain reaches for these when the larder allows and the body
 is dry; brained villagers have them all as actions. Joy is in the training reward: what fed the
 life counts, not only what kept it.
+
+## Talking to yours, and carrying them between worlds
+
+Open a villager you own and the top of their panel is a conversation. You speak as the voice they
+have always had; they answer as themselves, through your model, knowing what has happened to them
+since you last spoke. Quick buttons ask what happened, what they want, and who they trust. Anything
+you say can be made their standing intention with one button, and they carry it every day. Only the
+tab whose model runs a villager can speak to them; everyone else sees why not.
+
+A villager can move to another village. Copy the "life record (json)" link at the bottom of their
+panel, open the other village's create page, and paste it under "Bring someone from another world".
+They arrive on the road with their name, chart, childhood, scars, diary, sense of self, and your
+conversations. Trust and belongings stay behind: new people, new life. The other village's server
+must be reachable from your browser; a village on your own machine counts.

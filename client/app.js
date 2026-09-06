@@ -51,7 +51,7 @@ function onMessage(m) {
     case 'tell': onTell(m.digest); break;
     case 'decideMany': onDecideMany(m.items); break;
     case 'chat': appendChat(m.msg); break;
-    case 'error': log('server: ' + m.error); toast(m.error, 'bad'); if (/attention/.test(m.error)) { weatherDirty = false; setTimeout(renderWeather, 300); } break;
+    case 'error': log('server: ' + m.error); if (!m.soft) toast(m.error, 'bad'); if (/attention/.test(m.error)) { weatherDirty = false; setTimeout(renderWeather, 300); } break;
     case 'result': toast(m.text, 'good'); addSkyAct(m.text); break;
     case 'dilemma': showDilemma(m); break;
     case 'communeView': onCommuneView(m); break;
@@ -487,13 +487,14 @@ ${v.near.length ? 'With you: ' + v.near.join('; ') + '.' : 'You are alone right 
 People you know: ${v.people.slice(0, 8).join('; ')}
 What you remember most: ${v.memories.slice(0, 5).join(' ')}
 ${v.diary.length ? 'From your diary: ' + v.diary[v.diary.length - 1] : ''}
+${m.since?.length ? 'Since the voice last spoke, this happened to you: ' + m.since.join(' ') : ''}
 
 A quiet voice you have always had, underneath everything, speaks to you. It has spoken before:
 ${recent || '(this is the first time)'}
 
 It says now: "${m.text}"
 
-Answer the voice in your own words. First person, one to four sentences, plain, the way a person who lives outdoors talks. You may agree, argue, ask it something, or refuse. You do not know what the voice is. Never mention being an AI. No JSON, no quotation marks around the whole answer.`;
+Answer the voice in your own words, and answer what it actually said or asked. If it asks what happened, tell it what happened to you, plainly. First person, one to five sentences, plain, the way a person who lives outdoors talks. You may agree, argue, ask it something, or refuse. You do not know what the voice is. Never mention being an AI. No JSON, no quotation marks around the whole answer.`;
     const raw = await Brain.callModel(cfgFor(m.agentId), 'You are a villager with a body, answering a voice inside you. Plain speech only.', user, { maxTokens: 300 });
     const text = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim().replace(/^["“]|["”]$/g, '').slice(0, 700);
     if (text) send({ type: 'communed', agentId: m.agentId, text });
@@ -502,12 +503,15 @@ Answer the voice in your own words. First person, one to four sentences, plain, 
   finally { communeBusy.delete(m.agentId); }
 }
 function renderCommune(a) {
-  if (!owned.has(a.id) || !a.alive) return '';
+  if (!a.alive) return a.guidance ? `<div class="muted">Guided: "${esc(a.guidance)}"</div>` : '';
+  if (!owned.has(a.id)) return `<div class="muted" style="margin:6px 0">Only ${esc(a.name)}'s higher self can speak to them: the tab whose model runs them. ${a.brain === 'remote' ? 'Someone else is their higher self.' : 'Adopt them in the Higher Self tab to become theirs.'}${a.guidance ? ` They are guided: "${esc(a.guidance)}"` : ''}</div>`;
   const thread = communeThreads.get(a.id) || [];
   const lines = thread.map(t => `<div class="mem" style="${t.from === 'self' ? 'color:var(--warm)' : ''}"><span class="muted">${t.from === 'self' ? 'you' : esc(a.name)} · d${t.day}</span><br>${esc(t.text)}</div>`).join('');
-  return `<h3>Commune <span class="muted">· speak as the voice they have always had; they answer as themselves</span></h3>
-    <div id="communeLog-${a.id}" style="max-height:220px;overflow:auto;background:#0a0d12;border-radius:6px;padding:6px 8px">${lines || '<div class="muted">Nothing said yet. They do not know what you are. Say something.</div>'}${communeBusy.has(a.id) ? '<div class="muted">…they are thinking</div>' : ''}</div>
-    <div class="row" style="margin-top:6px"><input data-commune="${a.id}" placeholder="what do you say to them?" maxlength="500" style="flex:1"><button class="act" data-communesend="${a.id}">Speak</button></div>`;
+  return `<h3>You are their higher self <span class="muted">· the voice they have always had. They answer as themselves.</span></h3>
+    <div id="communeLog-${a.id}" style="max-height:240px;overflow:auto;background:#0a0d12;border-radius:6px;padding:6px 8px">${lines || '<div class="muted">Nothing said yet. They do not know what you are. Say something, and they will answer.</div>'}${communeBusy.has(a.id) ? '<div class="muted">…' + esc(a.name) + ' is thinking</div>' : ''}</div>
+    <div class="row" style="margin-top:6px"><input data-commune="${a.id}" placeholder="say anything; ${esc(a.name)} will answer" maxlength="500" style="flex:1"><button class="act" data-communesend="${a.id}">Speak</button></div>
+    <div class="row" style="margin-top:4px;flex-wrap:wrap;gap:4px"><button class="act" data-communeask="${a.id}" data-q="What has happened to you since we last spoke? How are you, really?">What happened since?</button><button class="act" data-communeask="${a.id}" data-q="What do you want most right now?">What do you want?</button><button class="act" data-communeask="${a.id}" data-q="Who do you trust, and who hurt you?">Who do you trust?</button><button class="act" data-communeguide="${a.id}">Make what I said their standing intention</button></div>
+    <div class="muted" style="margin-top:4px">Standing intention${a.guidance ? `: "${esc(a.guidance)}" <button class="act" data-guideclear="${a.id}" style="padding:0 6px">clear</button>` : ': none. Speak, then press the button above and they carry it every day.'}</div>`;
 }
 
 // ---------- feedback ----------
@@ -825,6 +829,20 @@ $('inspector').addEventListener('click', (e) => {
   if (step) { const id = step.dataset.diary; const a = state.agents.find(x => x.id === id); const cur = diaryPage.has(id) ? diaryPage.get(id) : a.diary.length - 1; diaryPage.set(id, cur + Number(step.dataset.step)); renderInspector(); return; }
   const cBtn = e.target.closest('[data-communesend]');
   if (cBtn) { const id = cBtn.dataset.communesend; const inp = document.querySelector(`[data-commune="${id}"]`); const text = inp.value.trim(); if (text) { send({ type: 'commune', agentId: id, text }); inp.value = ''; inp.blur(); } return; }
+  const askBtn = e.target.closest('[data-communeask]');
+  if (askBtn) { send({ type: 'commune', agentId: askBtn.dataset.communeask, text: askBtn.dataset.q }); return; }
+  const mkBtn = e.target.closest('[data-communeguide]');
+  if (mkBtn) {
+    const id = mkBtn.dataset.communeguide; const inp = document.querySelector(`[data-commune="${id}"]`);
+    const last = (communeThreads.get(id) || []).filter(t => t.from === 'self').slice(-1)[0];
+    const text = (inp.value.trim() || last?.text || '').slice(0, 300);
+    if (!text) { toast('Say something first; then it can become their intention.', 'bad'); return; }
+    send({ type: 'guide', agentId: id, text });
+    if (inp.value.trim()) { send({ type: 'commune', agentId: id, text }); inp.value = ''; }
+    toast(`${state.agents.find(x => x.id === id)?.name} will carry this every day: "${text}"`, 'good'); inp.blur(); return;
+  }
+  const clrBtn = e.target.closest('[data-guideclear]');
+  if (clrBtn) { send({ type: 'guide', agentId: clrBtn.dataset.guideclear, text: '' }); return; }
   const guideBtn = e.target.closest('[data-guidesend]');
   if (guideBtn) { const id = guideBtn.dataset.guidesend; const inp = document.querySelector(`[data-guide="${id}"]`); send({ type: 'guide', agentId: id, text: inp.value.trim() }); log(`you guided ${state.agents.find(x => x.id === id)?.name}: ${inp.value.trim() || '(cleared)'}`); inp.blur(); return; }
   const sendBtn = e.target.closest('[data-notesend]');
@@ -853,8 +871,7 @@ function renderInspector() {
     <a href="diaries.html?who=${a.id}" style="display:block;text-decoration:none;background:var(--warm);color:#1a1206;font-weight:700;text-align:center;padding:10px;border-radius:8px;margin:8px 0">📖 Read ${esc(a.name)}'s diary (${a.diary.length} night${a.diary.length === 1 ? '' : 's'})</a>
     <div class="row" style="margin:6px 0">${a.alive ? `<button class="act" data-moment="${a.id}">Look closer · stop time</button><span class="muted">${esc(expressionOf(a))}</span>` : ''}</div>
     ${a.destiny ? `<div class="quote" style="color:var(--warm)">${a.destiny.fulfilled ? 'Destiny come to pass' : 'Marked'}: "${esc(a.destiny.text)}"</div>` : ''}
-    ${owned.has(a.id) && a.alive ? `<label>Your voice as their higher self <span class="muted">· a standing intention, heard as a voice they have always had</span></label>
-      <div class="row" style="margin-top:4px"><input data-guide="${a.id}" value="${esc(a.guidance || '')}" placeholder="e.g. look after Calypso · get the hall built · learn who you can trust" maxlength="300" style="flex:1"><button class="act" data-guidesend="${a.id}">Set</button></div>` : (a.guidance ? `<div class="muted">Guided: "${esc(a.guidance)}"</div>` : '')}
+    ${renderCommune(a)}
     <div class="muted">${esc(a.chart.summary)}</div>
     <div class="muted">Born ${a.chart.birth.slice(0, 10)} · raised ${a.upbringing} · one village year is ${state.yearDays} days · brain: ${a.brain}${a.voicedBy ? ` · whispered to by <b>${esc(a.voicedBy)}</b> since day ${a.voicedSince}` : ''}${a.brain === 'remote' ? (a.connected ? (a.autopilot ? ' (owner slow, scripted stood in)' : ' (owner connected)') : ' (owner away)') : ''}</div>
     ${a.transits.length ? `<div class="muted">Sky: ${a.transits.map(esc).join(', ')}</div>` : ''}
@@ -871,7 +888,6 @@ function renderInspector() {
     ${a.wants ? `<div class="muted" style="margin-top:4px">${a.inv[a.wants] > 0 ? `Has the <b>${esc(a.wants)}</b> they longed for.` : `Longs for a <b>${esc(a.wants)}</b>.`}</div>` : ''}
     ${(a.grief || []).length ? `<h3>Grieving</h3>${a.grief.map(g => `<div class="wound"><div>${esc(g.name)} <span class="muted">· since day ${g.day} · shared ${g.shared}×</span></div>${dial('weight', g.intensity, 'cold')}</div>`).join('')}` : ''}
     ${renderFamily(a)}
-    ${renderCommune(a)}
     <h3>Diary <span class="muted">(${a.diary.length} entr${a.diary.length === 1 ? 'y' : 'ies'})</span></h3>
     ${renderDiary(a)}
     <h3>Rules the body wrote <span class="muted">(they cannot see these)</span></h3>
@@ -882,7 +898,7 @@ function renderInspector() {
     <h3>What a mind could learn from this life</h3>
     <div class="muted" id="trainInfo-${a.id}">Loading…</div>
     <div class="row" style="margin-top:6px"><a class="act" href="/api/training/${a.id}/sft.jsonl" style="text-decoration:none">Export examples</a><a class="act" href="/api/training/${a.id}/dpo.jsonl" style="text-decoration:none">Export preference pairs</a><a class="act" href="/train/README.md" target="_blank" style="text-decoration:none">How to train</a></div>
-    <div class="muted" style="margin-top:10px"><a href="/api/agent/${a.id}.json" target="_blank" style="color:var(--dim)">life record (json)</a></div>`;
+    <div class="muted" style="margin-top:10px"><a href="/api/agent/${a.id}.json" target="_blank" style="color:var(--dim)">life record (json)</a> · to bring ${esc(a.name)} into another village, paste that link on the other village's create page under "Bring someone from another world".</div>`;
   fetch(`/api/training/${a.id}`).then(r => r.json()).then(s => {
     const el = document.getElementById(`trainInfo-${a.id}`); if (!el) return;
     if (!s.n) { el.textContent = a.brain === 'remote' || a.brain === 'lent' ? 'No decisions recorded yet. Every choice this mind makes from now on is kept with what it did to the body.' : 'Nothing recorded. Only villagers with a mind (owned or lent) are recorded.'; return; }

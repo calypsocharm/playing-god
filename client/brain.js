@@ -165,9 +165,21 @@ export function parseAction(text) {
 }
 
 export async function decide(cfg, view) {
-  const text = await callModel(cfg, SYSTEM, renderView(view), { maxTokens: 900, json: true });
-  const parsed = parseAction(text);
-  if (!parsed) throw new Error('no JSON in reply: ' + text.slice(0, 120));
+  let text = await callModel(cfg, SYSTEM, renderView(view), { maxTokens: 900, json: true });
+  let parsed = parseAction(text);
+  if (!parsed) {
+    // Once more, firmly. Some models answer in prose the first time.
+    text = await callModel(cfg, SYSTEM, renderView(view) + '\n\nAnswer with ONLY the JSON object: {"thought": "...", "action": {"type": "...", ...}}. No prose before or after it.', { maxTokens: 900, json: true });
+    parsed = parseAction(text);
+  }
+  if (!parsed) {
+    // Still prose. A person who talks instead of acting is still doing something: they are talking.
+    const prose = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim().slice(0, 200);
+    if (!prose) throw new Error('empty reply');
+    const near = (view.near || []);
+    const action = near.length ? { type: 'talk', target: near[0].id, say: prose } : { type: 'rest' };
+    return { action, thought: near.length ? '' : prose, raw: text, prose: true };
+  }
   const action = parsed.action || parsed;
   return { action, thought: parsed.thought || '', raw: text };
 }

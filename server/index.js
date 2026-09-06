@@ -30,7 +30,7 @@ const server = http.createServer(async (req, res) => {
     const id = url.pathname.split('/')[3].replace(/\.json$/, '');
     try {
       const txt = await fs.readFile(path.join(ROOT, 'data', 'agents', `${id}.json`), 'utf8');
-      res.writeHead(200, { 'content-type': 'application/json' }); return res.end(txt);
+      res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' }); return res.end(txt);
     } catch { res.writeHead(404); return res.end('no such life'); }
   }
   if (url.pathname === '/api/chart') {
@@ -210,6 +210,37 @@ function handle(ws, c, m) {
       broadcast({ type: 'state', state: World.publicState(world) });
       break;
     }
+    case 'carry': {
+      // A villager from another village walks in on the road. They keep their name, chart, childhood,
+      // scars, diary and who they think they are. Trust and belongings stay behind: new people, new life.
+      if (!allow(c, 'claim', 3, 60000)) return send(ws, { type: 'error', error: 'slow down: three arrivals a minute' });
+      if (World.alive(world).length >= 60) return send(ws, { type: 'error', error: 'the village is full for now' });
+      const r = m.record;
+      if (!r || typeof r !== 'object' || !r.chart || typeof r.chart.birth !== 'string' || typeof r.name !== 'string') return send(ws, { type: 'error', error: 'that is not a life record' });
+      if (JSON.stringify(r).length > 400 * 1024) return send(ws, { type: 'error', error: 'that record is too large' });
+      const ms = Date.parse(r.chart.birth);
+      const age = (World.simDate(world) - ms) / (365.25 * 86400000);
+      if (!Number.isFinite(ms) || age < 16 || age > 120) return send(ws, { type: 'error', error: 'their birth does not fit this world\'s time' });
+      const name = r.name.slice(0, 24).replace(/[^\p{L}\p{N} '.-]/gu, '') || undefined;
+      c.token = c.token || uid();
+      const a = World.newAgent(world, { name, upbringing: ['warm', 'cold', 'inconsistent'].includes(r.upbringing) ? r.upbringing : undefined, birthMs: ms, brain: 'remote' });
+      const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+      a.selfSummary = str(r.selfSummary, 600);
+      a.wants = ['rope', 'axe', 'hoe', 'blanket', 'salve', 'charm'].includes(r.wants) ? r.wants : a.wants;
+      a.scars = (Array.isArray(r.scars) ? r.scars : []).slice(0, 12).filter(s => s && ['closeness', 'weakness', 'asking'].includes(s.trigger)).map(s => ({ trigger: s.trigger, belief: str(s.belief, 80), healedDay: 0, woundedDay: 0, carried: true }));
+      a.diary = (Array.isArray(r.diary) ? r.diary : []).slice(-40).filter(d => d && typeof d.text === 'string').map(d => ({ day: 0, text: str(d.text, 700), by: 'carried', mood: str(d.mood, 20) || 'quiet', carriedDay: Number(d.day) || 0 }));
+      a.commune = (Array.isArray(r.commune) ? r.commune : []).slice(-20).filter(t => t && typeof t.text === 'string').map(t => ({ day: 0, tick: 0, from: t.from === 'self' ? 'self' : 'villager', text: str(t.text, 700) }));
+      const carriedMem = (Array.isArray(r.memories) ? r.memories : []).slice(-6).filter(x => x && typeof x.text === 'string').map(x => str(x.text, 200));
+      World.remember(world, a, 'You walked a long road from another village. Everyone you knew is behind you; the diary in your pack is yours.', 1);
+      for (const t of carriedMem) World.remember(world, a, 'From before: ' + t, 0.4);
+      a.owner = c.token; a.connected = true; c.owned.add(a.id);
+      a.location = 'road'; a.pos = { ...World.PLACES.road };
+      World.event(world, `${a.name} arrives on the road from another village, carrying a diary of ${a.diary.length} nights.`, 'arrive', [a.id]);
+      send(ws, { type: 'adopted', agentId: a.id, token: c.token, born: true });
+      send(ws, { type: 'decide', agentId: a.id, view: World.viewFor(a, world) });
+      broadcast({ type: 'state', state: World.publicState(world) });
+      break;
+    }
     case 'release': {
       const a = World.byId(world, m.agentId);
       if (a && a.owner === c.token) { a.owner = null; a.brain = 'scripted'; a.connected = false; c.owned.delete(a.id); }
@@ -227,7 +258,7 @@ function handle(ws, c, m) {
         // Words are said once; carrying on a talk means staying, not repeating the line.
         a.lastAction = act.type === 'talk' ? { type: 'go', to: act.to, thought: act.thought } : { ...act };
       }
-      else send(ws, { type: 'error', error: `could not understand action for ${a.name}` });
+      else send(ws, { type: 'error', soft: true, error: `${a.name}'s answer was not an action the world knows; they carried on as before` });
       break;
     }
     case 'summary': {
@@ -252,7 +283,10 @@ function handle(ws, c, m) {
       a.commune.push({ day: world.day, tick: world.tick, from: 'self', text });
       if (a.commune.length > 80) a.commune.shift();
       World.remember(world, a, `A voice inside you said: "${text}"`, 0.6);
-      send(ws, { type: 'communeView', agentId: a.id, view: World.viewFor(a, world), thread: a.commune.slice(-20), text });
+      const prev = a.commune.filter(x => x.from === 'self').slice(-2, -1)[0];
+      const sinceDay = prev ? prev.day : Math.max(0, world.day - 3), sinceTick = prev ? prev.tick : 0;
+      const since = a.memories.filter(x => (x.day > sinceDay || (x.day === sinceDay && x.tick > sinceTick)) && !/voice inside/.test(x.text)).slice(-10).map(x => x.text);
+      send(ws, { type: 'communeView', agentId: a.id, view: World.viewFor(a, world), thread: a.commune.slice(-20), text, since });
       break;
     }
     case 'communed': {
