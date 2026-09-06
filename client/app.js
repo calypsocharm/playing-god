@@ -417,7 +417,17 @@ canvas.addEventListener('pointerup', (e) => {
   dragging = null;
 });
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); const f = e.deltaY < 0 ? 1.1 : 0.9; cam.scale = Math.max(0.5, Math.min(4, cam.scale * f)); }, { passive: false });
-canvas.addEventListener('dblclick', () => { if (selected) openMoment(selected); });
+canvas.addEventListener('dblclick', (e) => {
+  // Look closer at whoever or whatever is under the cursor, whether or not the first click selected them.
+  if (!state) return;
+  const r = canvas.getBoundingClientRect();
+  const p = fromScreen((e.clientX - r.left) * devicePixelRatio, (e.clientY - r.top) * devicePixelRatio);
+  let best = null, bd = 1.4;
+  for (const a of state.agents) { if (!a.alive) continue; const d = display.get(a.id) || a.pos; const dist = Math.hypot(d.x - p.x, d.y - p.y); if (dist < bd) { bd = dist; best = a; } }
+  if (best) return openMoment(best.id);
+  const hit = placeAt(p); if (hit) return openPlace(hit);
+  if (selected) openMoment(selected);
+});
 
 // ---------- the watchers ----------
 // Chat shared by everyone on the page, and the instruments.
