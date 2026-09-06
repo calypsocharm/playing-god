@@ -151,3 +151,17 @@ well. From there it is the village's problem.
   harvested in autumn, dead in winter. A neglected garden shows it.
 - **Night owls** exist now: the young, restless and grieving sit up late by the fire when there is
   wood; children slip out and worried parents notice.
+
+## Next up (Sep 6 2026): keep the disk small, keep the context sharp
+
+Measured on the laptop village at day 340, ~22 villagers: 7.2 MB on disk, 4.6 MB of it training
+records (~7 KB per brained decision, uncapped). Everything else is already capped.
+
+1. Training records: store the view as a diff against the previous record for that villager,
+   and gzip-rotate `data/training/*.jsonl` nightly. Expect ~10x smaller.
+2. Stop persisting `lastView` in world.json (7 KB per villager per save, never read back).
+3. Fold diaries by season: every 40 days, the season's nights become one season entry, written
+   by the owner's model if present, else scripted. Keep the last 40 nights raw. The prompt gets
+   shorter and the villager remembers in eras. Chapters already do this for the chronicle.
+4. Archive the dead: life file written once at death, then drop the record from the live world
+   (keep a stub for family, graves and grief).
