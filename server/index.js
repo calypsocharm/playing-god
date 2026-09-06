@@ -133,6 +133,8 @@ function handle(ws, c, m) {
       const a = World.byId(world, m.agentId);
       if (!a || !a.alive) return send(ws, { type: 'error', error: 'no such villager' });
       if (a.owner && a.owner !== c.token) return send(ws, { type: 'error', error: `${a.name} already has an owner` });
+      // Nobody may be the higher self of more than five at once; the village is not one person's.
+      if (c.token && world.agents.filter(x => x.alive && x.owner === c.token).length >= 5 && a.owner !== c.token) return send(ws, { type: 'error', error: 'You already hold five. Release one first.' });
       // Children cannot be adopted; a grown child's family has first claim for two seasons.
       if (a.upbringing === 'raised') return send(ws, { type: 'error', error: `${a.name} is a child. Their mind is still forming.` });
       if (a.kinOwner && a.kinOwner !== c.token && world.day < (a.comeOfAgeDay || 0) + world.weather.daysPerSeason * 2) return send(ws, { type: 'error', error: `${a.name}'s family has first claim for now.` });
@@ -221,6 +223,10 @@ function handle(ws, c, m) {
     }
     case 'chat': {
       // Watchers talking about the village. Anyone on the page. Villagers never see it.
+      // One line every three seconds per connection, so a bored stranger cannot flood the gallery.
+      const now = Date.now();
+      if (c.lastChat && now - c.lastChat < 3000) return send(ws, { type: 'error', error: 'slow down' });
+      c.lastChat = now;
       const msg = World.chat(world, m.name, m.text);
       if (msg) broadcast({ type: 'chat', msg });
       break;

@@ -369,3 +369,17 @@ Once the road is laid, a cart comes now and then from beyond the edge. It buys t
 and why a glut is worth something. When the till is fat it also leaves blankets, salve, rope, and
 pots on the shelf. Workers on a store project bring what it still lacks, make rope for it, and go
 to the clay pit for clay, rather than hauling more of what is already there.
+
+## Deploying (clawkeep.io on box 2)
+
+One paste, as root, on the server:
+
+    curl -fsSL https://raw.githubusercontent.com/calypsocharm/playing-god/main/deploy/server-setup.sh | bash
+
+It installs Node and pm2 if needed, clones to `/opt/playing-god`, mints a Creator password into
+`/opt/playing-god/.god_token` (printed once at the end; never in the repo), runs the app under pm2
+on port 3340, writes the nginx block for clawkeep.io with websocket upgrade (retiring whatever
+served the name before), gets a certificate with certbot's nginx authenticator, and installs an
+hourly self-update. After that, a push to `main` is live within the hour, or run
+`playing-god-update` on the box for instant. Never hand-edit files under `/opt/playing-god`; the
+updater resets to `origin/main`. `data/` on the server is the village and is never touched.
