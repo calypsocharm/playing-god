@@ -92,6 +92,18 @@ export function scriptedDecide(a, s) {
     if (inv.fiber < 5) return { type: 'forage', to: 'meadow', thought: 'Fiber. Not like them.' };
   }
 
+  // A gift, used when it plainly fits and the body can pay for it.
+  if (a.gift && b.energy > 0.55 && (a.castsToday || 0) < 2 && Math.random() < 0.35) {
+    const k = a.gift.kind;
+    const hurt = s.near.find(n => n.visible?.includes('injured'));
+    const cold = s.near.find(n => n.visible?.includes('shivering'));
+    const wounded = s.near.find(n => n.tightness > 0.5 && n.trust > 0);
+    if (k === 'kindling' && (cold || (s.hearthWood ?? 9) < 3)) return cold ? { type: 'cast', target: cold.id, thought: 'Warm them.' } : { type: 'cast', to: 'hearth', thought: 'The fire is low. I can fix that.' };
+    if (k === 'greenhand' && hurt) return { type: 'cast', target: hurt.id, thought: 'Let it close.' };
+    if (k === 'greenhand' && !hurt && inv.food < 1.5 && isDay && a.location === 'field') return { type: 'cast', to: 'field', thought: 'Wake the ground.' };
+    if (k === 'seeing' && wounded) return { type: 'cast', target: wounded.id, thought: 'Let me see what runs you.' };
+    if (k === 'farsight' && s.frontierLeft > 0 && ['edge', 'road'].includes(a.location)) return { type: 'cast', to: 'edge', thought: 'I can see what is out there.' };
+  }
   // Something that is not work. When the larder allows and the body is dry, joy comes first.
   const joy = b.joy ?? 0.5;
   if (isDay && inv.food >= 1 && b.food > 0.4 && (joy < 0.35 || (joy < 0.6 && Math.random() < 0.25))) {

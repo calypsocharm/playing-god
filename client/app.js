@@ -983,6 +983,7 @@ function renderInspector() {
     <a href="diaries.html?who=${a.id}" style="display:block;text-decoration:none;background:var(--warm);color:#1a1206;font-weight:700;text-align:center;padding:10px;border-radius:8px;margin:8px 0">📖 Read ${esc(a.name)}'s diary (${a.diary.length} night${a.diary.length === 1 ? '' : 's'})</a>
     <div class="row" style="margin:6px 0">${a.alive ? `<button class="act" data-moment="${a.id}">Look closer · stop time</button><span class="muted">${esc(expressionOf(a))}</span>` : ''}</div>
     ${a.destiny ? `<div class="quote" style="color:var(--warm)">${a.destiny.fulfilled ? 'Destiny come to pass' : 'Marked'}: "${esc(a.destiny.text)}"</div>` : ''}
+    ${a.gift ? `<div class="quote" style="color:var(--warm)">Gift: ${esc(a.gift.label)} <span class="muted">· woke day ${a.gift.day} · used ${a.gift.uses}×</span><br><span class="muted">${esc(a.gift.what)}</span></div>` : ((a.skills?.stillness || 0) >= 4 ? '<div class="muted">Something stirs when they sit still. Not finished yet.</div>' : '')}
     ${renderCommune(a)}
     <div class="muted">${esc(a.chart.summary)}</div>
     <div class="muted">Born ${a.chart.birth.slice(0, 10)} · raised ${a.upbringing} · one village year is ${state.yearDays} days · brain: ${a.brain}${a.voicedBy ? ` · whispered to by <b>${esc(a.voicedBy)}</b> since day ${a.voicedSince}` : ''}${a.brain === 'remote' ? (a.connected ? (a.autopilot ? ' (owner slow, scripted stood in)' : ' (owner connected)') : ' (owner away)') : ''}</div>
@@ -1041,7 +1042,8 @@ function renderWeather() {
   const pr = (state.prayers || []).slice(-8).reverse();
   $('prayers').innerHTML = pr.length ? pr.map(p => `<div class="mem"><span class="muted">d${p.day} ${esc(p.name)}${p.faith < -0.2 ? ' (doubting)' : p.faith > 0.2 ? ' (believing)' : ''}:</span> "${esc(p.text)}"</div>`).join('') : 'No one has spoken to the sky.';
   const opts = state.agents.filter(a => a.alive).map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
-  if ($('nudgeA').innerHTML !== opts) { $('nudgeA').innerHTML = opts; $('nudgeB').innerHTML = opts; $('destWho').innerHTML = opts; }
+  if ($('nudgeA').innerHTML !== opts) { $('nudgeA').innerHTML = opts; $('nudgeB').innerHTML = opts; $('destWho').innerHTML = opts; $('giftWho').innerHTML = opts; }
+  $('btnGift').disabled = !can('gift');
   // Destinies spoken, and whether they came to pass. You decide when they have.
   const dest = state.agents.filter(a => a.destiny);
   const destHtml = dest.length ? dest.map(a => `<div class="mem">${esc(a.name)}: "${esc(a.destiny.text)}" ${a.destiny.fulfilled ? `<span style="color:var(--good)">· came to pass day ${a.destiny.fulfilled}</span>` : `<span class="muted">· spoken day ${a.destiny.day}</span> ${a.alive ? `<button class="act" data-fulfil="${a.id}" style="padding:2px 8px;font-size:12px">It has come to pass</button>` : ''}`}</div>`).join('') : '';
@@ -1065,6 +1067,7 @@ $('btnTraveler').onclick = () => send({ type: 'god', op: 'traveler' });
 $('btnWood').onclick = () => send({ type: 'god', op: 'wood' });
 $('btnPause').onclick = () => send({ type: 'god', op: state.paused ? 'resume' : 'pause' });
 $('btnNudge').onclick = () => send({ type: 'god', op: 'nudge', a: $('nudgeA').value, b: $('nudgeB').value, place: $('nudgePlace').value });
+$('btnGift').onclick = () => { send({ type: 'god', op: 'gift', a: $('giftWho').value }); };
 $('btnDestiny').onclick = () => { const text = $('destText').value.trim(); if (!text) return; send({ type: 'god', op: 'destiny', a: $('destWho').value, text }); $('destText').value = ''; };
 $('btnOmen').onclick = () => send({ type: 'god', op: 'omen', kind: $('omenKind').value });
 $('lendToggle').checked = localStorage.getItem('playinggod.lend') === '1';

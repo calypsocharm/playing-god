@@ -10,6 +10,7 @@ import { scriptedDecide, scriptedSummary } from './scripted.js';
 import { ELEMENT } from './chart.js';
 import * as I from './items.js';
 import * as F from './family.js';
+import * as G from './gifts.js';
 
 export const TICKS_PER_DAY = 6;
 export const TICK_NAMES = ['dawn', 'morning', 'midday', 'afternoon', 'evening', 'night'];
@@ -117,7 +118,19 @@ export const simDate = (w, day = w.day) => w.startMs + day * DAY_MS;
 // ---------- the weather's attention ----------
 // A god who can do anything every tick has nothing to decide. Attention is scarce and refills
 // with the seasons. Where you spend it is what becomes real.
-export const GOD_COSTS = { weather: 2, traveler: 3, nudge: 1, wood: 1, destiny: 2, fulfil: 0, omen: 1, pause: 0, resume: 0 };
+export const GOD_COSTS = { weather: 2, traveler: 3, nudge: 1, wood: 1, destiny: 2, fulfil: 0, omen: 1, gift: 3, pause: 0, resume: 0 };
+
+// A gift wakes. `how` is a phrase: 'in the quiet at the creek', 'when the sky touched you'.
+export function awaken(w, a, how) {
+  if (a.gift) return a.gift;
+  const kind = G.giftFor(a.chart);
+  a.gift = { kind, day: w.day, uses: 0 };
+  a.skills = a.skills || {}; a.skills.gift = 0;
+  remember(w, a, `Something woke in you ${how}. ${G.GIFTS[kind].felt} You do not have a word for it yet.`, 1);
+  event(w, `Something woke in ${a.name} ${how}. They cannot say what.`, 'wonder', [a.id]);
+  for (const o of sameSpot(w, a)) if (o !== a) remember(w, o, `Something happened to ${a.name} today. They look at their hands differently.`, 0.6);
+  return a.gift;
+}
 // Omens: the sky says something without doing anything. Everyone sees it; what it means is theirs.
 export const OMENS = {
   redsky: 'The sky went red at dusk and stayed red a long time.',
@@ -548,6 +561,7 @@ function dayPhase(w, remoteActions) {
           let y = W.fieldYield(w.day, w.weather);
           if (a.inv.hoe > 0) { y *= 1.5; if (I.wear(a, 'hoe')) { event(w, `${a.name}'s hoe breaks.`, 'info', [a.id]); remember(w, a, 'Your hoe broke.', 0.4); } }
           if (w.builds.granary?.done) y *= 1.25;
+          if ((w.blessedField || 0) >= w.day) y *= 1.5;
           a.inv.food += y; a.body.energy = B.clamp(a.body.energy - 0.08);
           if (y < 0.1) remember(w, a, 'You worked the field and it gave almost nothing.', 0.5);
         } else if (a.location === 'forest') {
@@ -886,12 +900,80 @@ function dayPhase(w, remoteActions) {
         }
         break;
       }
+      case 'cast': {
+        const g = a.gift && G.GIFTS[a.gift.kind];
+        if (!g) { remember(w, a, 'You reached for something that is not in you. Nothing came.', 0.4); break; }
+        a.castsToday = (a.castsToday || 0) + 1;
+        if (a.body.energy < 0.3 || a.castsToday > 2) {
+          a.body.hurt = B.clamp(a.body.hurt + 0.08); a.body.energy = B.clamp(a.body.energy - 0.2); a.body.overwhelmed = Math.max(a.body.overwhelmed, 1);
+          remember(w, a, 'You reached for it and it took more than you had. You are on your knees, and it burns.', 0.8);
+          event(w, `${a.name} reaches for their gift and collapses.`, 'wound', [a.id]);
+          break;
+        }
+        a.body.energy = B.clamp(a.body.energy - 0.3); a.body.breath = B.clamp(a.body.breath - 0.15);
+        a.gift.uses += 1; a.skills.gift = (a.skills.gift || 0) + 1;
+        const power = 1 + Math.min(1, a.gift.uses * 0.1);
+        let text = '';
+        switch (a.gift.kind) {
+          case 'kindling': {
+            if (tgt) { tgt.body.warmth = B.clamp(tgt.body.warmth + 0.5); B.soothe(tgt.body, 0.1); bumpTrust(tgt, a, 0.08); remember(w, tgt, `${a.name} held your hands and the cold left you. Their palms were hot as coals.`, 0.9); text = `${a.name} holds ${tgt.name}'s hands and the cold leaves them.`; }
+            else { const fire = fireStore(w, a); fire.wood = (fire.wood || 0) + Math.round(4 * power); for (const o of near) o.body.warmth = B.clamp(o.body.warmth + 0.25); text = `${a.name} kneels at the fire and it rises without wood. For a moment it burns blue.`; }
+            break;
+          }
+          case 'seeing': {
+            if (!tgt) { text = `${a.name} looks into the well water a long time and sees nothing they can say.`; remember(w, a, 'You looked into the water for someone and found only your own face.', 0.4); break; }
+            const r = tgt.wounds.slice().sort((x, y) => y.strength - x.strength)[0];
+            if (r) {
+              remember(w, a, `You saw into ${tgt.name}. Their body believes: ${r.belief}. It was written on day ${r.day}${r.from ? ' by ' + (byId(w, r.from)?.name || 'someone') : ''}.`, 1);
+              r.strength = Math.max(0, r.strength - 0.15 * power); r.contradictions += 1; tgt.exposures[r.trigger] = true;
+              B.soothe(tgt.body, 0.15); bumpTrust(tgt, a, 0.1);
+              remember(w, tgt, `${a.name} looked at you and you felt seen through, and it did not hurt.`, 0.9);
+              text = `${a.name} looks at ${tgt.name} and something in ${tgt.name}'s face gives way.`;
+            } else { remember(w, a, `You saw into ${tgt.name}. Nothing is written there that runs them.`, 0.7); B.soothe(tgt.body, 0.1); text = `${a.name} looks into ${tgt.name} a long moment.`; }
+            break;
+          }
+          case 'greenhand': {
+            if (tgt && tgt.body.hurt > 0.1) { tgt.body.hurt = B.clamp(tgt.body.hurt - 0.3 * power); bumpTrust(tgt, a, 0.1); remember(w, tgt, `${a.name} laid hands on you and the hurt closed like a flower at dusk.`, 0.9); text = `${a.name} lays hands on ${tgt.name} and the hurt closes.`; }
+            else { w.blessedField = w.day + 1; text = `${a.name} kneels in the field with both hands in the earth, and the earth answers. Tomorrow will give more.`; remember(w, a, 'You put your hands in the ground and felt it turn toward you.', 0.6); }
+            break;
+          }
+          case 'farsight': {
+            const next = I.FRONTIER.find(f => !isFound(w, f.key));
+            if (next && ['edge', 'road'].includes(a.location)) {
+              w.found = w.found || {}; w.found[next.key] = { day: w.day, by: a.id };
+              PLACES[next.key] = PLACES[next.key] || { x: next.x, y: next.y, label: next.label, sheltered: false };
+              text = `${a.name} stands at the edge with closed eyes and says where to walk: ${next.found}. They call it ${next.label}.`;
+              remember(w, a, `You saw it before anyone walked there: ${next.label}.`, 1);
+              for (const o of alive(w)) if (o !== a) remember(w, o, `${a.name} found ${next.label} without leaving the edge. There is more out there than we knew.`, 0.7);
+              if (!w.goals.frontier) { w.goals.frontier = { done: w.day }; event(w, `A question answered: ${GOALS.frontier}.`, 'healed'); }
+            } else {
+              const lacks = alive(w).filter(o => o !== a && (o.body.food < 0.3 || o.body.warmth < 0.3 || o.body.hurt > 0.4)).map(o => `${o.name} is ${o.body.hurt > 0.4 ? 'hurt' : o.body.food < 0.3 ? 'hungry' : 'cold'} at ${o.location === 'home' ? 'home' : (PLACES[o.location]?.label || o.location)}`);
+              remember(w, a, lacks.length ? `You saw far: ${lacks.join('; ')}.` : 'You saw far: everyone is fed and warm, for now.', 0.8);
+              text = `${a.name} goes still and their eyes move as if reading something far off.`;
+            }
+            break;
+          }
+        }
+        B.gladden(a.body, 0.1);
+        a.lastSaid = '';
+        event(w, text, 'wonder', [a.id, ...(tgt ? [tgt.id] : [])]);
+        // The village sees. The guarded and the distrustful are afraid; the rest are lifted, and believe a little more.
+        for (const o of near) {
+          if (o === a || o === tgt) continue;
+          const afraid = (o.traits?.guard || 0.5) > 0.6 || trustOf(o, a) < 0;
+          if (afraid) { bumpTrust(o, a, -0.06); o.faith = B.clamp((o.faith || 0) - 0.05, -1, 1); remember(w, o, `${a.name} did something that should not be possible. Your skin crawled.`, 0.8); }
+          else { bumpTrust(o, a, 0.07); o.faith = B.clamp((o.faith || 0) + 0.08, -1, 1); remember(w, o, `You saw ${a.name} do something no one can explain. You will not forget it.`, 0.9); }
+        }
+        break;
+      }
       case 'sit': {
         // Stillness. By water or under trees it goes deeper. With someone near, it is shared.
         const deep = ['creek', 'grove', 'meadow'].includes(a.location) ? 0.12 : 0.07;
         B.gladden(a.body, deep); a.body.breath = B.clamp(a.body.breath + 0.15);
         a.body.energy = B.clamp(a.body.energy + 0.05);
         if (near.length) { a.exposures.closeness = true; }
+        a.skills = a.skills || {}; a.skills.stillness = (a.skills.stillness || 0) + (deep > 0.1 ? 2 : 1);
+        if (!a.gift && a.skills.stillness >= 8) awaken(w, a, `in the quiet at ${PLACES[a.location]?.label || a.location}`);
         remember(w, a, `You sat still ${a.location === 'home' ? 'at home' : 'at ' + (PLACES[a.location]?.label || a.location)} and let your breath slow.`, 0.3);
         break;
       }
@@ -1479,6 +1561,7 @@ function narrate(w, a, act) {
     case 'leave': return s('leaving', `${a.name} leaves their partner.`, 'hurt');
     case 'split': return s('leaving the village', `${a.name} walks out of the village.`, 'hurt');
     case 'pray': return s('praying', `${a.name} speaks to the sky: "${act.say || ''}"`, 'talk');
+    case 'cast': return T ? s(`gift on ${tn}`, `${a.name} turns their gift on ${tn}.`, 'care') : s('casting', `${a.name} reaches for their gift ${where}.`, 'care');
     case 'sit': return s('sitting still', `${a.name} sits still ${where}, breathing.`, 'care');
     case 'walk': return T ? s(`walking with ${tn}`, `${a.name} and ${tn} walk a long way together.`, 'care') : s('walking', `${a.name} walks alone to ${place(act.to || a.location)}.`, 'quiet');
     case 'sing': return s('singing', `${a.name} sings at the hearth${act.say ? `: "${act.say}"` : '.'}`, 'care');
@@ -1593,6 +1676,7 @@ export function leaveNote(w, a, text) {
 
 function newDay(w) {
   w.day += 1;
+  for (const a of w.agents) a.castsToday = 0;
   const now = simDate(w);
   const d = W.describe(w.day, w.weather);
   // Age takes some in the night.
@@ -1638,6 +1722,14 @@ export function godAct(w, msg) {
       w.weather.tickMs = Math.max(1000, Math.min(180000, w.weather.tickMs));
       event(w, 'The weather shifts.', 'god');
       return { ok: true };
+    }
+    case 'gift': {
+      const a = byId(w, msg.a);
+      if (!a || !a.alive) return { error: 'name someone alive' };
+      if (a.gift) return { error: `${a.name} already carries ${G.GIFTS[a.gift.kind].label}` };
+      awaken(w, a, 'when something reached down and touched you');
+      for (const o of alive(w)) if (o !== a && Math.random() < 0.4) { o.faith = B.clamp((o.faith || 0) + 0.05, -1, 1); remember(w, o, `Something happened to ${a.name}. The air around them is different.`, 0.5); }
+      return { ok: true, kind: a.gift.kind, name: a.name };
     }
     case 'traveler': {
       const a = newAgent(w, { name: msg.name, upbringing: msg.upbringing });
@@ -1724,6 +1816,8 @@ export function viewFor(a, w) {
   const age = ageOf(w, a);
   const hobbyLines = Object.entries(a.skills || {}).filter(([k, n]) => I.HOBBIES[k] && n >= 8).map(([k]) => I.HOBBIES[k].line);
   if ((a.skills?.music || 0) >= 10) hobbyLines.push('You are the one who sings. People ask you to.');
+  if (a.gift && G.GIFTS[a.gift.kind]) hobbyLines.push(`${G.GIFTS[a.gift.kind].felt} ${G.GIFTS[a.gift.kind].what}`);
+  else if ((a.skills?.stillness || 0) >= 4) hobbyLines.push('When you sit still, something at the edge of you stirs. It is not finished yet.');
   const felt = [...ageFelt(age), ...B.feltSense(a.body), ...woundFeltSense(a, nearNames), ...griefFelt(a), ...F.familyFelt(w, a), ...hobbyLines,
     ...(a.destiny && !a.destiny.fulfilled ? [`There is a pull in you toward something. If you had to say it: ${a.destiny.text.replace(/^(this one|they|he|she|this person)\s+will\s+/i, 'you will ')}`] : a.destiny?.fulfilled ? ['You did the thing you were made for. Whatever comes now is extra.'] : [])];
   const feelings = s.others.map(o => {
@@ -1788,6 +1882,7 @@ export function viewFor(a, w) {
       'tend {target: <child name>}  (feed and hold a child in front of you)',
       'strike {target: <person name>}',
       'withdraw  (go home, be alone)',
+      ...(a.gift && G.GIFTS[a.gift.kind] ? [`cast {target: <person name>}  (your gift, ${G.GIFTS[a.gift.kind].label}. ${G.GIFTS[a.gift.kind].what} ${G.COST})`] : []),
       'rest',
     ],
   };
@@ -1819,7 +1914,7 @@ export function publicState(w) {
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
       body: a.body, visible: B.visibleState(a.body), branch: branch(a),
       chart: { summary: a.chart.summary, sun: a.chart.sun, moon: a.chart.moon, rising: a.chart.rising, birth: a.chart.birth },
-      traits: a.traits, upbringing: a.upbringing, inv: a.inv, wants: a.wants, upgrades: a.upgrades || {}, skills: a.skills || {},
+      traits: a.traits, upbringing: a.upbringing, inv: a.inv, wants: a.wants, upgrades: a.upgrades || {}, skills: a.skills || {}, gift: a.gift ? { ...a.gift, label: G.GIFTS[a.gift.kind]?.label, what: G.GIFTS[a.gift.kind]?.what } : null,
       age: Math.floor(ageOf(w, a)), stage: stageOf(ageOf(w, a)), ageAtDeath: a.ageAtDeath,
       family: F.familyPublic(w, a), settlement: fireOf(w, a) === 'camp' ? 'camp' : 'village', destiny: a.destiny || null, faith: +(a.faith || 0).toFixed(2), guidance: a.guidance || '',
       wounds: a.wounds.map(r => ({ trigger: r.trigger, belief: r.belief, strength: r.strength, from: r.from, day: r.day, contradictions: r.contradictions })),
@@ -1827,7 +1922,7 @@ export function publicState(w) {
       trust: a.trust,
       memories: a.memories.slice(-8),
       diary: a.diary, notes: a.notes, grief: a.grief || [], causeOfDeath: a.causeOfDeath,
-      felt: a.alive ? [...ageFelt(ageOf(w, a)), ...B.feltSense(a.body), ...woundFeltSense(a, sameSpot(w, a).map(o => o.name)), ...griefFelt(a)] : [],
+      felt: a.alive ? [...ageFelt(ageOf(w, a)), ...B.feltSense(a.body), ...woundFeltSense(a, sameSpot(w, a).map(o => o.name)), ...griefFelt(a), ...(a.gift && G.GIFTS[a.gift.kind] ? [G.GIFTS[a.gift.kind].felt] : [])] : [],
       near: a.alive ? sameSpot(w, a).map(o => o.id) : [],
       selfSummary: a.selfSummary, thought: a.thought, lastSaid: a.lastSaid,
       transits: a.transits.map(t => `${t.planet} ${t.aspect} ${t.point}`),
@@ -1870,6 +1965,9 @@ export function normaliseAction(w, raw) {
     if (!act.to) return null;
   } else if (type === 'work') {
     act.to = place === 'forest' ? 'forest' : 'field';
+  } else if (type === 'cast' || type === 'magic' || type === 'gift' || type === 'use_gift' || type === 'heal' || type === 'bless') {
+    act.type = 'cast'; act.target = resolveTarget(w, raw.target) || resolveTarget(w, raw.to) || null;
+    act.to = act.target || (PLACES[place] ? place : null);
   } else if (type === 'sit' || type === 'meditate' || type === 'rest_by') {
     act.type = 'sit'; act.to = PLACES[place] || place === 'home' ? place : null;
   } else if (type === 'walk' || type === 'stroll') {

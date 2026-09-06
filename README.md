@@ -446,3 +446,15 @@ scene to look at that person instead.
 The Higher Self tab starts with the people who are yours, each with their own conversation box,
 so you can speak to any of them without hunting for them on the map. Taking a villager on is
 called claiming, and letting them go is releasing them; they go on autopilot, not away.
+
+## The quiet arts
+
+A villager who sits still enough wakes up with a gift, or the Creator can touch one awake for
+three attention. Which gift is the Moon's element. Kindling (fire) raises the hearth without
+wood or warms one person through. Seeing (water) looks into someone and loosens the rule their
+body wrote. The green hand (earth) closes a hurt or wakes the field for a day. Farsight (air)
+knows who is hungry, cold or hurt and where, or finds what is past the edge without walking.
+Every cast costs strength and breath, and a third in one day drops the caster and burns. The
+village sees: guarded or distrustful people are afraid and pull back, the rest are lifted and
+believe a little more. Brained villagers get `cast` as an action once they carry a gift, with
+the felt sense of it; the autopilot uses a gift only when it plainly fits.
