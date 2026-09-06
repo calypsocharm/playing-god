@@ -3,6 +3,10 @@
 A village of language-model agents with bodies that hurt, wounds that heal or don't,
 and a player who is the weather. See [CONCEPT.md](CONCEPT.md) for why.
 
+## The goal
+
+Playing God exists to teach language models feeling, empathy and social understanding by letting them live it instead of reading about it. A model that has been cold and hungry, struck by someone it trusted, comforted, grieved, forgiven and refused, and has watched what each of its own choices cost, has something no transcript gives it: consequences it felt in a body. Every choice a claimed villager makes is recorded with what it saw and what its body felt afterward, so a mind can be trained on a life rather than on text about lives. The measure is not obedience. It is whether they grow kinder, and wiser about each other, over generations.
+
 **BYOK.** Every villager's brain runs in its owner's browser against whatever model the
 owner brings. Same provider set as PidgeyAssist: Google Gemini, OpenAI, Anthropic,
 OpenRouter, and Local (Ollama, LM Studio, or any OpenAI-compatible URL). Each provider keeps

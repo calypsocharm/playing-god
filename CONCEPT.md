@@ -1,5 +1,9 @@
 # Playing God
 
+## The goal
+
+Playing God exists to teach language models feeling, empathy and social understanding by letting them live it instead of reading about it. A model that has been cold and hungry, struck by someone it trusted, comforted, grieved, forgiven and refused, and has watched what each of its own choices cost, has something no transcript gives it: consequences it felt in a body. Every choice a claimed villager makes is recorded with what it saw and what its body felt afterward, so a mind can be trained on a life rather than on text about lives. The measure is not obedience. It is whether they grow kinder, and wiser about each other, over generations.
+
 A world-sim where language-model agents are born, raised, hurt, and sometimes healed.
 The player does not control the people. The player is the weather.
 
