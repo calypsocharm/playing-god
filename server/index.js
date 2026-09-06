@@ -160,7 +160,7 @@ function handle(ws, c, m) {
       if (m.token) c.token = String(m.token).slice(0, 40);
       if (c.token && world.mod.bannedTokens[c.token]) { ws.close(4003, 'banned'); return; }
       // Reconnect any agents this token owns.
-      if (c.token) for (const a of world.agents) if (a.owner === c.token && a.alive) { a.connected = true; c.owned.add(a.id); send(ws, { type: 'adopted', agentId: a.id, token: c.token }); }
+      if (c.token) for (const a of world.agents) if (a.owner === c.token && a.alive) { a.connected = true; c.owned.add(a.id); send(ws, { type: 'adopted', agentId: a.id, token: c.token }); send(ws, { type: 'communeLog', agentId: a.id, thread: (a.commune || []).slice(-20) }); }
       break;
     }
     case 'god': {
@@ -187,6 +187,7 @@ function handle(ws, c, m) {
       c.token = c.token || uid();
       a.owner = c.token; a.brain = 'remote'; a.connected = true; c.owned.add(a.id);
       send(ws, { type: 'adopted', agentId: a.id, token: c.token });
+      send(ws, { type: 'communeLog', agentId: a.id, thread: (a.commune || []).slice(-20) });
       send(ws, { type: 'decide', agentId: a.id, view: World.viewFor(a, world) });
       break;
     }
@@ -237,6 +238,34 @@ function handle(ws, c, m) {
         // Notes shown in the consolidation prompt have now been read.
         for (const n of a.notes) n.read = true;
       }
+      break;
+    }
+    case 'commune': {
+      // The higher self speaks. The villager hears it as the voice they have always had, and answers
+      // in their own words through their owner's model. Kept as an inner dialogue in the record.
+      const a = World.byId(world, m.agentId);
+      if (!a || a.owner !== c.token || !a.alive) return;
+      if (!allow(c, 'commune', 10, 60000)) return send(ws, { type: 'error', error: 'slow down; they need a moment' });
+      const text = String(m.text || '').trim().slice(0, 500);
+      if (!text) return;
+      a.commune = a.commune || [];
+      a.commune.push({ day: world.day, tick: world.tick, from: 'self', text });
+      if (a.commune.length > 80) a.commune.shift();
+      World.remember(world, a, `A voice inside you said: "${text}"`, 0.6);
+      send(ws, { type: 'communeView', agentId: a.id, view: World.viewFor(a, world), thread: a.commune.slice(-20), text });
+      break;
+    }
+    case 'communed': {
+      // The villager's answer, as their model gave it.
+      const a = World.byId(world, m.agentId);
+      if (!a || a.owner !== c.token) return;
+      const text = String(m.text || '').trim().slice(0, 700);
+      if (!text) return;
+      a.commune = a.commune || [];
+      a.commune.push({ day: world.day, tick: world.tick, from: 'villager', text });
+      if (a.commune.length > 80) a.commune.shift();
+      World.remember(world, a, `You answered the voice inside: "${text.slice(0, 160)}"`, 0.5);
+      send(ws, { type: 'communeLog', agentId: a.id, thread: a.commune.slice(-20) });
       break;
     }
     case 'guide': {

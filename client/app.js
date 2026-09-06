@@ -54,6 +54,8 @@ function onMessage(m) {
     case 'error': log('server: ' + m.error); toast(m.error, 'bad'); if (/attention/.test(m.error)) { weatherDirty = false; setTimeout(renderWeather, 300); } break;
     case 'result': toast(m.text, 'good'); addSkyAct(m.text); break;
     case 'dilemma': showDilemma(m); break;
+    case 'communeView': onCommuneView(m); break;
+    case 'communeLog': communeThreads.set(m.agentId, m.thread || []); if (selected === m.agentId) renderInspector(); break;
   }
 }
 
@@ -463,6 +465,51 @@ $('chatLog').addEventListener('click', (e) => {
 });
 $('chatText').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChat(); } });
 
+// ---------- commune ----------
+// Talk to someone who is yours. You are the voice they have always had; your model answers as them.
+const communeThreads = new Map();
+const communeBusy = new Set();
+async function onCommuneView(m) {
+  if (communeBusy.has(m.agentId)) return;
+  communeBusy.add(m.agentId);
+  communeThreads.set(m.agentId, m.thread || []);
+  renderInspector();
+  try {
+    const v = m.view;
+    const recent = (m.thread || []).slice(-8).map(t => `${t.from === 'self' ? 'The voice' : v.you.name}: "${t.text}"`).join('\n');
+    const user = `You are ${v.you.name}, ${v.you.age} years old. ${v.you.chart}
+${v.you.nature.join(' ')}
+${v.you.selfSummary ? 'Who you have become: ' + v.you.selfSummary : ''}
+
+${v.when} You are ${v.where}.
+Your body: ${v.felt.join(' ')}
+${v.near.length ? 'With you: ' + v.near.join('; ') + '.' : 'You are alone right now.'}
+People you know: ${v.people.slice(0, 8).join('; ')}
+What you remember most: ${v.memories.slice(0, 5).join(' ')}
+${v.diary.length ? 'From your diary: ' + v.diary[v.diary.length - 1] : ''}
+
+A quiet voice you have always had, underneath everything, speaks to you. It has spoken before:
+${recent || '(this is the first time)'}
+
+It says now: "${m.text}"
+
+Answer the voice in your own words. First person, one to four sentences, plain, the way a person who lives outdoors talks. You may agree, argue, ask it something, or refuse. You do not know what the voice is. Never mention being an AI. No JSON, no quotation marks around the whole answer.`;
+    const raw = await Brain.callModel(cfgFor(m.agentId), 'You are a villager with a body, answering a voice inside you. Plain speech only.', user, { maxTokens: 300 });
+    const text = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim().replace(/^["“]|["”]$/g, '').slice(0, 700);
+    if (text) send({ type: 'communed', agentId: m.agentId, text });
+    else log(`${v.you.name} had no answer for the voice.`);
+  } catch (e) { log(`commune failed: ${e.message}`); toast(`${m.view?.you?.name || 'They'} could not answer: ${e.message}`, 'bad'); }
+  finally { communeBusy.delete(m.agentId); }
+}
+function renderCommune(a) {
+  if (!owned.has(a.id) || !a.alive) return '';
+  const thread = communeThreads.get(a.id) || [];
+  const lines = thread.map(t => `<div class="mem" style="${t.from === 'self' ? 'color:var(--warm)' : ''}"><span class="muted">${t.from === 'self' ? 'you' : esc(a.name)} · d${t.day}</span><br>${esc(t.text)}</div>`).join('');
+  return `<h3>Commune <span class="muted">· speak as the voice they have always had; they answer as themselves</span></h3>
+    <div id="communeLog-${a.id}" style="max-height:220px;overflow:auto;background:#0a0d12;border-radius:6px;padding:6px 8px">${lines || '<div class="muted">Nothing said yet. They do not know what you are. Say something.</div>'}${communeBusy.has(a.id) ? '<div class="muted">…they are thinking</div>' : ''}</div>
+    <div class="row" style="margin-top:6px"><input data-commune="${a.id}" placeholder="what do you say to them?" maxlength="500" style="flex:1"><button class="act" data-communesend="${a.id}">Speak</button></div>`;
+}
+
 // ---------- feedback ----------
 // Every act answers on screen. Every hard moment for one of yours becomes a choice.
 function toast(text, kind = '') {
@@ -776,6 +823,8 @@ $('inspector').addEventListener('click', (e) => {
   if (look) { openMoment(look.dataset.moment); return; }
   const step = e.target.closest('[data-diary]');
   if (step) { const id = step.dataset.diary; const a = state.agents.find(x => x.id === id); const cur = diaryPage.has(id) ? diaryPage.get(id) : a.diary.length - 1; diaryPage.set(id, cur + Number(step.dataset.step)); renderInspector(); return; }
+  const cBtn = e.target.closest('[data-communesend]');
+  if (cBtn) { const id = cBtn.dataset.communesend; const inp = document.querySelector(`[data-commune="${id}"]`); const text = inp.value.trim(); if (text) { send({ type: 'commune', agentId: id, text }); inp.value = ''; inp.blur(); } return; }
   const guideBtn = e.target.closest('[data-guidesend]');
   if (guideBtn) { const id = guideBtn.dataset.guidesend; const inp = document.querySelector(`[data-guide="${id}"]`); send({ type: 'guide', agentId: id, text: inp.value.trim() }); log(`you guided ${state.agents.find(x => x.id === id)?.name}: ${inp.value.trim() || '(cleared)'}`); inp.blur(); return; }
   const sendBtn = e.target.closest('[data-notesend]');
@@ -788,6 +837,7 @@ $('inspector').addEventListener('input', (e) => {
 $('inspector').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.target.matches('[data-note]')) { e.preventDefault(); document.querySelector(`[data-notesend="${e.target.dataset.note}"]`)?.click(); }
   if (e.key === 'Enter' && e.target.matches('[data-guide]')) { e.preventDefault(); document.querySelector(`[data-guidesend="${e.target.dataset.guide}"]`)?.click(); }
+  if (e.key === 'Enter' && e.target.matches('[data-commune]')) { e.preventDefault(); document.querySelector(`[data-communesend="${e.target.dataset.commune}"]`)?.click(); }
 });
 
 function renderInspector() {
@@ -820,6 +870,7 @@ function renderInspector() {
     ${a.wants ? `<div class="muted" style="margin-top:4px">${a.inv[a.wants] > 0 ? `Has the <b>${esc(a.wants)}</b> they longed for.` : `Longs for a <b>${esc(a.wants)}</b>.`}</div>` : ''}
     ${(a.grief || []).length ? `<h3>Grieving</h3>${a.grief.map(g => `<div class="wound"><div>${esc(g.name)} <span class="muted">· since day ${g.day} · shared ${g.shared}×</span></div>${dial('weight', g.intensity, 'cold')}</div>`).join('')}` : ''}
     ${renderFamily(a)}
+    ${renderCommune(a)}
     <h3>Diary <span class="muted">(${a.diary.length} entr${a.diary.length === 1 ? 'y' : 'ies'})</span></h3>
     ${renderDiary(a)}
     <h3>Rules the body wrote <span class="muted">(they cannot see these)</span></h3>

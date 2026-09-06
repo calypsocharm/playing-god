@@ -29,7 +29,7 @@ export async function save(world) {
     const life = {
       id: a.id, name: a.name, chart: a.chart, upbringing: a.upbringing, bornDay: a.bornDay, diedDay: a.diedDay ?? null,
       wounds: a.wounds, scars: a.scars, trust: a.trust, selfSummary: a.selfSummary, memories: a.memories,
-      inv: a.inv, wants: a.wants, diary: a.diary, notes: a.notes,
+      inv: a.inv, wants: a.wants, diary: a.diary, notes: a.notes, commune: a.commune || [],
     };
     const txt = JSON.stringify(life, null, 1);
     a.record.hash = 'sha256:' + createHash('sha256').update(txt).digest('hex');

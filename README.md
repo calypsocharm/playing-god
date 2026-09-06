@@ -397,3 +397,11 @@ mute, boot, ban, and remove. Mute keeps them watching and playing but silent. Bo
 connection and releases their villagers to the village (they can return). Ban does that and
 refuses their token and address from then on. `unban` exists as a god op for when you change
 your mind. Tokens are never sent to browsers; only the short ids are.
+
+## Commune: talking to someone who is yours
+
+On any villager you own, the Commune panel is a conversation. You speak as the voice they have
+always had, underneath everything. Your model answers as them, in their body, with their memories
+and the last thing they wrote in their diary, in one to four plain sentences. They may agree,
+argue, ask you something, or refuse. They do not know what the voice is. Every exchange is kept as
+an inner dialogue in their life record, and both sides become memories they carry.
