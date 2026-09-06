@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playing God · The Story</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23e8a04c'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%230e1116'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#0e1116; --panel:#161b24; --line:#2a3242; --ink:#d9dee8; --dim:#8a94a6; --warm:#e8a04c; --good:#6cc38a; --bad:#d9645b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.65 Georgia, 'Times New Roman', serif; }
+  header { display:flex; align-items:center; gap:14px; padding:10px 18px; border-bottom:1px solid var(--line); background:var(--panel); font-family:system-ui, sans-serif; position:sticky; top:0; z-index:2; flex-wrap:wrap; }
+  header h1 { font-size:14px; letter-spacing:.1em; text-transform:uppercase; color:var(--warm); margin:0; }
+  header a { color:var(--dim); text-decoration:none; font-size:13px; }
+  header .spacer { flex:1; }
+  header label { font-size:12px; color:var(--dim); display:flex; gap:6px; align-items:center; }
+  .book { max-width: 760px; margin: 0 auto; padding: 28px 22px 80px; }
+  .frontis { text-align:center; margin: 10px 0 40px; color:var(--dim); font-family:system-ui; font-size:14px; }
+  .frontis h2 { font: 600 34px Georgia, serif; color:var(--ink); margin:0 0 6px; }
+  .toc { columns: 2; column-gap: 24px; font-family: system-ui; font-size: 13px; margin: 0 0 40px; padding: 14px 18px; border:1px solid var(--line); border-radius:8px; }
+  .toc a { display:block; color:var(--dim); text-decoration:none; padding:2px 0; }
+  .toc a:hover { color:var(--warm); }
+  .toc .yr { color:var(--warm); font-weight:600; margin-top:6px; break-inside: avoid; }
+  .chapter { margin: 0 0 54px; }
+  .chapter h3 { font: 600 26px Georgia, serif; margin: 0 0 4px; }
+  .chapter .sub { font-family:system-ui; font-size:12px; color:var(--dim); margin-bottom:16px; letter-spacing:.06em; text-transform:uppercase; }
+  .chapter p { margin: 0 0 14px; text-indent: 1.4em; }
+  .chapter p:first-of-type { text-indent: 0; }
+  .chapter p.told { color:#f0e9d6; }
+  .chapter .daymark { font-family:system-ui; font-size:11px; color:var(--dim); letter-spacing:.06em; margin-right:6px; }
+  blockquote { margin: 10px 0 18px 2.2em; padding-left: 12px; border-left: 2px solid var(--warm); color:#e6d9bd; font-style: italic; font-size: 15px; }
+  blockquote cite { display:block; font-style: normal; font-family:system-ui; font-size:12px; color:var(--dim); margin-top:4px; }
+  .gone { font-family: system-ui; font-size: 13px; color: var(--dim); border-top:1px solid var(--line); padding-top:14px; margin-top:40px; }
+  .gone b { color: var(--ink); }
+  .empty { color:var(--dim); font-family:system-ui; text-align:center; padding:40px; }
+  mark { background: rgba(232,160,76,.25); color: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <h1>The Story</h1>
+  <a href="/">← the village</a>
+  <a href="diaries.html">diaries</a>
+  <span class="spacer"></span>
+  <label><input type="checkbox" id="quotesOn" checked> voices from the diaries</label>
+  <label><input type="checkbox" id="quietOn"> include quiet nights</label>
+  <label>Search <input id="q" style="width:150px;background:#0a0d12;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:13px system-ui"></label>
+</header>
+<div class="book" id="book"><div class="empty">Opening the book…</div></div>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let story = null;
+async function load() {
+  try { story = await (await fetch('/api/story')).json(); render(); }
+  catch { $('book').innerHTML = '<div class="empty">The village is not answering.</div>'; }
+}
+function render() {
+  if (!story) return;
+  const q = $('q').value.trim().toLowerCase();
+  const quotesOn = $('quotesOn').checked, quietOn = $('quietOn').checked;
+  const hl = (t) => q ? esc(t).replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), m => `<mark>${m}</mark>`) : esc(t);
+  const chapters = [...story.chapters].sort((a, b) => a.index - b.index);
+  const byIdx = new Map(chapters.map(c => [c.index, c]));
+  // Nights not covered by a chapter (older than the chapter log) get a plain heading.
+  const yd = story.yearDays / 4;
+  const nights = story.chronicle;
+  if (!nights.length) { $('book').innerHTML = '<div class="empty">Nothing has been written yet. The village writes at night.</div>'; return; }
+  const groups = new Map();
+  for (const n of nights) { const idx = Math.floor(n.day / yd); if (!groups.has(idx)) groups.set(idx, []); groups.get(idx).push(n); }
+  const isQuiet = (n) => (/A quiet day\. People worked/.test(n.text) || /^Nothing much\./.test(n.text)) && n.by !== 'told';
+  const answered = story.goals.filter(g => g.done != null).length;
+  let html = `<div class="frontis"><h2>The Village</h2>${story.day} days · year ${Math.floor(story.day / story.yearDays) + 1} · ${answered} of ${story.goals.length} questions answered · they call the sky <b style="color:var(--warm)">${esc(story.skyName)}</b></div>`;
+  html += `<nav class="toc">` + [...groups.keys()].sort((a, b) => a - b).map(idx => { const ch = byIdx.get(idx); const yr = Math.floor(idx / 4) + 1; return `<a href="#ch${idx}">${ch ? esc(ch.title) : `Season ${idx + 1}`} <span style="opacity:.6">· year ${yr}</span></a>`; }).join('') + `</nav>`;
+  for (const idx of [...groups.keys()].sort((a, b) => a - b)) {
+    const ch = byIdx.get(idx);
+    let ns = groups.get(idx);
+    if (!quietOn) ns = ns.filter(n => !isQuiet(n) || ns.length <= 2);
+    if (q) ns = ns.filter(n => n.text.toLowerCase().includes(q) || (story.quotes[n.day] || []).some(x => x.text.toLowerCase().includes(q)));
+    if (!ns.length) continue;
+    const season = ch?.season || ['spring', 'summer', 'autumn', 'winter'][idx % 4];
+    const yr = Math.floor(idx / 4) + 1;
+    html += `<section class="chapter" id="ch${idx}"><h3>${ch ? esc(ch.title) : `An ordinary ${season}`}</h3><div class="sub">year ${yr} · ${season} · days ${idx * yd} to ${idx * yd + yd - 1}</div>`;
+    for (const n of ns) {
+      html += `<p class="${n.by === 'told' ? 'told' : ''}"><span class="daymark">day ${n.day}</span>${hl(n.text)}</p>`;
+      if (quotesOn) for (const qt of (story.quotes[n.day] || []).slice(0, 1)) html += `<blockquote>${hl(qt.text.length > 320 ? qt.text.slice(0, 317) + '…' : qt.text)}<cite>${esc(qt.name)}, that night</cite></blockquote>`;
+    }
+    html += `</section>`;
+  }
+  if (story.dead.length) html += `<div class="gone">Gone: ${story.dead.map(d => `<b>${esc(d.name)}</b> (day ${d.day}, aged ${d.age ?? '?'}, ${esc(d.cause || '')})`).join(' · ')}</div>`;
+  $('book').innerHTML = html;
+}
+for (const id of ['quotesOn', 'quietOn']) $(id).addEventListener('change', render);
+$('q').addEventListener('input', render);
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

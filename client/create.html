@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playing God · Create a villager</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23e8a04c'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%230e1116'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#0e1116; --panel:#161b24; --line:#2a3242; --ink:#d9dee8; --dim:#8a94a6; --warm:#e8a04c; --cold:#5b8fd9; --bad:#d9645b; --good:#6cc38a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, sans-serif; min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:24px 14px; }
+  .card { width:100%; max-width:620px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:22px; }
+  h1 { font-size:14px; letter-spacing:.1em; text-transform:uppercase; color:var(--warm); margin:0 0 4px; }
+  h2 { font-size:22px; margin:0 0 6px; }
+  .lead { color:var(--dim); margin:0 0 18px; }
+  .steps { display:flex; gap:6px; margin-bottom:18px; }
+  .steps i { flex:1; height:4px; border-radius:2px; background:var(--line); }
+  .steps i.on { background:var(--warm); }
+  label { display:block; color:var(--dim); font-size:12px; margin:12px 0 4px; }
+  input, select { width:100%; background:#0a0d12; color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px 12px; font:inherit; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:16px; }
+  button { background:#222a38; color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px 16px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--warm); }
+  button.primary { background:var(--warm); color:#1a1206; border-color:var(--warm); font-weight:700; }
+  button.ghost { background:none; }
+  .spacer { flex:1; }
+  .placement { display:grid; grid-template-columns: 78px 1fr; gap:12px; padding:10px 0; border-bottom:1px dashed var(--line); }
+  .placement b { color:var(--warm); text-transform:capitalize; }
+  .placement .sign { font-weight:600; }
+  .placement .txt { color:var(--dim); font-size:14px; }
+  .dial { display:grid; grid-template-columns: 90px 1fr 40px; gap:10px; align-items:center; font-size:13px; margin:6px 0; }
+  .bar { height:8px; background:#0a0d12; border-radius:4px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--warm); }
+  .choice { border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin:8px 0; cursor:pointer; }
+  .choice:hover { border-color:var(--dim); }
+  .choice.on { border-color:var(--warm); background:#1c1a14; }
+  .choice b { display:block; margin-bottom:2px; }
+  .choice span { color:var(--dim); font-size:14px; }
+  .muted { color:var(--dim); font-size:13px; }
+  .hidden { display:none; }
+  .err { color:var(--bad); }
+  .summary { background:#0a0d12; border-radius:8px; padding:12px 14px; margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Playing God</h1>
+  <div class="steps"><i class="on"></i><i></i><i></i><i></i><i></i></div>
+
+  <!-- 1 name -->
+  <section id="s1">
+    <h2>Who is coming into the world?</h2>
+    <p class="lead">Naming is the first collapse. Before a name, a villager could be anyone.</p>
+    <label>Name</label><input id="name" placeholder="Wren, Ash, Marlow… or leave blank and the village will name them" maxlength="24">
+    <div class="row"><a href="/" class="muted">← back to the village</a><span class="spacer"></span><button class="primary" data-next>Next</button></div>
+  </section>
+
+  <!-- 2 birth -->
+  <section id="s2" class="hidden">
+    <h2>When were they born?</h2>
+    <p class="lead">The sky at that moment sets the lean. Not who they are, but where the energy wants to go. <span id="simNote"></span></p>
+    <div class="row" style="margin-top:0"><button id="roll">🎲 Roll a birth for me</button><span class="muted">or choose one:</span></div>
+    <label>Date</label><input id="date" type="date">
+    <label>Time <span class="muted">(sets the rising sign, one sign every two hours)</span></label><input id="time" type="time" value="06:00">
+    <div class="err" id="birthErr"></div>
+    <div class="row"><button class="ghost" data-back>Back</button><span class="spacer"></span><button class="primary" data-next id="toChart">Read the chart</button></div>
+  </section>
+
+  <!-- 3 chart -->
+  <section id="s3" class="hidden">
+    <h2 id="chartTitle">Their chart</h2>
+    <p class="lead" id="chartBirth"></p>
+    <div id="placements"></div>
+    <label>What the village will actually feel from this</label>
+    <div id="traits"></div>
+    <p class="muted">These three tilt the starting body. The rest is what happens to them. The approximate ephemeris is sign-accurate for the slow bodies and rough for Venus and Mars.</p>
+    <div class="row"><button class="ghost" data-back>Change the birth</button><button id="reroll">🎲 Roll again</button><span class="spacer"></span><button class="primary" data-next>Next</button></div>
+  </section>
+
+  <!-- 4 childhood -->
+  <section id="s4" class="hidden">
+    <h2>What kind of house did they grow up in?</h2>
+    <p class="lead">This is the part nobody chooses in life. Here you do. It writes the first rules into the body before day one.</p>
+    <div class="choice on" data-up="warm"><b>A warm house</b><span>Someone was steady. They start open, trusting a little by default, no wounds. Easiest to hurt for the first time, quickest to heal.</span></div>
+    <div class="choice" data-up="cold"><b>A cold house</b><span>Nobody came. They start tight and wary with one rule already written: either "closeness leads to pain" or "weakness gets punished." The village decides which.</span></div>
+    <div class="choice" data-up="inconsistent"><b>A house that changed with the weather</b><span>Sometimes held, sometimes left. They start with "needing someone means being left." They will not ask for help even when starving.</span></div>
+    <div class="choice" data-up=""><b>Let the dice decide</b><span>Like everyone else in the village.</span></div>
+    <div class="row"><button class="ghost" data-back>Back</button><span class="spacer"></span><button class="primary" data-next>Next</button></div>
+  </section>
+
+  <!-- 5 confirm -->
+  <section id="s5" class="hidden">
+    <h2>Ready to be born</h2>
+    <p class="lead">Your browser becomes their brain. Set your model on the Brain tab if you haven't. Close the tab and they go on autopilot until you return.</p>
+    <div class="summary" id="summary"></div>
+    <div class="err" id="birthErr2"></div>
+    <div class="row"><button class="ghost" data-back>Back</button><span class="spacer"></span><button class="primary" id="birth">Enter the village</button></div>
+  </section>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let step = 1, chartData = null, upbringing = 'warm', simDate = null;
+
+function show(n) {
+  step = n;
+  for (let i = 1; i <= 5; i++) $('s' + i).classList.toggle('hidden', i !== n);
+  document.querySelectorAll('.steps i').forEach((el, i) => el.classList.toggle('on', i < n));
+}
+document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => show(step - 1));
+document.querySelectorAll('[data-next]').forEach(b => b.onclick = async () => {
+  if (step === 2) { const ok = await loadChart(); if (!ok) return; }
+  if (step === 4) fillSummary();
+  show(step + 1);
+});
+document.querySelectorAll('.choice').forEach(c => c.onclick = () => { document.querySelectorAll('.choice').forEach(x => x.classList.remove('on')); c.classList.add('on'); upbringing = c.dataset.up; });
+
+// The sim has its own calendar. Births must land between 16 and 60 sim-years old.
+fetch('/api/chart').then(r => r.json()).then(j => {
+  simDate = new Date(j.simDate);
+  const y = simDate.getUTCFullYear();
+  $('simNote').textContent = `The village's calendar reads ${simDate.toISOString().slice(0, 10)}. A villager must be 16 to 60, so born between ${y - 60} and ${y - 16}.`;
+  $('date').min = `${y - 60}-01-01`; $('date').max = `${y - 16}-12-31`;
+  setBirth(j.birth);
+});
+
+function setBirth(iso) {
+  const d = new Date(iso);
+  $('date').value = d.toISOString().slice(0, 10);
+  $('time').value = d.toISOString().slice(11, 16);
+}
+function birthIso() {
+  if (!$('date').value) return null;
+  return `${$('date').value}T${$('time').value || '06:00'}:00Z`;
+}
+$('roll').onclick = async () => { const j = await (await fetch('/api/chart')).json(); setBirth(j.birth); $('birthErr').textContent = ''; };
+$('reroll').onclick = async () => { const j = await (await fetch('/api/chart')).json(); setBirth(j.birth); await loadChart(); };
+
+async function loadChart() {
+  const iso = birthIso();
+  if (!iso) { $('birthErr').textContent = 'Pick a date or roll one.'; return false; }
+  const age = (simDate - new Date(iso)) / (365.25 * 86400000);
+  if (age < 16 || age > 60) { $('birthErr').textContent = 'That birth would make them younger than 16 or older than 60 in the village. Choose another.'; return false; }
+  $('birthErr').textContent = '';
+  chartData = await (await fetch('/api/chart?at=' + encodeURIComponent(iso))).json();
+  const name = $('name').value.trim();
+  $('chartTitle').textContent = name ? `${name}'s chart` : 'Their chart';
+  $('chartBirth').textContent = `Born ${iso.slice(0, 10)} at ${iso.slice(11, 16)}, age ${Math.floor(age)} when the village begins.`;
+  $('placements').innerHTML = chartData.describe.map(d => `<div class="placement"><b>${d.point}</b><div><div class="sign">${esc(d.sign)}</div><div class="txt">${esc(d.text)}</div></div></div>`).join('');
+  const t = chartData.traits;
+  const dial = (label, v, note) => `<div class="dial"><span>${label}</span><div class="bar"><i style="width:${Math.round(v * 100)}%"></i></div><span class="muted">${Math.round(v * 100)}</span></div><div class="muted" style="margin:-4px 0 8px">${note}</div>`;
+  $('traits').innerHTML =
+    dial('temper', t.temper, t.temper > 0.6 ? 'Hurt turns outward fast. If a wound forms, this one may strike.' : t.temper < 0.4 ? 'Hurt sits. Slow to anger, slow to let go.' : 'Ordinary fuse.') +
+    dial('need', t.need, t.need > 0.6 ? 'Wants people close. Starts open, feels rebuffs hard.' : t.need < 0.45 ? 'Content alone. Starts a little closed.' : 'Wants company, can do without.') +
+    dial('guard', t.guard, t.guard > 0.6 ? 'Starts braced and slow to trust. Wounds heal slower, but also form slower.' : t.guard < 0.45 ? 'Starts loose and trusting. Easy to reach, easy to hurt.' : 'Neither braced nor loose.');
+  return true;
+}
+
+function fillSummary() {
+  const name = $('name').value.trim() || '(the village will name them)';
+  const up = { warm: 'a warm house', cold: 'a cold house', inconsistent: 'a house that changed with the weather', '': 'a rolled childhood' }[upbringing];
+  $('summary').innerHTML = `<b>${esc(name)}</b><br>${esc(chartData.chart.summary)}<br>Raised in ${up}.`;
+}
+
+// Birth goes over the same socket the village uses, with the same claim token, so the new villager is yours.
+$('birth').onclick = () => {
+  const token = localStorage.getItem('playinggod.token') || null;
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+  $('birth').disabled = true; $('birthErr2').textContent = '';
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'hello', token }));
+    ws.send(JSON.stringify({ type: 'birth', name: $('name').value.trim() || undefined, upbringing: upbringing || undefined, birth: birthIso() }));
+  };
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    // The server also re-announces villagers this token already owns; only the birth reply carries `born`.
+    if (m.type === 'adopted' && m.born) {
+      localStorage.setItem('playinggod.token', m.token);
+      ws.close(); location.href = '/?select=' + encodeURIComponent(m.agentId);
+    }
+    if (m.type === 'error') { $('birthErr2').textContent = m.error; $('birth').disabled = false; }
+  };
+  ws.onerror = () => { $('birthErr2').textContent = 'Could not reach the village.'; $('birth').disabled = false; };
+};
+</script>
+</body>
+</html>

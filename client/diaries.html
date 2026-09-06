@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playing God · Diaries</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23e8a04c'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%230e1116'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#0e1116; --panel:#161b24; --line:#2a3242; --ink:#d9dee8; --dim:#8a94a6; --warm:#e8a04c; --cold:#5b8fd9; --bad:#d9645b; --good:#6cc38a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 Georgia, 'Times New Roman', serif; }
+  header { display:flex; align-items:center; gap:14px; padding:10px 18px; border-bottom:1px solid var(--line); background:var(--panel); font-family: system-ui, sans-serif; flex-wrap:wrap; position:sticky; top:0; z-index:2; }
+  header h1 { font-size:14px; letter-spacing:.1em; text-transform:uppercase; color:var(--warm); margin:0; }
+  header a { color:var(--dim); text-decoration:none; font-size:13px; }
+  header .spacer { flex:1; }
+  header input, header select { background:#0a0d12; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:13px system-ui; }
+  header label { font-size:12px; color:var(--dim); display:flex; gap:6px; align-items:center; }
+  main { max-width: 1100px; margin: 0 auto; padding: 18px; display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+  .page { background:#f3ecd9; color:#2a241c; border-radius:6px; padding:16px 18px 14px; box-shadow: 0 6px 24px rgba(0,0,0,.35), inset 0 0 0 1px rgba(0,0,0,.06); position:relative; }
+  .page.mine { outline: 2px solid var(--warm); }
+  .page h2 { margin:0 0 2px; font-size:19px; font-weight:600; }
+  .page .meta { font: 12px system-ui; color:#6f6455; margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .page .meta b { color:#8a4b1a; font-weight:600; }
+  .page .mood { font-style:italic; }
+  .page .txt { white-space:pre-wrap; }
+  .page .margin { margin-top:10px; padding-left:10px; border-left:2px solid #c5883d; color:#6f4a1c; font: italic 13px Georgia, serif; }
+  .page .nav { margin-top:10px; display:flex; justify-content:space-between; font: 12px system-ui; color:#6f6455; }
+  .page .nav button { background:none; border:1px solid #cdbf9f; border-radius:4px; color:#4a3f30; padding:2px 8px; cursor:pointer; font:inherit; }
+  .page .nav button:disabled { opacity:.35; cursor:default; }
+  .page.dead { filter: grayscale(.6); opacity:.75; }
+  .empty { color:var(--dim); font-family: system-ui; padding: 40px; text-align:center; grid-column: 1/-1; }
+  .face { width:44px; height:44px; border-radius:50%; background:#e8dcc2; float:right; margin: -4px 0 0 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Diaries</h1>
+  <a href="/">← the village</a>
+  <span class="spacer"></span>
+  <label><input type="checkbox" id="onlyMinds"> only villagers with their own minds</label>
+  <label><input type="checkbox" id="showDead"> include the dead</label>
+  <select id="sort"><option value="recent">most recent first</option><option value="name">by name</option><option value="mood">by mood</option></select>
+  <input id="q" placeholder="search the pages…" style="width:180px">
+  <span id="when" style="color:var(--dim);font-size:12px"></span>
+</header>
+<main id="book"><div class="empty">Turning the pages…</div></main>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let state = null;
+const pageOf = new Map();   // agentId -> which entry is open (default latest)
+// ?who=<id> opens one person's whole diary, every page, newest first.
+const who = new URLSearchParams(location.search).get('who');
+let mineIds = new Set();
+try { mineIds = new Set(JSON.parse(localStorage.getItem('playinggod.owned') || '[]')); } catch {}
+
+// Faces, the same as on the map but smaller. Copied here so the page stands alone.
+function drawFace(g, cx, cy, r, a) {
+  const b = a.body; const cold = b.warmth < 0.35, old = (a.age ?? 40) >= 80, elder = (a.age ?? 40) >= 65;
+  const base = cold ? [159, 184, 217] : old ? [217, 210, 199] : elder ? [230, 211, 184] : [241, 215, 181];
+  g.fillStyle = `rgb(${base.join(',')})`; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
+  const openEye = Math.max(0.15, Math.min(1, 0.35 + b.energy * 0.6 - b.tightness * 0.35));
+  const ey = cy - r * 0.15, ex = r * 0.36, ew = r * 0.17;
+  g.fillStyle = '#1b1f27'; for (const s of [-1, 1]) { g.beginPath(); g.ellipse(cx + s * ex, ey, ew, Math.max(1, r * 0.17 * openEye), 0, 0, 7); g.fill(); }
+  const knit = b.tightness * 0.5 - b.openness * 0.15;
+  g.strokeStyle = '#3a2f26'; g.lineWidth = Math.max(1.2, r * 0.09); g.lineCap = 'round';
+  for (const s of [-1, 1]) { g.beginPath(); g.moveTo(cx + s * (ex + ew * 1.1), ey - r * 0.32 + knit * r * 0.1); g.lineTo(cx + s * (ex - ew * 1.1), ey - r * 0.32 + knit * r * 0.45); g.stroke(); }
+  const curve = (b.openness - 0.45) * 1.1 - b.tightness * 1.0 - b.hurt * 0.5, my = cy + r * 0.42, mw = r * 0.42;
+  g.strokeStyle = '#5a2e2a'; g.lineWidth = Math.max(1.2, r * 0.08); g.beginPath();
+  if (b.overwhelmed > 0) { g.fillStyle = '#4a2320'; g.ellipse(cx, my, mw * 0.5, r * 0.16, 0, 0, 7); g.fill(); }
+  else { g.moveTo(cx - mw, my - curve * r * 0.12); g.quadraticCurveTo(cx, my + curve * r * 0.5, cx + mw, my - curve * r * 0.12); g.stroke(); }
+}
+
+async function load() {
+  try { const r = await fetch('/api/state'); state = await r.json(); render(); } catch { $('book').innerHTML = '<div class="empty">The village is not answering.</div>'; }
+}
+
+function render() {
+  if (!state) return;
+  $('when').textContent = `Year ${state.year} · day ${state.day} · ${state.weather.season} · ${state.tickName}`;
+  const q = $('q').value.trim().toLowerCase();
+  if (who) {
+    const a = state.agents.find(x => x.id === who);
+    if (!a) { $('book').innerHTML = '<div class="empty">No such villager.</div>'; return; }
+    document.title = `Playing God · ${a.name}'s diary`;
+    const entries = [...a.diary].reverse().filter(d => !q || d.text.toLowerCase().includes(q));
+    $('book').innerHTML = `<div style="grid-column:1/-1;font-family:system-ui;color:var(--dim);display:flex;gap:12px;align-items:center;flex-wrap:wrap"><canvas class="face" width="88" height="88" data-face="${a.id}" style="float:none;margin:0"></canvas><div><div style="font:600 22px Georgia,serif;color:var(--ink)">${esc(a.name)}'s diary</div>${a.alive ? `${a.age} · ${esc(a.stage)} · ${esc(a.branch)}` : `died day ${a.diedDay} aged ${a.ageAtDeath ?? '?'}`} · ${a.diary.length} nights · <a href="diaries.html" style="color:var(--dim)">everyone's diaries</a> · <a href="/?select=${a.id}" style="color:var(--dim)">back to them in the village</a></div></div>` +
+      (entries.length ? entries.map(d => { const notes = (a.notes || []).filter(x => x.day === d.day); return `<article class="page ${a.brain === 'remote' ? 'mine' : ''}"><div class="meta"><b>day ${d.day}</b><span>·</span><span class="mood">${esc(d.mood || '')}</span>${d.by === 'scripted' ? '<span>· autopilot</span>' : '<span>· in their own words</span>'}</div><div class="txt">${esc(d.text)}</div>${notes.map(x => `<div class="margin">in the margin: "${esc(x.text)}"</div>`).join('')}</article>`; }).join('') : '<div class="empty">Nothing written yet. They write at night.</div>');
+    for (const c of document.querySelectorAll('canvas[data-face]')) drawFace(c.getContext('2d'), 44, 44, 38, a);
+    return;
+  }
+  let people = state.agents.filter(a => a.diary && a.diary.length);
+  if (!$('showDead').checked) people = people.filter(a => a.alive);
+  if ($('onlyMinds').checked) people = people.filter(a => a.brain === 'remote');
+  if (q) people = people.filter(a => a.name.toLowerCase().includes(q) || a.diary.some(d => d.text.toLowerCase().includes(q)));
+  const sort = $('sort').value;
+  const cur = (a) => a.diary[Math.min(a.diary.length - 1, pageOf.has(a.id) ? pageOf.get(a.id) : a.diary.length - 1)];
+  if (sort === 'name') people.sort((x, y) => x.name.localeCompare(y.name));
+  else if (sort === 'mood') people.sort((x, y) => (cur(x).mood || '').localeCompare(cur(y).mood || ''));
+  else people.sort((x, y) => (y.brain === 'remote') - (x.brain === 'remote') || cur(y).day - cur(x).day);
+  if (!people.length) { $('book').innerHTML = '<div class="empty">No pages match.</div>'; return; }
+  $('book').innerHTML = people.map(a => {
+    const n = a.diary.length; const i = Math.min(n - 1, pageOf.has(a.id) ? pageOf.get(a.id) : n - 1); const d = a.diary[i];
+    const notes = (a.notes || []).filter(x => x.day === d.day);
+    let text = esc(d.text);
+    if (q) text = text.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), m => `<mark>${m}</mark>`);
+    return `<article class="page ${a.alive ? '' : 'dead'} ${a.brain === 'remote' ? 'mine' : ''}" data-id="${a.id}">
+      <canvas class="face" width="88" height="88" data-face="${a.id}"></canvas>
+      <h2>${esc(a.name)}</h2>
+      <div class="meta"><span>${a.alive ? `${a.age} · ${esc(a.stage)}` : `died aged ${a.ageAtDeath ?? '?'}`}</span><span>·</span><b>day ${d.day}</b><span>·</span><span class="mood">${esc(d.mood || '')}</span>${d.by === 'scripted' ? '<span>· autopilot</span>' : '<span>· in their own words</span>'}${a.settlement === 'camp' ? '<span>· the camp</span>' : ''}</div>
+      <div class="txt">${text}</div>
+      ${notes.map(x => `<div class="margin">in the margin: "${esc(x.text)}"</div>`).join('')}
+      <div class="nav"><button data-step="-1" ${i === 0 ? 'disabled' : ''}>‹ earlier</button><span>${i + 1} of ${n}</span><button data-step="1" ${i === n - 1 ? 'disabled' : ''}>later ›</button></div>
+    </article>`;
+  }).join('');
+  for (const c of document.querySelectorAll('canvas[data-face]')) { const a = state.agents.find(x => x.id === c.dataset.face); if (a) drawFace(c.getContext('2d'), 44, 44, 38, a); }
+}
+$('book').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-step]'); if (!b) return;
+  const art = b.closest('article'); const a = state.agents.find(x => x.id === art.dataset.id);
+  const cur = pageOf.has(a.id) ? pageOf.get(a.id) : a.diary.length - 1;
+  const next = Math.max(0, Math.min(a.diary.length - 1, cur + Number(b.dataset.step)));
+  if (next >= a.diary.length - 1) pageOf.delete(a.id); else pageOf.set(a.id, next);
+  render();
+});
+for (const id of ['onlyMinds', 'showDead', 'sort']) $(id).addEventListener('change', render);
+$('q').addEventListener('input', render);
+load();
+setInterval(load, 20000);
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "playing-god",
+  "version": "0.1.0",
+  "description": "A village of LLM agents with bodies that hurt, wounds that heal or don't, and a player who is the weather. BYOK: every agent's brain runs in its owner's browser.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "license": "MIT"
+}

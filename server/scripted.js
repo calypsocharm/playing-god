@@ -1,0 +1,202 @@
+// The fallback brain. Runs when an agent has no owner, or its owner's browser
+// is closed or slow. Deliberately simple: needs first, then whatever the wounds
+// push toward, then things. It exists so the village never freezes.
+
+import { branch } from './wounds.js';
+import * as I from './items.js';
+
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+export function scriptedDecide(a, s) {
+  const b = a.body;
+  const br = branch(a);
+  const isDay = s.tick >= 1 && s.tick <= 3;
+  const inv = a.inv;
+  const winterComing = s.weather.season === 'autumn' || s.weather.season === 'winter';
+
+  // Survival first.
+  if (b.warmth < 0.3) return s.hearthWood > 0 || s.builds?.hall?.done ? { type: 'go', to: 'hearth', thought: 'Cold. The fire.' } : { type: 'withdraw', thought: 'Cold. Home.' };
+  if (b.food < 0.35 && inv.food < 0.3) {
+    if (s.yieldToday > 0.1 && isDay) return { type: 'work', to: 'field', thought: 'Hungry. Work.' };
+    if (isDay && s.weather.season !== 'winter') return { type: 'forage', to: 'meadow', thought: 'Berries, at least.' };
+    const giver = s.near.find(n => n.trust > 0.2);
+    if (giver && br !== 'inward') return { type: 'talk', target: giver.id, say: 'I have nothing to eat.', thought: 'Ask.' };
+  }
+  if (b.energy < 0.25) return { type: 'rest', thought: 'Spent.' };
+  // The old rest more and go to the hearth rather than the field.
+  const age = s.age ?? 40;
+  if (age >= 80 && b.energy < 0.5) return { type: 'rest', thought: 'These bones.' };
+  if (age >= 80 && isDay && Math.random() < 0.5) return s.near.length ? { type: 'talk', target: pick(s.near).id, say: pick(OLD_TALK), thought: 'Company, while there is time.' } : { type: 'go', to: 'hearth', thought: 'The fire, and faces.' };
+  if (b.hurt > 0.3 && inv.salve <= 0 && I.canCraft(inv, 'salve')) return { type: 'craft', item: 'salve', thought: 'Salve for this.' };
+  if (s.hearthWood < 2 && s.weather.cold > 0.3 && isDay && Math.random() < 0.4) return { type: 'work', to: 'forest', thought: 'Wood before the cold.' };
+
+  // Someone near is in a bad way.
+  const suffering = s.near.find(n => n.overwhelmed || n.tightness > 0.5);
+  if (suffering) {
+    if (br === 'healed' || (br === 'open' && b.openness > 0.45)) return { type: 'comfort', target: suffering.id, thought: 'I know that look.' };
+    if (br === 'outward' && b.tightness > 0.4 && suffering.trust < 0.3) return { type: 'strike', target: suffering.id, thought: 'Weak. Get it away from me.' };
+    if (br === 'inward') return { type: 'withdraw', thought: 'Too much.' };
+  }
+  const hungry = s.near.find(n => n.hungry);
+  if (hungry && inv.food >= 0.6 && (br === 'healed' || br === 'open')) return { type: 'share', target: hungry.id, thought: 'They need it more.' };
+
+  // Wound-driven defaults.
+  if (br === 'inward' && b.tightness > 0.4) return { type: 'withdraw', thought: 'Alone is safer.' };
+  const temper = a.traits?.temper ?? 0.5;
+  if (br === 'outward' && b.tightness > 0.75 - temper * 0.4) {
+    const victim = s.near.find(n => n.trust < 0.2);
+    if (victim) return { type: 'strike', target: victim.id, thought: 'Before they do.' };
+  }
+  // An outward, tight, tempered person near someone who has what they want may just take it.
+  if (br === 'outward' && temper > 0.6 && b.tightness > 0.5 && a.wants && inv[a.wants] <= 0) {
+    const mark = s.near.find(n => n.trust < 0.1 && n.carries?.[a.wants] > 0);
+    if (mark) return { type: 'take', target: mark.id, item: a.wants, thought: 'Mine now.' };
+  }
+
+  // Family first. A child of yours in front of you who is hungry or crying gets tended, if you are able.
+  const myChild = s.near.find(n => n.isChild && (a.children || []).includes(n.id) && (n.hungry || n.overwhelmed || n.tightness > 0.5));
+  if (myChild && br !== 'inward' && br !== 'outward') return { type: 'tend', target: myChild.id, thought: 'Mine.' };
+  if (myChild && br === 'outward' && b.tightness > 0.6) return { type: 'withdraw', thought: 'Stop that noise.' };
+  const anyChild = s.near.find(n => n.isChild && (n.hungry || n.overwhelmed));
+  if (anyChild && (br === 'healed' || br === 'open') && inv.food >= 1) return { type: 'tend', target: anyChild.id, thought: 'Someone has to.' };
+  // Someone hurt your child. Attached parents do not let that stand.
+  if (a.avenge) { const who = s.near.find(n => n.id === a.avenge); if (who && br !== 'inward') { a.avenge = null; return { type: 'strike', target: who.id, thought: 'Never again. Not my child.' }; } }
+  // Ask someone you trust to stay. The open and the healed dare; the wounded rarely do.
+  if (!a.partner && (br === 'open' || br === 'healed') && age >= 18 && age <= 60 && Math.random() < 0.08) {
+    const beloved = s.near.find(n => n.trust > 0.6 && !n.isChild && !n.partner);
+    if (beloved) return { type: 'bond', target: beloved.id, thought: 'Stay.' };
+  }
+  // A thin bond and a short fuse, and someone walks out.
+  if (a.partner && (a.bondStrength ?? 1) < 0.2 && br === 'outward' && Math.random() < 0.1) return { type: 'leave', thought: 'Done with this.' };
+
+  // In need, some people talk to the sky.
+  if ((b.food < 0.3 || b.warmth < 0.3 || a.grief?.length) && (a.faith ?? 0) > -0.5 && Math.random() < 0.04) {
+    const ask = b.food < 0.3 ? 'Let the field give something.' : b.warmth < 0.3 ? 'Let the cold ease, just for tonight.' : `Keep ${a.grief[0].name} somewhere warm.`;
+    return { type: 'pray', say: ask, thought: 'Someone might be listening.' };
+  }
+
+  // Grief looks for company. Two grievers together share it; the open comfort the grieving.
+  if (a.grief?.length) {
+    const fellow = s.near.find(n => n.grieving);
+    if (fellow) return { type: 'talk', target: fellow.id, say: `I keep thinking about ${a.grief[0].name}.`, thought: 'They knew them too.' };
+    if (b.openness > 0.35 && isDay && Math.random() < 0.3) return { type: 'go', to: 'hearth', thought: 'I do not want to be alone with it.' };
+  }
+  const griever = s.near.find(n => n.grieving && !a.grief?.length);
+  if (griever && (br === 'healed' || br === 'open') && Math.random() < 0.5) return { type: 'comfort', target: griever.id, thought: 'Sit with them.' };
+
+  // What the village learned the hard way.
+  const lessons = (s.lessons || []).map(l => l.kind);
+  const foodFloor = lessons.includes('hunger') ? 2.5 : 1.5;
+  if (lessons.includes('cold') && inv.blanket <= 0 && isDay) {
+    if (I.canCraft(inv, 'blanket')) return { type: 'craft', item: 'blanket', thought: 'Not like them.' };
+    if (inv.fiber < 5) return { type: 'forage', to: 'meadow', thought: 'Fiber. Not like them.' };
+  }
+
+  // Bread before things. Nobody forages for a charm on an empty larder.
+  if (isDay && inv.food < foodFloor && s.yieldToday > 0.1) return { type: 'work', to: 'field', thought: lessons.includes('hunger') ? 'Never again.' : 'Food first.' };
+
+  // Things. Make what you can; want what you want.
+  if (inv.blanket <= 0 && winterComing) {
+    if (I.canCraft(inv, 'blanket')) return { type: 'craft', item: 'blanket', thought: 'Winter is coming.' };
+    if (I.canCraft(inv, 'rope') && inv.fiber >= 5) return { type: 'craft', item: 'rope', thought: 'Rope first.' };
+    if (isDay && inv.fiber < 5) return { type: 'forage', to: 'meadow', thought: 'Fiber for a blanket.' };
+  }
+  if (a.wants && inv[a.wants] <= 0) {
+    if (I.canCraft(inv, a.wants)) return { type: 'craft', item: a.wants, thought: 'At last.' };
+    const need = missing(inv, a.wants);
+    if (need && isDay && Math.random() < 0.5) return { type: 'forage', to: sourceOf(need), thought: `I need ${need}.` };
+  }
+  // Generous people give what a friend longs for.
+  if (br === 'healed' || br === 'open') {
+    const friend = s.near.find(n => n.trust > 0.4 && n.wants && n.carries?.[n.wants] <= 0 && inv[n.wants] > 1);
+    if (friend) return { type: 'give', target: friend.id, item: friend.wants, thought: 'They have wanted this a long time.' };
+  }
+  // Barter first, with someone near you trust: your surplus for what you lack.
+  if (s.near.length && Math.random() < 0.35) {
+    const wantFor = a.wants && inv[a.wants] <= 0 ? missing(inv, a.wants) : (winterComing && inv.blanket <= 0 ? missing(inv, 'blanket') : null);
+    if (wantFor && (inv[wantFor] || 0) < 2) {
+      const mine = ['wood', 'stone', 'fiber', 'fish', 'berries', 'clay', 'herbs'].filter(x => x !== wantFor && (inv[x] || 0) >= 4).sort((x, y) => (inv[y] || 0) - (inv[x] || 0))[0];
+      const partner = s.near.find(n => n.trust > 0.1 && (n.carries?.[wantFor] || 0) >= 3);
+      if (mine && partner) return { type: 'trade', target: partner.id, give: mine, n: 2, want: wantFor, m: 2, thought: `My ${mine} for their ${wantFor}.` };
+    }
+  }
+
+  // Coin. Sell what piles up, buy what you lack, build for the house when you can.
+  const store = s.store;
+  // Paid work: when the store posts wages, bring wood and stone to the project.
+  if (store?.project && isDay && ((inv.wood || 0) >= 3 || (inv.stone || 0) >= 3) && Math.random() < 0.6) return { type: 'build', what: store.project, thought: 'Paid work.' };
+  if (store?.project && isDay && (inv.wood || 0) < 3 && (inv.stone || 0) < 3 && Math.random() < 0.3) return { type: 'forage', to: Math.random() < 0.5 ? 'forest' : 'quarry', thought: `Wood and stone for the ${store.project}. It pays.` };
+  // Borrow when hungry and broke; pay back when flush.
+  if (store && isDay && b.food < 0.35 && inv.food < 0.3 && (inv.coin || 0) < 2 && !store.loans?.some(l => l.name === a.name)) return { type: 'borrow', n: 6, thought: 'I will pay it back.' };
+  if (store && isDay && (inv.coin || 0) >= 8 && store.loans?.some(l => l.name === a.name)) return { type: 'repay', n: 4, thought: 'Owe less.' };
+  if (store && isDay) {
+    if (b.food < 0.4 && inv.food < 0.3 && (inv.coin || 0) >= (store.prices?.food?.buy || 2) && (store.shelf.food || 0) >= 1) return { type: 'buy', item: 'food', n: 2, thought: 'Buy something to eat.' };
+    if (winterComing && inv.blanket <= 0 && (inv.coin || 0) >= (store.prices?.blanket?.buy || 10) && (store.shelf.blanket || 0) >= 1) return { type: 'buy', item: 'blanket', n: 1, thought: 'A blanket before the snow.' };
+    const surplus = ['wood', 'stone', 'fiber', 'fish', 'berries', 'clay'].find(m => (inv[m] || 0) >= 8 && (store.prices?.[m]?.sell || 0) > 0);
+    if (surplus && Math.random() < 0.4) return { type: 'sell', item: surplus, n: 4, thought: 'Turn some of this into coin.' };
+    if (inv.food >= 4 && (store.prices?.food?.sell || 0) > 0 && Math.random() < 0.3) return { type: 'sell', item: 'food', n: 2, thought: 'More than I can eat.' };
+  }
+  if (a.location === 'home' || Math.random() < 0.15) {
+    const ups = a.upgrades || {};
+    for (const [k, u] of Object.entries(I.UPGRADES)) {
+      if (ups[k]) continue;
+      if (Object.entries(u.cost).every(([m, n]) => (inv[m] || 0) >= n)) return { type: 'upgrade', what: k, thought: `A ${u.label}. Ours.` };
+    }
+  }
+
+  // Bread when the larder allows; the open break it with friends.
+  if (inv.food >= 2.5 && inv.wood >= 1 && inv.bread < 2 && Math.random() < 0.3) return { type: 'craft', item: 'bread', thought: 'Bread.' };
+  if (inv.bread >= 1 && (br === 'open' || br === 'healed')) { const friend = s.near.find(n => n.trust > 0.3 && n.hungry); if (friend) return { type: 'share', target: friend.id, thought: 'Break bread.' }; }
+  // The young and the restless walk out past the edge when the village can spare them.
+  if ((s.frontierLeft || 0) > 0 && isDay && age < 45 && b.energy > 0.6 && inv.food >= 1.5 && s.weather.season !== 'winter' && (br === 'open' || br === 'healed') && Math.random() < (a.traits?.need < 0.5 ? 0.08 : 0.04)) return { type: 'scout', thought: 'What is out there?' };
+  // Fish, if there is a creek and the field is thin.
+  if (s.found?.creek && isDay && inv.food < 1.5 && Math.random() < 0.4) return { type: 'forage', to: 'creek', thought: 'The creek.' };
+  // Build when carrying a surplus.
+  const unbuilt = Object.keys(I.BUILDS).find(k => !s.builds?.[k]?.done);
+  if (unbuilt && ((inv.wood >= 4) || (inv.stone >= 3)) && Math.random() < 0.5) return { type: 'build', what: unbuilt, thought: `The ${unbuilt}.` };
+  if (isDay && Math.random() < 0.2) return { type: 'forage', to: pick(['forest', 'quarry', 'meadow']), thought: 'See what there is.' };
+
+  // Ordinary day.
+  if (isDay && (inv.food < 1.2 || Math.random() < 0.35)) return { type: 'work', to: 'field', thought: 'The field.' };
+  if (s.near.length && b.openness > 0.4) {
+    const o = pick(s.near);
+    return { type: 'talk', target: o.id, say: pick(SMALL_TALK), thought: 'Company.' };
+  }
+  if (b.openness > 0.45) return { type: 'go', to: pick(['hearth', 'well', 'hearth']), thought: 'Where people are.' };
+  return { type: 'withdraw', thought: 'Home.' };
+}
+
+// First material missing for an item, following sub-recipes one level.
+function missing(inv, item) {
+  for (const [m, n] of Object.entries(I.ITEMS[item].recipe)) {
+    if ((inv[m] || 0) >= n) continue;
+    if (I.ITEMS[m]) { const sub = missing(inv, m); return sub || null; }
+    return m;
+  }
+  return null;
+}
+function sourceOf(material) {
+  for (const [place, table] of Object.entries(I.FORAGE)) if (table[material]) return place;
+  return 'meadow';
+}
+
+const OLD_TALK = [
+  'I remember when the field gave twice this.', 'You young ones work too hard.', 'Sit. Tell me something.',
+  'My hands are no good in the cold anymore.', 'I have buried better people than me.', 'Winter was worse when I was young. Or I was.',
+];
+const SMALL_TALK = [
+  'Cold one.', 'The field was thin today.', 'You look tired.', 'Sit a while.', 'Did you sleep?',
+  'There is wood left.', 'I saw you at the well.', 'Long day.', 'Stay by the fire.', 'I found stone at the quarry.',
+];
+
+export function scriptedSummary(a) {
+  const br = branch(a);
+  const raised = { warm: 'raised warm', cold: 'raised cold', inconsistent: 'raised never knowing' }[a.upbringing];
+  const shape = {
+    open: 'I am mostly at ease with people.',
+    healed: 'I have been hurt and it has let go. I notice when others hurt.',
+    outward: 'I do not let anyone get the better of me.',
+    inward: 'I keep to myself. It is safer.',
+  }[br];
+  return `${a.name}, ${raised}. ${shape}`;
+}
