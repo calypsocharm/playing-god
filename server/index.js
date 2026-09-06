@@ -310,7 +310,7 @@ async function tick() {
         a.lastAttention = key; a.sinceDecide = 0; a.lastView = view;
         byToken.get(a.voicedBy).items.push({ agentId: a.id, view });
       }
-      for (const { ws, items } of byToken.values()) if (items.length) send(ws, { type: 'decideMany', items: items.slice(0, 8) });
+      for (const { ws, items } of byToken.values()) if (items.length) send(ws, { type: 'decideMany', items: items.slice(0, 4) });   // four at a time keeps a batch under a tick on a modest card
     } else for (const a of world.agents) { a.lent = false; a.voicedBy = null; }
     if (wasNight) {
       // Offer tonight's facts to any connected weather with a model, so the story can be told, not listed.
