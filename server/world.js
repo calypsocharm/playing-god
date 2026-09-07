@@ -2025,7 +2025,7 @@ function newDay(w) {
   }
   for (const a of alive(w)) {
     a.transits = transitsFor(a.chart, now);
-    for (const t of a.transits) if (t.planet === 'saturn' || t.planet === 'mars') remember(w, a, t.note, 0.3);
+    for (const t of a.transits) if ((t.planet === 'saturn' || t.planet === 'mars') && !a.memories.some(m => m.text === t.note)) remember(w, a, t.note, 0.3);
   }
   if (W.dayInSeason(w.day, w.weather) === 0) {
     // What was coming and never landed lands on the season's last breath.
@@ -2370,6 +2370,15 @@ export function viewFor(a, w) {
     people: feelings,
     sky: [...a.transits.map(t => t.note), ...(w.god.name !== 'the Sky' ? [`People here call the sky ${w.god.name}.`] : []), ...((a.faith || 0) < -0.3 ? ['You do not think anything up there cares.'] : (a.faith || 0) > 0.3 ? ['You have a sense something watches over this place.'] : [])],
     memories: [...a.memories].sort((x, y) => (y.weight + (y.day - a.memories[0]?.day) * 0.01) - (x.weight + (x.day - a.memories[0]?.day) * 0.01)).slice(0, 6).map(m => `Day ${m.day}: ${m.text}`),
+    // The heaviest memories are, by definition, the worst things that ever happened. Ordinary days
+    // are what a person is mostly made of, so they are offered too, and whoever asks may use both.
+    recent: [...a.memories].slice(-5).map(m => `Day ${m.day}: ${m.text}`),
+    faith: +(a.faith || 0).toFixed(2),
+    towardTheVoice: (a.faith || 0) > 0.6 ? 'You have always known something watches over this place, and you are glad of it. When the voice speaks you are not afraid of it.'
+      : (a.faith || 0) > 0.2 ? 'You think something watches over this place, most days. The voice is part of that, whatever it is.'
+      : (a.faith || 0) < -0.4 ? 'You do not think anything up there cares, and you have reasons. If the voice wants something from you it can earn it.'
+      : (a.faith || 0) < -0.1 ? 'You are not sure anything is listening. You have been let down before.'
+      : 'You do not know what to make of the voice. You never have.',
     diary: a.diary.slice(-3).map(d => `Day ${d.day}: ${d.text}`),
     notes: a.notes.filter(n => !n.read).map(n => n.text),
     guidance: a.guidance || '',

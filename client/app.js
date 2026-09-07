@@ -1,4 +1,5 @@
 import * as Brain from './brain.js';
+import * as Prompt from './prompt.js';
 import * as Ghost from './ghost.js';
 import * as PX from './pixel.js';
 import * as Interior from './interior.js';
@@ -621,25 +622,8 @@ async function onCommuneView(m) {
   try {
     const v = m.view;
     const recent = (m.thread || []).slice(-8).map(t => `${t.from === 'self' ? 'The voice' : v.you.name}: "${t.text}"`).join('\n');
-    const user = `You are ${v.you.name}, ${v.you.age} years old. ${v.you.chart}
-${v.you.nature.join(' ')}
-${v.you.selfSummary ? 'Who you have become: ' + v.you.selfSummary : ''}
-
-${v.when} You are ${v.where}.
-Your body: ${v.felt.join(' ')}
-${v.near.length ? 'With you: ' + v.near.join('; ') + '.' : 'You are alone right now.'}
-People you know: ${v.people.slice(0, 8).join('; ')}
-What you remember most: ${v.memories.slice(0, 5).join(' ')}
-${v.diary.length ? 'From your diary: ' + v.diary[v.diary.length - 1] : ''}
-${m.since?.length ? 'Since the voice last spoke, this happened to you: ' + m.since.join(' ') : ''}
-
-A quiet voice you have always had, underneath everything, speaks to you. It has spoken before:
-${recent || '(this is the first time)'}
-
-It says now: "${m.text}"
-
-Answer the voice in your own words, and answer what it actually said or asked. If it asks what happened, tell it what happened to you, plainly. First person, one to five sentences, plain, the way a person who lives outdoors talks. You may agree, argue, ask it something, or refuse. You do not know what the voice is. Never mention being an AI. No JSON, no quotation marks around the whole answer.`;
-    const raw = await Brain.callModel(cfgFor(m.agentId), 'You are a villager with a body, answering a voice inside you. Plain speech only.', user, { maxTokens: 300 });
+    const user = Prompt.communePrompt({ ...v, _since: m.since || [] }, m.text, recent);
+    const raw = await Brain.callModel(cfgFor(m.agentId), Prompt.COMMUNE_SYSTEM, user, { maxTokens: 300 });
     const text = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim().replace(/^["“]|["”]$/g, '').slice(0, 700);
     if (text) send({ type: 'communed', agentId: m.agentId, text });
     else log(`${v.you.name} had no answer for the voice.`);

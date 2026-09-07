@@ -93,6 +93,27 @@ foot of this file).
 - Not done: the second Creator still shares the page, so they see the village map and villagers like any watcher. Only the
   fire's *own* block is gated. If you want a true blind second player, give them their own page rendering `state.fire`.
 
+## The higher self's conversation (fixed 2026-09-07 late)
+She said almost everyone was nasty to her in the commune. It was not her and it was not the model.
+
+- The prompt **never told them how they feel about the voice**. `viewFor`'s `sky` block carries it and the
+  commune prompt did not include `sky` at all - so villagers at faith 1.00 answered a strange voice in their head
+  with nothing to say they trusted it. `viewFor` now returns `faith`, `towardTheVoice` (a sentence keyed off faith,
+  five bands) and `recent`; the prompt leads the relationship with `towardTheVoice`.
+- **"What you remember most" was sorted by weight, and weight means trauma.** Every conversation opened on the five
+  worst things that ever happened to them. Now: `memories.slice(0,3)` as "the hardest things you carry" *plus*
+  `recent.slice(-3)` as "ordinary days you also remember".
+- The closing line used to read "You may agree, argue, ask it something, or refuse." It now says how you answer
+  follows from how you feel about the voice, offers warmth first to anyone who trusts it, keeps refusal for anyone
+  who does not, and adds: **a hard answer has to be earned by something that actually happened to you.** Refusal is
+  still fully available - that is the game working - it just is not the default any more.
+- Transit notes were re-remembered **every single day**, so memory filled with "Saturn is pressing on your sense of
+  who you are" over and over and buried real events. `newDay` now only remembers a transit the agent does not
+  already hold.
+- The prompt moved out of `client/app.js` into `client/prompt.js` as `communePrompt(v, said, recent)` +
+  `COMMUNE_SYSTEM`, so it can be read and tested without a browser or a model:
+  **`node test/smoke_commune.mjs <Name>` prints the whole thing for a real villager.**
+
 ## NEXT (her list, in order)
 1. ~~A second Creator holding the rival fire~~ **DONE, see above.** What is left of it:  set a real `FIRE_TOKEN` on box 2 before
    handing the key to anybody, and decide whether the second player gets their own page.
