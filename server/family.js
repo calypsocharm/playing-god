@@ -138,6 +138,7 @@ export function births(w) {
     c.memories = [{ day: w.day, tick: w.tick, text: `You were born to ${c.parents.map(id => byId(w, id).name).join(' and ')}.`, weight: 1 }];
     const names = c.parents.map(id => byId(w, id).name).join(' and ');
     event(w, `A child is born to ${names}. They name them ${c.name}.`, 'healed', [c.id, ...c.parents]);
+    (w.seasonBorn = w.seasonBorn || []).push({ name: c.name });
   }
 }
 

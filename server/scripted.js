@@ -99,6 +99,17 @@ export function scriptedDecide(a, s) {
     if (inv.fiber < 5) return { type: 'forage', to: 'meadow', thought: 'Fiber. Not like them.' };
   }
 
+  // Something is coming, and they know it. Those with the strength get ready.
+  if (s.threat && isDay && b.energy > 0.35 && Math.random() < 0.5) {
+    const t = s.threat.kind, days = s.threat.days;
+    if (t === 'cold') { if (inv.blanket <= 0 && I.canCraft(inv, 'blanket')) return { type: 'craft', item: 'blanket', thought: 'Before the cold.' }; if (inv.blanket <= 0 && inv.fiber < 3) return { type: 'forage', to: 'meadow', thought: 'Fiber for a blanket.' }; if (s.hearthWood < 12) return { type: 'work', to: 'forest', thought: `Wood. ${days} days.` }; }
+    if (t === 'wolves') { if (a.location.startsWith('wild:') || a.location === 'edge') return { type: 'withdraw', thought: 'Not out here. Not now.' }; if (s.pets?.length && a.location !== 'home' && days <= 2) return { type: 'withdraw', thought: 'Bring them in. Bar the door.' }; }
+    if (t === 'sickness') { if (inv.salve <= 0 && I.canCraft(inv, 'salve')) return { type: 'craft', item: 'salve', thought: 'Salve, before it comes.' }; if (inv.herbs < 3) return { type: 'forage', to: 'forest', thought: 'Herbs. Everyone will need them.' }; }
+    if (t === 'drought' || t === 'frost' || t === 'flood') { const price = s.store?.prices?.food?.buy || 2; if (inv.food < 4 && (inv.coin || 0) >= price && (s.store?.shelf?.food || 0) >= 1) return { type: 'buy', item: 'food', n: Math.max(1, Math.min(4, Math.floor((inv.coin || 0) / price), Math.floor(s.store.shelf.food))), thought: 'Lay it by.' }; if (s.yieldToday > 0.1 && inv.food < 6) return { type: 'work', to: 'field', thought: 'Bring it in while it gives.' }; }
+    if (t === 'raiders') { if (inv.axe <= 0 && I.canCraft(inv, 'axe')) return { type: 'craft', item: 'axe', thought: 'Something in my hands when they come.' }; if (inv.axe <= 0 && inv.wood < 3) return { type: 'forage', to: 'forest', thought: 'Wood for an axe.' }; if (days <= 2 && a.location !== 'hearth') return { type: 'go', to: 'hearth', thought: 'Together, at the fire.' }; }
+    if (t === 'fire') { if (inv.stone < 3) return { type: 'forage', to: 'quarry', thought: 'Stone. Stone does not burn.' }; }
+  }
+
   // The arts. Sadness wants a shape; the grieving and the low make something of it, and makers show what they made.
   const grieving = (a.grief || []).some(g => g.intensity > 0.3);
   if ((grieving || (b.joy ?? 0.5) < 0.4) && inv.food >= 0.5 && b.energy > 0.35 && Math.random() < 0.22) {

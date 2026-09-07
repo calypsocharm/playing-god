@@ -60,7 +60,7 @@ const server = http.createServer(async (req, res) => {
     const quotes = {};
     for (const a of remote) for (const d of a.diary) if (d.by === 'remote') (quotes[d.day] = quotes[d.day] || []).push({ name: a.name, text: d.text });
     res.writeHead(200, { 'content-type': 'application/json' });
-    return res.end(JSON.stringify({ name: world.camp?.name || '', day: world.day, yearDays: World.yearDays(world), chapters: world.chapters || [], chronicle: world.chronicle, quotes, skyName: world.god.name, goals: Object.entries(World.GOALS).map(([k, label]) => ({ key: k, label, done: world.goals[k]?.done ?? null })), dead: world.agents.filter(a => !a.alive).map(a => ({ name: a.name, day: a.diedDay, age: a.ageAtDeath, cause: a.causeOfDeath })) }));
+    return res.end(JSON.stringify({ name: world.camp?.name || '', day: world.day, yearDays: World.yearDays(world), chapters: world.chapters || [], chronicle: world.chronicle, quotes, skyName: world.god.name, ended: world.ended || null, reports: world.reports || [], goals: Object.entries(World.GOALS).map(([k, label]) => ({ key: k, label, done: world.goals[k]?.done ?? null })), dead: world.agents.filter(a => !a.alive).map(a => ({ name: a.name, day: a.diedDay, age: a.ageAtDeath, cause: a.causeOfDeath })) }));
   }
   if (url.pathname === '/api/state') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(World.publicState(world))); }
   let file = url.pathname === '/' ? '/index.html' : url.pathname;
@@ -85,6 +85,7 @@ function describeGodAct(world, m, r) {
     case 'nudge': return 'Two people will find themselves at the same place this moment.';
     case 'weather': return `The dials are set: winter ${world.weather.winterHarshness.toFixed(2)}, harvest ${world.weather.harvest.toFixed(2)}, ${world.weather.daysPerSeason} days a season, ${Math.round(world.weather.tickMs / 1000)}s a tick. They take hold from the next tick.`;
     case 'omen': return 'Everyone saw it. What it means is theirs to decide.';
+    case 'warn': return 'The omen is shown and named. They know what is coming and what would help. Whether they do it is theirs.';
     case 'destiny': return 'A destiny is spoken. They feel the pull; others sense the mark.';
     case 'gift': return `Something woke in ${r.name}: ${r.kind}. Watch who is glad of it and who is afraid.`;
     case 'sense': return `${r.name} is ${r.kind} now. It is always on, and it costs them.`;

@@ -14,6 +14,7 @@ import * as G from './gifts.js';
 import * as A from './animals.js';
 import * as R from './rites.js';
 import * as Art from './arts.js';
+import * as T from './threats.js';
 
 export const TICKS_PER_DAY = 6;
 export const TICK_NAMES = ['dawn', 'morning', 'midday', 'afternoon', 'evening', 'night'];
@@ -112,6 +113,9 @@ export function createWorld(saved) {
     saved.god = saved.god || newGod();
     saved.goals = saved.goals || {};
     saved.prayers = saved.prayers || [];
+    saved.reports = saved.reports || [];
+    if (saved.seasonStartDay == null) saved.seasonStartDay = saved.day - W.dayInSeason(saved.day, saved.weather);
+    saved.seasonDeaths = saved.seasonDeaths || []; saved.seasonBorn = saved.seasonBorn || [];
     saved.chronicle = saved.chronicle || [];
     for (const a of saved.agents) if (a.faith == null) a.faith = 0;
     for (const a of saved.agents) { for (const m of I.MATERIALS) if (a.inv && a.inv[m] == null) a.inv[m] = 0; for (const k of Object.keys(I.ITEMS)) if (a.inv && a.inv[k] == null) a.inv[k] = 0; }
@@ -141,6 +145,7 @@ export function createWorld(saved) {
     saved.store.loans = saved.store.loans || {}; saved.store.project = saved.store.project ?? null; saved.store.wagesPaid = saved.store.wagesPaid || 0;
     if (saved.store.coin < 120 && !saved.store.funded) { saved.store.coin += 200; saved.store.funded = true; }
     for (const a of saved.agents) { if (a.inv && a.inv.coin == null) a.inv.coin = 3; a.upgrades = a.upgrades || {}; }
+    if (!saved.threat && !saved.ended) rollThreat(saved);
     return saved;
   }
   const w = {
@@ -157,6 +162,8 @@ export function createWorld(saved) {
     mod: { bannedIps: {}, bannedTokens: {}, muted: {} },
     goals: {},           // question key -> { done: day }
     prayers: [],         // what the villagers ask of the sky
+    reports: [],         // the sky weighed at the turn of each season
+    seasonStartDay: 0, seasonDeaths: [], seasonBorn: [], seasonHealed: 0, seasonHolidays: 0,
     chronicle: [],       // one paragraph a night, in the village's voice
     builds: {},          // granary, hall: { have: {wood:n,...}, done: bool, builders: {agentId: n} }
     agents: [],
@@ -164,6 +171,7 @@ export function createWorld(saved) {
     log: [],             // everything, for the record
   };
   seedVillage(w);
+  rollThreat(w);
   return w;
 }
 
@@ -172,7 +180,7 @@ export const simDate = (w, day = w.day) => w.startMs + day * DAY_MS;
 // ---------- the weather's attention ----------
 // A god who can do anything every tick has nothing to decide. Attention is scarce and refills
 // with the seasons. Where you spend it is what becomes real.
-export const GOD_COSTS = { weather: 2, traveler: 3, nudge: 1, wood: 1, destiny: 2, fulfil: 0, omen: 1, gift: 3, sense: 3, pause: 0, resume: 0 };
+export const GOD_COSTS = { weather: 2, traveler: 3, nudge: 1, wood: 1, destiny: 2, fulfil: 0, omen: 1, gift: 3, sense: 3, warn: 1, pause: 0, resume: 0 };
 
 // A gift wakes. `how` is a phrase: 'in the quiet at the creek', 'when the sky touched you'.
 // A sense opens. Always on from then; the body pays for it every day.
@@ -596,7 +604,8 @@ export function step(w, remoteActions) {
 
 function dayPhase(w, remoteActions) {
   const living = alive(w);
-  const cold = W.coldToday(w.day, w.weather);
+  let cold = W.coldToday(w.day, w.weather);
+  if (w.coldSnap && w.day <= w.coldSnap.until) cold = B.clamp(cold + w.coldSnap.extra);
 
   // 1. decisions
   const decisions = new Map();
@@ -659,6 +668,9 @@ function dayPhase(w, remoteActions) {
       case 'work': {
         if (a.location === 'field') {
           let y = W.fieldYield(w.day, w.weather);
+          if (w.drought && w.day <= w.drought.until) y *= 0.15;
+          if (w.flood && w.day <= w.flood.until) y *= 0.5;
+          if (w.frost && w.day <= w.frost.until) y = 0;
           if (a.carrying) y *= 0.6;
           if (a.inv.hoe > 0) { y *= 1.5; if (I.wear(a, 'hoe')) { event(w, `${a.name}'s hoe breaks.`, 'info', [a.id]); remember(w, a, 'Your hoe broke.', 0.4); } }
           if (w.builds.granary?.done) y *= 1.25;
@@ -704,6 +716,7 @@ function dayPhase(w, remoteActions) {
         break;
       }
       case 'forage': {
+        if (a.location === 'creek' && w.flood && w.day <= w.flood.until) { remember(w, a, 'The creek is a brown roar over its banks. Nothing to be had from it.', 0.4); break; }
         const table = I.FORAGE[a.location];
         if (table) {
           const season = W.seasonOf(w.day, w.weather);
@@ -1330,6 +1343,7 @@ function die(w, a, forcedCause) {
   a.ageAtDeath = Math.floor(ageOf(w, a));
   const cause = forcedCause || (a.ill ? R.KINDS[a.ill.kind] : a.body.food < 0.15 ? 'hunger' : a.body.warmth < 0.15 ? 'the cold' : 'injuries');
   a.causeOfDeath = cause;
+  (w.seasonDeaths = w.seasonDeaths || []).push({ name: a.name, cause });
   if (w.winterDeaths != null) w.winterDeaths += 1;
   const griefCount = alive(w).filter(o => trustOf(o, a) > 0.25).length;
   if (cause === 'old age' && griefCount >= 3 && !w.goals.oldAndMourned) { w.goals.oldAndMourned = { done: w.day }; event(w, `A question answered: ${GOALS.oldAndMourned}.`, 'healed'); }
@@ -1436,7 +1450,7 @@ function griefNightly(w) {
         event(w, `${o.name} has grieved ${g.name}.`, 'healed', [o.id]);
         const rule = o.wounds.find(r => r.kind === 'loss');
         if (rule) rule.strength -= 0.2;
-        if (rule && rule.strength <= 0) { o.wounds = o.wounds.filter(r => r !== rule); o.scars.push({ trigger: rule.trigger, belief: rule.belief, healedDay: w.day, woundedDay: rule.day }); }
+        if (rule && rule.strength <= 0) { o.wounds = o.wounds.filter(r => r !== rule); o.scars.push({ trigger: rule.trigger, belief: rule.belief, healedDay: w.day, woundedDay: rule.day }); w.seasonHealed = (w.seasonHealed || 0) + 1; }
       }
     }
   }
@@ -1491,6 +1505,7 @@ function nightPhase(w) {
       asking:    { happened: !!a.exposures.asking,    painFollowed: !!a.exposures.painToday },
     };
     const healed = processExposures(a, exposures, w.day);
+    w.seasonHealed = (w.seasonHealed || 0) + healed.length;
     for (const r of healed) {
       event(w, `${a.name} has healed. "${r.belief}" no longer runs them. The scar stays.`, 'healed', [a.id]);
       remember(w, a, 'Something that used to clamp your chest has let go. You still remember it.', 1);
@@ -1915,7 +1930,7 @@ function newDay(w) {
   const now = simDate(w);
   const d = W.describe(w.day, w.weather);
   w.holidayToday = R.holidayToday(w, yearDays(w));
-  if (w.holidayToday) { const h = w.holidayToday; h.kept += 1; event(w, `Today is ${h.name}, kept since ${h.byName} made it in year ${h.year}: ${h.decorate}.`, 'healed'); for (const a of alive(w)) remember(w, a, `Today is ${h.name}. ${h.decorate}. Everyone goes to the fire; there is ${h.food}${h.dance ? ' and dancing' : ''}, and the song: "${h.song}".`, 0.6); }
+  if (w.holidayToday) { const h = w.holidayToday; h.kept += 1; w.seasonHolidays = (w.seasonHolidays || 0) + 1; event(w, `Today is ${h.name}, kept since ${h.byName} made it in year ${h.year}: ${h.decorate}.`, 'healed'); for (const a of alive(w)) remember(w, a, `Today is ${h.name}. ${h.decorate}. Everyone goes to the fire; there is ${h.food}${h.dance ? ' and dancing' : ''}, and the song: "${h.song}".`, 0.6); }
   // Age takes some in the night.
   for (const a of alive(w)) {
     const age = ageOf(w, a);
@@ -1932,10 +1947,51 @@ function newDay(w) {
     for (const t of a.transits) if (t.planet === 'saturn' || t.planet === 'mars') remember(w, a, t.note, 0.3);
   }
   if (W.dayInSeason(w.day, w.weather) === 0) {
+    // What was coming and never landed lands on the season's last breath.
+    if (w.threat && !w.threat.landed) landThreat(w);
+    // The sky is weighed, and attention is earned, not given.
+    closeSeason(w);
     event(w, `${d.season[0].toUpperCase() + d.season.slice(1)} begins. ${d.sky}.`, 'season');
-    // The sky's attention returns with the season.
-    w.god.attention = Math.min(w.god.max, w.god.attention + 3);
+    if (!w.ended) rollThreat(w);
   }
+  // Something is always coming. Each day the Creator can see how ready they are; the day it is due, it lands.
+  if (w.threat && !w.threat.landed) {
+    T.readiness(w, alive(w), A.alive(w), w.builds, w.store);
+    if (w.day >= w.threat.lands) landThreat(w);
+  }
+}
+
+// ---------- threats and the season's weighing ----------
+
+function rollThreat(w) {
+  const season = W.seasonOf(w.day, w.weather), yd = w.weather.daysPerSeason;
+  const t = T.roll(w, season, yd);
+  const last = (w.seasonStartDay ?? w.day) + yd - 1;
+  t.lands = Math.max(w.day + 1, Math.min(t.lands, last));
+  T.readiness(w, alive(w), A.alive(w), w.builds, w.store);
+  // Those who see tomorrow see this too.
+  for (const a of alive(w)) if (a.sense?.kind === 'clairvoyant') remember(w, a, `You saw it before it came: ${t.name}, in ${t.lands - w.day} days. What would help: ${t.help}.`, 0.9);
+  return t;
+}
+function landThreat(w) {
+  T.readiness(w, alive(w), A.alive(w), w.builds, w.store);
+  T.land(w, alive(w), A.alive(w), PLACES, R.fallIll, remember, event, die, bumpTrust);
+}
+function closeSeason(w) {
+  const endedSeason = W.seasonOf(w.day - 1, w.weather), year = Math.floor((w.day - 1) / yearDays(w)) + 1;
+  const since = w.seasonStartDay ?? 0;
+  const questions = Object.values(w.goals || {}).filter(g => g && g.done != null && g.done >= since).length;
+  const works = (w.works || []).filter(x => x.day >= since).length;
+  const prayers = (w.prayers || []).filter(p => p.day >= since).length;
+  const report = T.seasonReport(w, endedSeason, year, alive(w), w.seasonBorn || [], w.seasonDeaths || [], w.seasonHealed || 0, questions, w.seasonHolidays || 0, works, prayers);
+  w.god.attention = Math.max(0, Math.min(w.god.max, w.god.attention + report.earned));
+  event(w, `The ${endedSeason} is weighed: ${report.earned >= 0 ? '+' : ''}${report.earned} attention. ${report.why.join('; ')}.`, 'season');
+  if ((w.despair || 0) >= 2 && !w.ended) {
+    w.ended = { day: w.day, why: 'two seasons of loss', alive: alive(w).length };
+    w.paused = true;
+    event(w, `Two seasons of loss, one after the other. The hearth goes cold and no one has the heart to light it. ${w.god.name} is left holding the book.`, 'death');
+  }
+  w.seasonStartDay = w.day; w.seasonDeaths = []; w.seasonBorn = []; w.seasonHealed = 0; w.seasonHolidays = 0;
 }
 
 // ---------- god ----------
@@ -1947,7 +2003,7 @@ export function godAct(w, msg) {
   // only the cold and the harvest are acts.
   if (msg.op === 'weather') { const changesSky = ['winterHarshness', 'harvest'].some(k => typeof msg[k] === 'number' && Math.abs(msg[k] - w.weather[k]) > 0.001); if (!changesSky) cost = 0; }
   if (cost > 0) {
-    if (w.god.attention < cost) return { error: `not enough attention (${w.god.attention} of ${cost} needed). It returns with the seasons.` };
+    if (w.god.attention < cost) return { error: `not enough attention (${w.god.attention} of ${cost} needed). It is earned when the season is weighed.` };
     w.god.attention -= cost;
     w.god.acts.push({ op: msg.op, day: w.day });
     if (w.god.acts.length > 200) w.god.acts.shift();
@@ -2028,6 +2084,11 @@ export function godAct(w, msg) {
       B.soothe(a.body, 0.4);
       return { ok: true };
     }
+    case 'warn': {
+      const r = T.warn(w, alive(w), remember, event);
+      if (r.error) { w.god.attention = Math.min(w.god.max, w.god.attention + cost); w.god.acts.pop(); }
+      return r;
+    }
     case 'pause': w.paused = true; return { ok: true };
     case 'resume': w.paused = false; return { ok: true };
     default: return { error: 'unknown op' };
@@ -2049,6 +2110,7 @@ export function snapshotFor(a, w) {
     infants: (a.children || []).map(id => byId(w, id)).filter(c => c && F.isInfant(w, c)).map(c => ({ id: c.id, name: c.name, minder: c.minder || null, otherParent: (c.parents || []).find(p => p !== a.id) || null })),
     infantsAlone: (w.infantsAlone || []).filter(x => !x.parents.includes(a.id)).map(x => ({ id: x.id, name: x.name })), strays: A.straysAt(w, a.location).map(x => ({ id: x.id, kind: x.kind, name: x.name })), deer: w.deer || 0,
     unexplored: +(1 - exploredFraction(w)).toFixed(3), exploring: !!a.explore,
+    threat: w.threat && !w.threat.landed && (w.threat.known || a.sense?.kind === 'clairvoyant') ? { kind: w.threat.kind, name: w.threat.name, days: w.threat.lands - w.day } : null,
     builds: w.builds, found: w.found || {}, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
     store: { shelf: w.store.shelf, coin: w.store.coin, prices: Object.fromEntries(Object.keys(I.STORE_PRICES).map(k => [k, { buy: I.buyPrice(w.store, k), sell: I.sellPrice(w.store, k) }])), loans: Object.values(w.store.loans || {}), project: w.store.project },
     location: a.location,
@@ -2083,6 +2145,8 @@ export function viewFor(a, w) {
   const felt = [...ageFelt(age), ...R.illFelt(a), ...B.feltSense(a.body), ...woundFeltSense(a, nearNames), ...griefFelt(a), ...F.familyFelt(w, a), ...F.infantFelt(w, a), ...hobbyLines, ...A.felt(w, a),
     ...(w.holidayToday ? [`Today is ${w.holidayToday.name}, the day ${w.holidayToday.byName} made in year ${w.holidayToday.year}. ${w.holidayToday.decorate}. People gather at the hearth${w.holidayToday.dance ? ' and dance' : ''}, share ${w.holidayToday.food}, and sing: "${w.holidayToday.song}".`] : []),
     ...(w.pendingHoliday && w.pendingHoliday.by === a.id ? ['Last night you decided: this deserves a day, every year. Name it, and say how it is kept (holiday {name, decorate, song, dance, food}).'] : []),
+    ...(w.threat && !w.threat.landed && (w.threat.known || a.sense?.kind === 'clairvoyant') ? [`${w.threat.known ? 'Everyone says' : 'No one else has seen it, but you have:'} ${w.threat.name} is coming in ${Math.max(1, w.threat.lands - w.day)} day${w.threat.lands - w.day === 1 ? '' : 's'}. What would help: ${w.threat.help}.`] : []),
+    ...(w.threat?.landed && w.day - w.threat.landed <= 3 ? [w.threat.text] : []),
     ...(a.destiny && !a.destiny.fulfilled ? [`There is a pull in you toward something. If you had to say it: ${a.destiny.text.replace(/^(this one|they|he|she|this person)\s+will\s+/i, 'you will ')}`] : a.destiny?.fulfilled ? ['You did the thing you were made for. Whatever comes now is extra.'] : [])];
   const feelings = s.others.map(o => {
     const t = o.trust;
@@ -2189,6 +2253,8 @@ export function publicState(w) {
     explored: ensureExplored(w), cell: CELL, mapped: +exploredFraction(w).toFixed(3),
     animals: A.publicList(w), deer: w.deer || 0,
     works: Art.publicWorks(w), arts: w.arts || [],
+    threat: w.threat ? { ...w.threat, word: T.readinessWord(w.threat.readiness || 0), daysLeft: w.threat.landed ? 0 : w.threat.lands - w.day } : null,
+    reports: (w.reports || []).slice(-4), threatLog: (w.threatLog || []).slice(-8), ended: w.ended || null,
     holidays: w.holidays || [], holidayToday: w.holidayToday || null, pendingHoliday: w.pendingHoliday ? { by: w.pendingHoliday.by, reason: w.pendingHoliday.reason } : null, sick: alive(w).filter(a => a.ill).length,
     agents: w.agents.map(a => ({
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,

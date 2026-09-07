@@ -965,8 +965,11 @@ function renderPanels() {
   const sick = s.sick ? `<br><span style="color:var(--bad)">${s.sick} sick</span>: ${s.agents.filter(a => a.alive && a.ill).map(a => esc(a.name) + ' (' + a.ill.kind + ')').join(', ')}` : '';
   const frontier = `${st}${today}${hol}${arts}${sick}<br>Known land: ${found.length ? found.join(', ') : 'only what you see'} · ${Math.round((s.mapped || 0) * 100)}% of the land walked${s.frontierLeft ? ` · ${s.frontierLeft} place${s.frontierLeft === 1 ? '' : 's'} still out in the pale` : ' · every place is found'}`;
   const fam = `<br>${couples} couple${couples === 1 ? '' : 's'} · ${kids} child${kids === 1 ? '' : 'ren'}${expecting ? ` · ${expecting} expecting` : ''}${s.camp?.founded ? `<br><b style="color:var(--warm)">${esc(s.camp.name)}</b>, past the edge: ${campers} people, fire wood ${s.camp.wood}` : ''}`;
-  $('villageSummary').innerHTML = `${alive.length} alive · ${s.weather.sky} · hearth wood ${s.hearth.wood}<br>` +
+  const ended = s.ended ? `<div class="mem" style="border:1px solid var(--bad);padding:8px;margin-bottom:8px"><b style="color:var(--bad)">The book is closed.</b> Day ${s.ended.day}: ${esc(s.ended.why)}. ${s.ended.alive} were left, and none had the heart to go on. <a href="story.html" style="color:var(--warm)">Read it as a book →</a>${godOk ? ` <button class="act warn" id="btnAgain" style="margin-left:6px">Begin again</button>` : ''}</div>` : '';
+  const coming = s.threat && !s.threat.landed && s.threat.known ? `<br><b style="color:var(--warm)">Everyone says ${esc(s.threat.name)} is coming</b> in ${s.threat.daysLeft} day${s.threat.daysLeft === 1 ? '' : 's'}.` : s.threat?.landed && s.day - s.threat.landed <= 3 ? `<br><b style="color:var(--bad)">${esc(s.threat.name[0].toUpperCase() + s.threat.name.slice(1))} has landed.</b> ${esc(s.threat.text || '')}` : '';
+  $('villageSummary').innerHTML = ended + `${alive.length} alive · ${s.weather.sky} · hearth wood ${s.hearth.wood}${coming}<br>` +
     Object.entries(branches).map(([k, v]) => `${v} ${k}`).join(' · ') + fam + frontier + `<br>${builds}${lessons}`;
+  const again = $('btnAgain'); if (again) again.onclick = () => $('btnReset').click();
   $('events').innerHTML = [...s.events].reverse().map(e => `<div class="ev ${e.kind}"><span class="t">d${e.day} ${['dawn', 'morn', 'mid', 'aft', 'eve', 'night'][e.tick]}</span>${esc(e.text)}</div>`).join('');
   // Right now: what every living person is doing this moment, the interesting ones first.
   const order = { hurt: 0, care: 1, talk: 2, work: 3, doing: 4, quiet: 5 };
@@ -1167,6 +1170,22 @@ function renderWeather() {
   if ($('destList').innerHTML !== destHtml) { $('destList').innerHTML = destHtml; for (const b of $('destList').querySelectorAll('[data-fulfil]')) b.onclick = () => send({ type: 'god', op: 'fulfil', a: b.dataset.fulfil }); }
   $('btnDestiny').disabled = !can('destiny');
   $('btnOmen').disabled = !can('omen');
+  // What is coming, how ready they are, and whether to tell them.
+  const t = state.threat;
+  const threatHtml = !t ? 'Nothing on the horizon.' : t.landed
+    ? `<div class="mem"><b style="color:var(--bad)">${esc(t.name[0].toUpperCase() + t.name.slice(1))}</b> landed on day ${t.landed}, the village <b>${esc(t.word)}</b>.<br>${esc(t.text || '')}</div>`
+    : `<div class="mem"><b style="color:var(--warm)">${esc(t.name[0].toUpperCase() + t.name.slice(1))}</b> in <b>${t.daysLeft}</b> day${t.daysLeft === 1 ? '' : 's'} · they are <b style="color:${t.readiness >= 0.5 ? 'var(--good)' : 'var(--bad)'}">${esc(t.word)}</b> (${Math.round((t.readiness || 0) * 100)}%)
+      <div class="bar" style="height:8px;margin:4px 0"><i style="width:${Math.round((t.readiness || 0) * 100)}%"></i></div>
+      <span class="muted">What would help: ${esc(t.help)}.</span><br>
+      ${t.known ? `<span class="muted">They know. You warned them on day ${t.warned ?? t.seen}.</span>` : `<button class="act" id="btnWarn" ${can('warn') ? '' : 'disabled'} title="costs ${g.costs?.warn ?? 1}">Warn them · costs ${g.costs?.warn ?? 1}</button> <span class="muted">an omen with a name; the ones who see tomorrow already know</span>`}</div>`;
+  if ($('threatBox').innerHTML !== threatHtml) { $('threatBox').innerHTML = threatHtml; const b = $('btnWarn'); if (b) b.onclick = () => send({ type: 'god', op: 'warn' }); }
+  const rep = (state.reports || []).slice(-1)[0];
+  const repHtml = !rep ? 'No season has turned yet.' : `<div class="mem"><b>${esc(rep.season[0].toUpperCase() + rep.season.slice(1))}, year ${rep.year}</b> · <b style="color:${rep.earned >= 0 ? 'var(--good)' : 'var(--bad)'}">${rep.earned >= 0 ? '+' : ''}${rep.earned} attention</b><br>
+    <span class="muted">${rep.why.map(esc).join(' · ')}</span><br>
+    ${rep.alive} alive${rep.born.length ? ` · born: ${rep.born.map(esc).join(', ')}` : ''}${rep.died.length ? ` · <span style="color:var(--bad)">lost: ${rep.died.map(esc).join(', ')}</span>` : ''}${rep.questions ? ` · ${rep.questions} question${rep.questions === 1 ? '' : 's'} answered` : ''}${rep.works ? ` · ${rep.works} work${rep.works === 1 ? '' : 's'} made` : ''}${rep.prayers ? ` · ${rep.prayers} prayer${rep.prayers === 1 ? '' : 's'}` : ''}
+    ${rep.threat ? `<br><span class="muted">${esc(rep.threat.name)}: ${rep.threat.landed ? `landed, the village ${rep.threat.readiness >= 0.5 ? 'ready' : 'unready'}` : 'never came'}</span>` : ''}</div>`
+    + ((state.reports || []).length > 1 ? `<div class="muted" style="margin-top:4px">Before that: ${(state.reports || []).slice(0, -1).reverse().map(r => `${esc(r.season)} ${r.year} ${r.earned >= 0 ? '+' : ''}${r.earned}`).join(' · ')}</div>` : '');
+  if ($('reportBox').innerHTML !== repHtml) $('reportBox').innerHTML = repHtml;
   if (g.omens && !$('omenKind').options.length) $('omenKind').innerHTML = Object.entries(g.omens).map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join('');
 }
 function sendWeather() {

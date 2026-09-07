@@ -55,7 +55,7 @@ export const readinessWord = (r) => r >= 0.75 ? 'strong' : r >= 0.5 ? 'ready' : 
 export function warn(w, living, remember, event) {
   const t = w.threat; if (!t || t.landed) return { error: 'nothing is coming that they could be warned of' };
   if (t.known) return { error: 'they already know' };
-  t.known = true;
+  t.known = true; t.warned = w.day;
   event(w, THREATS[t.kind].omen + ` People say it means ${t.name}.`, 'god');
   for (const a of living) { remember(w, a, `${THREATS[t.kind].omen} Everyone says: ${t.name} is coming. What would help: ${t.help}.`, 0.9); a.faith = B.clamp((a.faith || 0) + 0.03, -1, 1); }
   return { ok: true };

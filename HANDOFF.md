@@ -1,6 +1,6 @@
 # HANDOFF — Playing God (read this first in a new session)
 
-Updated 2026-09-07, early morning. Owner: Calypso (ultimatefaux@gmail.com). Repo: github.com/calypsocharm/playing-god (PUBLIC:
+Updated 2026-09-07, midday. Owner: Calypso (ultimatefaux@gmail.com). Repo: github.com/calypsocharm/playing-god (PUBLIC:
 never commit `data/`, `.env`, or a real Creator password). Live at https://clawkeep.io on box 2. **Pushing to main is
 deploying**: the server on the box runs `playing-god-update` every 5 minutes (cron hourly as backstop). Nobody has SSH from
 Claude sessions; the local server (`npm start`, :3333, launch config `playing-god` in Downloads/.claude/launch.json) is only a
@@ -21,33 +21,25 @@ villagers invent (`invent`→`invented` ws flow through the founder's model, scr
 (`client/eyes.html?who=`, ws `watch`, observer only); clock sliders free, only cold/harvest cost attention; winter hunger fix
 (buy/hunt/fish when hungry; eat scraps); goal statement in README/CONCEPT/Village tab.
 
-## IN PROGRESS when the window closed: threats + season score (strategy layer)
-`server/threats.js` is written and syntax-checked but NOT wired in. It exports: `THREATS`, `roll(w, season, daysPerSeason)`,
-`readiness(w, living, animals, builds, store)`, `readinessWord`, `warn(w, living, remember, event)`,
-`land(w, living, animals, PLACES, fallIll, remember, event, die, bumpTrust)`, `seasonReport(...)`.
-Wiring still to do (anchors verified in world.js):
-1. `import * as T from './threats.js'` in world.js.
-2. In `newDay` season-start block (`if (W.dayInSeason(w.day, w.weather) === 0)` near "attention returns with the season"):
-   before rolling the new threat, build the season report for the season just ended: born/died/healed/questions/holidays
-   kept/works/prayers since `w.seasonStartDay`; `T.seasonReport(...)`; replace the flat `+3` attention with
-   `+report.earned` (clamp to max); if `w.despair >= 2` → `w.ended = {day, why:'two seasons of loss'}`, event, `w.paused = true`.
-   Then `T.roll(w, newSeason, daysPerSeason)`, `w.seasonStartDay = w.day`. Track deaths in `die()` into `w.seasonDeaths`
-   (name, cause) and births into `w.seasonBorn`; healed count = wounds→scars this season (count in processExposures caller).
-3. In `newDay` every day: if `w.threat && !w.threat.landed && w.day >= w.threat.lands` → `T.land(...)` (pass `R.fallIll`).
-   Each day also `T.readiness(w, alive(w), A.alive(w), w.builds, w.store)`.
-4. Effects hooks: `coldSnap` → in dayPhase `const cold = ...` add `+ w.coldSnap.extra` while `w.day <= until`;
-   `drought`/`frost`/`flood` → field yield ×0.15 / 0 / 0.5 while active (`let y = W.fieldYield(...)` line); flood: creek
-   forage off.
-5. God op `warn` (GOD_COSTS.warn = 1) → `T.warn`; `describeGodAct` case; client Weather tab: threat name, days until it
-   lands, readiness word + bar, "what would help", **Warn them** button, and the last season report card (`w.reports`)
-   with the earned-attention breakdown. publicState: `threat`, `reports: w.reports.slice(-4)`, `ended`.
-6. Villagers: viewFor felt line when `threat.known` ("Everyone says X is coming in N days. What would help: ...");
-   clairvoyants know it regardless. Scripted prep when known: cold→gather wood/craft blanket; wolves→buy dog? (no dog
-   purchase yet: keep animals home); sickness→forage herbs/craft salve; drought/frost→work field, buy food; raiders→craft
-   axe, stay near hearth; fire→carry stone.
-7. Loss/end: when `w.ended`, the Creator gets a "close the book" card (story page) and a "begin again" that calls the
-   existing `reset` op. Smoke test 2 seasons headless (roll → warn → land → report), then README section + push.
-Next after that (her pick #3): a rival fire past the pale (competes for deer, trades, raids; later a second Creator).
+## Threats + season score (strategy layer): DONE and live
+`server/threats.js` is wired: each season `rollThreat` picks a seasonal threat that lands late in the season; `T.readiness`
+is recomputed daily; the god op `warn` (1 attention) names the omen and every villager remembers what would help; scripted
+villagers prepare (`s.threat` in snapshotFor -> block in scripted.js); `landThreat` scales damage by readiness; effects:
+`w.coldSnap`/`w.drought`/`w.flood`/`w.frost` read in dayPhase (cold + field yield + flooded creek). At each season turn
+`closeSeason` builds `T.seasonReport` from `w.seasonDeaths/seasonBorn/seasonHealed/seasonHolidays` + goals/works/prayers since
+`w.seasonStartDay`, attention += `report.earned` (the flat +3 is gone), and `w.despair >= 2` sets `w.ended` + pauses.
+Client: Weather tab "What is coming" (readiness bar, Warn them) + "The last season, weighed"; Village tab shows the
+"book is closed" card with Begin again (= reset); story.html frontispiece says so. publicState ships `threat`, `reports`,
+`threatLog`, `ended`. Smoke script: scratchpad `smoke_threats.mjs` (fresh 3 seasons w/ warn, forced despair, migration of
+data/world.json read-only). Live village will get its first threat rolled on load (migration rolls one if none).
+
+## NEXT (her ask, 2026-09-07): split the store into departments
+"Split up the store into departments: government (villagers vote), the store for getting stuff, and a bank for loans and
+savings, and loaning the government to start projects like building a town community center and things that make life
+better." Design notes: keep `w.store` as the goods shelf; add `w.bank` (savings accounts per villager, loans moved from
+store.loans, lends to the government); add `w.council`/government (villagers vote on a project from a ballot; the government
+borrows from the bank, pays wages, builds civic projects: community centre/hall-of-days, well-house, school, bathhouse etc.
+that raise joy/health/ease). After that, her earlier pick: a rival fire past the pale, then a second Creator.
 
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to

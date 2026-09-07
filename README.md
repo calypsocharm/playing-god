@@ -566,3 +566,25 @@ look to them, what their body feels, what their senses tell them, what happens t
 hear, what they think, what they do, what they say, and at night what they write. It is written
 in the second person and updates every tick. You cannot speak there and they do not know you are
 watching. It works for anyone, yours or not, and it never shows the rules their body wrote.
+
+## Something is always coming
+
+Each season a threat gathers past the pale and lands late in the season: a killing cold or a
+wolf pack in winter, a sickness on the wind or a flood in spring, a drought or a grass fire in
+summer, raiders from the pale or an early frost in autumn. The Creator sees it the day it
+gathers, in the Weather tab, with the days until it lands, how ready the village is (exposed,
+thin, ready, strong), and what would help. The villagers do not know unless the sky **warns
+them**, for one attention: an omen with a name, and every one of them remembers what would
+help. Those who see tomorrow know regardless. Warned villagers with the strength for it get
+ready on their own: wood and blankets before a cold, herbs and salve before a sickness, food
+laid by before a drought or frost, an axe in hand and everyone at the hearth before raiders,
+stone carried before a fire, animals brought in before wolves. What lands is scaled by how
+ready they were.
+
+Attention is no longer handed back with the seasons. When a season turns, the sky is weighed and
+the last season card in the Weather tab shows what it earned: two for the season turning, one
+for no one lost before their time, one for meeting what came ready, one each for births, old
+rules let go, and days kept; one taken for every death before its time, and one for meeting
+what came unready. Two seasons running with three or more lost before their time, and the
+village closes the book: time stops, the Village tab and the story page say so, and the Creator
+can begin again.

@@ -70,7 +70,7 @@ function render() {
   for (const n of nights) { const idx = Math.floor(n.day / yd); if (!groups.has(idx)) groups.set(idx, []); groups.get(idx).push(n); }
   const isQuiet = (n) => (/A quiet day\. People worked/.test(n.text) || /^Nothing much\./.test(n.text)) && n.by !== 'told';
   const answered = story.goals.filter(g => g.done != null).length;
-  let html = `<div class="frontis"><h2>The Village</h2>${story.day} days · year ${Math.floor(story.day / story.yearDays) + 1} · ${answered} of ${story.goals.length} questions answered · they call the sky <b style="color:var(--warm)">${esc(story.skyName)}</b></div>`;
+  let html = `<div class="frontis"><h2>The Village</h2>${story.day} days · year ${Math.floor(story.day / story.yearDays) + 1} · ${answered} of ${story.goals.length} questions answered · they call the sky <b style="color:var(--warm)">${esc(story.skyName)}</b>${story.ended ? `<br><b style="color:var(--bad)">The book is closed.</b> Day ${story.ended.day}: ${esc(story.ended.why)}.` : ''}</div>`;
   html += `<nav class="toc">` + [...groups.keys()].sort((a, b) => a - b).map(idx => { const ch = byIdx.get(idx); const yr = Math.floor(idx / 4) + 1; return `<a href="#ch${idx}">${ch ? esc(ch.title) : `Season ${idx + 1}`} <span style="opacity:.6">· year ${yr}</span></a>`; }).join('') + `</nav>`;
   for (const idx of [...groups.keys()].sort((a, b) => a - b)) {
     const ch = byIdx.get(idx);
