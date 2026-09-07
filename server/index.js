@@ -7,6 +7,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { execFile } from 'node:child_process';
 import * as World from './world.js';
 import * as Mem from './memory.js';
 import * as Chart from './chart.js';
@@ -448,6 +449,15 @@ server.listen(PORT, () => {
   console.log(`Playing God on http://localhost:${PORT}`);
   console.log(`God token: ${GOD_TOKEN}  (set GOD_TOKEN to change)`);
   console.log(`Village: ${world.agents.filter(a => a.alive).length} alive, day ${world.day}`);
+  // Self-update: on the box the installer leaves an update script; run it every few minutes so a push
+  // to main is live within minutes instead of at the top of the hour. It only restarts when main moved.
+  const UPDATER = "/usr/local/bin/playing-god-update";
+  if (process.env.PLAYING_GOD_AUTOUPDATE !== "0") fs.access(UPDATER).then(() => {
+    let busy = false;
+    const check = () => { if (busy) return; busy = true; execFile(UPDATER, { timeout: 120000 }, (err, out) => { busy = false; if (out && out.trim()) console.log(out.trim()); if (err) console.log("update check failed:", err.message); }); };
+    setInterval(check, Number(process.env.PLAYING_GOD_AUTOUPDATE_MS || 300000)).unref();
+    console.log("Self-update: checking GitHub every " + Math.round(Number(process.env.PLAYING_GOD_AUTOUPDATE_MS || 300000) / 60000) + " min");
+  }).catch(() => {});
   setTimeout(tick, world.weather.tickMs);
 });
 setInterval(() => Mem.save(world).catch(() => {}), 60000);

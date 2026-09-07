@@ -483,3 +483,10 @@ When people split off they walk out past the edge and raise their own fire on ne
 east of the village. The camp draws as its own settlement: tents instead of houses, a trodden
 ring, a track back to the edge, and its name over the fire. Clicking the camp fire opens a scene
 of it. Saved worlds whose camp used to sit inside the village's land are moved out on load.
+
+## Pushing is deploying
+
+On the box the server runs the installed `playing-god-update` script every five minutes (and cron
+still runs it hourly as a backstop). A push to main is live on clawkeep.io within about five
+minutes; the script only restarts the server when main actually moved, and never touches `data/`.
+Set `PLAYING_GOD_AUTOUPDATE=0` to turn the in-process check off.
