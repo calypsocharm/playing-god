@@ -53,6 +53,18 @@ findNext/closeBallot/landThreat). `Tarot.draw(w, ctx, by)` pops `w.deck` (shuffl
 the hearth for a day. Smoke: scratchpad `smoke_tarot.mjs` (turns all 78, checks effect errors = 0). Tuning knobs are the
 one-line effects in tarot.js. Next (her earlier picks): a rival fire past the pale, then a second Creator.
 
+## The other fire (rival) + funerals and fading: DONE (2026-09-07, later)
+`server/rival.js`: `w.rival` (abstract people, not agents) at PLACES.rival (66,27); seen by a scout within 12 tiles or
+~year 1.5; nightly: eats, hunts the same deer (`w.deer`), mood drifts; trader to the store when warm (`trade`), raid when
+cold+hungry (`raid`, defence = dogs + axes at hearth*1.5 + hall + fences); villager action `send {n}` at the edge; god op
+`parley` cost 2 (star over both fires, trader next morning); `Rv.deerTaken` in the hunt case. Client: tents+fire+smoke
+at the spot once seen, scene branch `k === 'rival'`, Village line, Weather button `btnParley`.
+Funerals: `w.funerals` queue filled in `die()`; `funeralIfDue` runs in `step` at tick 3 the day after: everyone to
+PLACES.graves (7,23), speaker = heaviest griever, words from FUNERAL_WORDS, grief halves + `buried`, faith>0.1 ->
+"somewhere better", openness/trust bumps, `w.graves` log; client STONE sprites + scene. Fading in `closeSeason`: negative
+trust +0.025/season, wounds older than 2y lose 0.03/season -> scar, memories older than 1y blur (weight*0.9).
+Smokes: scratchpad `smoke_rival.mjs`, `smoke_funeral.mjs`. NEXT: a second Creator holding the rival fire.
+
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to
   customers (different project, same instinct). Villagers must be able to refuse her; that's the game working.

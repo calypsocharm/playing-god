@@ -237,6 +237,8 @@ export function scriptedDecide(a, s) {
   if (s.bank && isDay && (inv.coin || 0) >= 8 && s.bank.owed > 0) return { type: 'repay', n: 4, thought: 'Owe less.' };
   // The vote. Everyone with a stake goes to the meeting house once while a ballot is open.
   if (s.ballot && !s.ballot.voted && isDay && Math.random() < 0.45) return { type: 'vote', for: preferBuild(a, s), thought: 'My hand, for what we need.' };
+  // The other fire. The open and the healed, with food to spare, go and leave some at the edge when things are cold between the fires.
+  if (s.rival && s.rival.mood !== 'friendly' && s.rival.mood !== 'warm' && inv.food >= 4 && (br === 'open' || br === 'healed') && isDay && Math.random() < 0.05) return { type: 'send', n: 2, thought: 'Better a friend out there than an enemy.' };
   // Savings: coin in the bank cannot be taken, and grows.
   if (s.bank && isDay && (inv.coin || 0) >= 15 && inv.food >= 1.5 && !s.bank.owed && Math.random() < 0.12) return { type: 'deposit', n: Math.floor((inv.coin || 0) / 2), thought: 'Where no one can take it.' };
   if (store && isDay) {

@@ -118,6 +118,9 @@ export const CLAY = sprite([
 export const STORE = sprite([
   '................', '..bbbbbbbbbbbb..', '.bBbBbBbBbBbBbB.', '.wwwwwwwwwwwwww.', '.w............w.', '.w.ooo.ee.ooo.w.', '.w.ooo.ee.ooo.w.', '.wwwwwwwwwwwwww.', '.w.aa..ff..yy.w.', '.w.aa..ff..yy.w.', '.wwwwwwwwwwwwww.', '.w............w.', 'DDDDDDDDDDDDDDDD', '................', '................', '................',
 ], 'store');
+export const STONE = sprite([
+  '........', '...rr...', '..rRRr..', '..rRRr..', '..rRRr..', '..RRRR..', '.dDDDDd.', '........',
+], 'stone');
 export const BANK = sprite([
   '................', '...RRRRRRRRRR...', '..RrRRrRRrRRrR..', '..RRRRRRRRRRRR..', '..R.RR.oo.RR.R..', '..R.RR.oo.RR.R..', '..RRRRRRRRRRRR..', '..R..R....R..R..', '..R..R.kk.R..R..', '..R..R.kk.R..R..', '..R..R.kk.R..R..', '..RRRRRRRRRRRR..', 'DDDDDDDDDDDDDDDD', '................', '................', '................',
 ], 'bank');

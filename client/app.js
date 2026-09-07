@@ -371,7 +371,15 @@ function draw() {
     else if (k === 'grove') tile(PX.GROVE, p.x, p.y, 2.6);
     else if (k === 'claypit') tile(PX.CLAY, p.x, p.y, 2);
     else if (k === 'store') tile(PX.STORE, p.x, p.y, 1.8);
+    else if (k === 'rival') {
+      // Another people's fire: tents in a rough ring, their fire, and a smudge of smoke.
+      const rv = state.rival; const n = Math.min(8, Math.max(2, Math.round((rv?.people || 6) / 2)));
+      for (let i = 0; i < n; i++) { const ang = i * (6.28 / n) + 0.4, rr = 2.2; tile(i % 3 === 0 ? PX.TENT_DARK : PX.TENT, p.x + Math.cos(ang) * rr, p.y + Math.sin(ang) * rr * 0.7, 1.3); }
+      tile(PX.fire(t), p.x, p.y, 1.2);
+      ctx.fillStyle = 'rgba(200,200,200,.25)'; for (let i = 0; i < 3; i++) { const sy = c.y - S * (1 + i * 0.9 + ((t * 0.4 + i * 0.3) % 1) * 0.6); ctx.beginPath(); ctx.arc(c.x + Math.sin(t + i) * S * 0.3, sy, S * (0.25 + i * 0.12), 0, 7); ctx.fill(); }
+    }
     else if (k === 'bank') tile(PX.BANK, p.x, p.y, 1.8);
+    else if (k === 'graves') { const gs = (state.graves || []).slice(-14); gs.forEach((g, i) => tile(PX.STONE, p.x - 1.8 + (i % 7) * 0.6, p.y - 0.6 + Math.floor(i / 7) * 0.7, 0.55)); if (!gs.length) tile(PX.STONE, p.x, p.y, 0.5); }
     else if (k === 'council') tile(PX.MEETING, p.x, p.y, 2);
     // What the council raised by the well.
     if (k === 'well') { if (state.builds?.bathhouse?.done) tile(PX.POOL, p.x + 1.6, p.y - 1.4, 1.5); if (state.builds?.wellhouse?.done) { ctx.fillStyle = '#7a5533'; ctx.fillRect(c.x - S * 0.7, c.y - S * 0.9, S * 1.4, S * 0.25); } }
@@ -885,6 +893,26 @@ function renderPlace(hit) {
       $('moCarry').textContent = `${cn.coin} coin in the chest · ${cn.income || 0} taken in tithe from the store · owes the bank ${s.bank?.civic?.owed || 0}${cn.votesCast ? ` · ${cn.votesCast} votes cast over time` : ''}.`;
       $('moScene').hidden = false;
       Interior.drawCouncil($('moScene'), { council: cn, here, names: nameOf, specs: s.buildSpecs });
+    } else if (k === 'graves') {
+      const gs = s.graves || [];
+      $('moMeta').textContent = gs.length ? `${gs.length} buried here · the village walks out together the afternoon after a death` : 'no one is buried here yet';
+      setMoHeads('The stones', 'Words said here', 'What it is for', 'Here now', 'Gone');
+      $('moDoing').innerHTML = gs.length ? gs.slice().reverse().slice(0, 12).map(g => `<div class="mem"><b>${esc(g.name)}</b> <span class="muted">· ${g.age ?? '?'} · ${esc(g.cause || '')} · day ${g.day} · ${g.mourners} stood here</span></div>`).join('') : '<div class="muted">No stones yet.</div>';
+      $('moSaid').innerHTML = gs.length ? gs.slice().reverse().slice(0, 4).map(g => `<div class="mem"><span class="muted">${esc(g.by)}, over ${esc(g.name)}:</span> "${esc(g.words)}"</div>`).join('') : '<div class="muted">Nothing said yet.</div>';
+      $('moFelt').innerHTML = '<div class="muted">Closure is something people do. Everyone who stands here grieves half as long, the ones who believe find the dead somewhere better, and everyone is reminded that time is short and to hold what they have. Grudges thin to nothing over about five years; old wounds no one reopens wear down to scars.</div>';
+      $('moNear').innerHTML = here.length ? here.map(o => personRow(o)).join('') : '<div class="muted">No one here right now.</div>';
+      $('moCarry').textContent = (s.dead || s.agents.filter(x => !x.alive)).map(x => x.name).join(', ') || 'no one';
+    } else if (k === 'rival') {
+      const rv = s.rival || {};
+      $('moName').textContent = (rv.name || 'the far fire').replace(/^the /, '').replace(/^\w/, ch => ch.toUpperCase());
+      $('moMeta').textContent = `${rv.people ?? '?'} people under ${rv.leader || 'someone'} · ${rv.mood || 'unknown'} toward the village · ${rv.food ?? '?'} food by their fire`;
+      $('moExpr').textContent = rv.trader?.day === s.day ? `${rv.leader} is at the edge today, trading.` : rv.mood === 'hostile' || rv.mood === 'cold' ? 'Doors are barred on both sides.' : 'Their fire is lit. No one from the village goes there.';
+      setMoHeads('What they are', 'What has passed between the fires', 'Raids', 'Here now', 'The sky\'s hand');
+      $('moDoing').innerHTML = `<div class="mem">Another people, out where the map ran out. They hunt the same deer. When they are warm toward the village their trader comes to the edge with fish, clay and stone and leaves with food. When they are cold and hungry they come in the night. Villagers can carry food out to the edge for them; dogs, axes at the hearth and the hall hold them off.</div>`;
+      $('moSaid').innerHTML = (rv.log || []).slice().reverse().map(l => `<div class="mem"><span class="muted">d${l.day}</span> ${esc(l.text)}</div>`).join('') || '<div class="muted">Nothing yet.</div>';
+      $('moFelt').innerHTML = (rv.raids || []).length ? rv.raids.slice().reverse().map(r => `<div class="mem"><span class="muted">d${r.day}</span> ${r.repelled ? '<span style="color:var(--good)">driven off</span>' : `<span style="color:var(--bad)">took ${r.food} food, ${r.wood} wood, ${r.coin} coin</span>`}</div>`).join('') : '<div class="muted">They have never raided.</div>';
+      $('moNear').innerHTML = '<div class="muted">No villager has stood at their fire.</div>';
+      $('moCarry').textContent = `${rv.trades || 0} trades · ${rv.sent || 0} food left at the edge for them · the sky can stand a star over both fires (Weather tab).`;
     } else if (k === 'hearth' || k === 'camp') {
       const fire = k === 'hearth' ? s.hearth : s.camp;
       $('moMeta').textContent = `${fire.wood > 0 ? 'the fire is lit' : 'the fire is OUT'} · ${fire.wood || 0} wood on the pile`;
@@ -1004,8 +1032,9 @@ function renderPanels() {
   const fam = `<br>${couples} couple${couples === 1 ? '' : 's'} · ${kids} child${kids === 1 ? '' : 'ren'}${expecting ? ` · ${expecting} expecting` : ''}${s.camp?.founded ? `<br><b style="color:var(--warm)">${esc(s.camp.name)}</b>, past the edge: ${campers} people, fire wood ${s.camp.wood}` : ''}`;
   const ended = s.ended ? `<div class="mem" style="border:1px solid var(--bad);padding:8px;margin-bottom:8px"><b style="color:var(--bad)">The book is closed.</b> Day ${s.ended.day}: ${esc(s.ended.why)}. ${s.ended.alive} were left, and none had the heart to go on. <a href="story.html" style="color:var(--warm)">Read it as a book →</a>${godOk ? ` <button class="act warn" id="btnAgain" style="margin-left:6px">Begin again</button>` : ''}</div>` : '';
   const coming = s.threat && !s.threat.landed && s.threat.known ? `<br><b style="color:var(--warm)">Everyone says ${esc(s.threat.name)} is coming</b> in ${s.threat.daysLeft} day${s.threat.daysLeft === 1 ? '' : 's'}.` : s.threat?.landed && s.day - s.threat.landed <= 3 ? `<br><b style="color:var(--bad)">${esc(s.threat.name[0].toUpperCase() + s.threat.name.slice(1))} has landed.</b> ${esc(s.threat.text || '')}` : '';
+  const rivalLine = s.rival?.seen ? `<br><b style="color:${s.rival.mood === 'hostile' || s.rival.mood === 'cold' ? 'var(--bad)' : 'var(--warm)'}">${esc(s.rival.name[0].toUpperCase() + s.rival.name.slice(1))}</b>, past the pale: ${s.rival.people} people, ${esc(s.rival.mood)} toward the village${s.rival.trader?.day === s.day ? ' · their trader is at the edge' : ''}` : '';
   const cardLine = s.card && s.day - s.card.day <= 1 ? `<br><b style="color:var(--warm)">The sky turned ${esc(s.card.name)}.</b> ${esc(s.card.text)}` : '';
-  $('villageSummary').innerHTML = ended + `${alive.length} alive · ${s.weather.sky} · hearth wood ${s.hearth.wood}${coming}${cardLine}<br>` +
+  $('villageSummary').innerHTML = ended + `${alive.length} alive · ${s.weather.sky} · hearth wood ${s.hearth.wood}${coming}${cardLine}${rivalLine}<br>` +
     Object.entries(branches).map(([k, v]) => `${v} ${k}`).join(' · ') + fam + frontier + `<br>${builds}${lessons}`;
   const again = $('btnAgain'); if (again) again.onclick = () => $('btnReset').click();
   $('events').innerHTML = [...s.events].reverse().map(e => `<div class="ev ${e.kind}"><span class="t">d${e.day} ${['dawn', 'morn', 'mid', 'aft', 'eve', 'night'][e.tick]}</span>${esc(e.text)}</div>`).join('');
@@ -1214,6 +1243,7 @@ function renderWeather() {
   const cardHtml = !cd ? 'No card has been turned.' : `<div class="mem" style="border-left:3px solid ${suitCol(cd.suit)};padding-left:8px"><b style="color:${suitCol(cd.suit)}">${esc(cd.name)}</b> <span class="muted">· ${esc(cd.meaning)} · day ${cd.day} · turned by ${cd.by === 'sky' ? 'the sky itself' : 'you'}</span><br>${esc(cd.text)}</div>`
     + ((state.cards || []).length > 1 ? `<div class="muted" style="margin-top:4px">Before that: ${state.cards.slice(0, -1).reverse().slice(0, 6).map(c => `<span style="color:${suitCol(c.suit)}">${esc(c.name)}</span> <span class="muted">d${c.day}</span>`).join(' · ')}</div>` : '');
   if ($('cardBox').innerHTML !== cardHtml) $('cardBox').innerHTML = cardHtml;
+  $('btnParley').disabled = !can('parley') || !state.rival?.seen; $('btnParley').title = state.rival?.seen ? `${state.rival.name} are ${state.rival.mood} toward the village` : 'no other fire has been seen yet';
   $('btnDraw').disabled = !can('draw'); $('deckLeft').textContent = `· ${state.deckLeft ?? 78} left in the deck`;
   // What is coming, how ready they are, and whether to tell them.
   const t = state.threat;
@@ -1253,6 +1283,7 @@ $('btnSense').onclick = () => { send({ type: 'god', op: 'sense', a: $('senseWho'
 $('btnDestiny').onclick = () => { const text = $('destText').value.trim(); if (!text) return; send({ type: 'god', op: 'destiny', a: $('destWho').value, text }); $('destText').value = ''; };
 $('btnOmen').onclick = () => send({ type: 'god', op: 'omen', kind: $('omenKind').value });
 $('btnDraw').onclick = () => send({ type: 'god', op: 'draw' });
+$('btnParley').onclick = () => send({ type: 'god', op: 'parley' });
 $('lendToggle').checked = localStorage.getItem('playinggod.lend') === '1';
 $('lendName').value = localStorage.getItem('playinggod.lendName') || '';
 $('lendName').onchange = () => { localStorage.setItem('playinggod.lendName', $('lendName').value.trim()); if ($('lendToggle').checked) send({ type: 'lend', on: true, name: $('lendName').value.trim() }); };

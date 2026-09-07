@@ -590,6 +590,35 @@ hear, what they think, what they do, what they say, and at night what they write
 in the second person and updates every tick. You cannot speak there and they do not know you are
 watching. It works for anyone, yours or not, and it never shows the rules their body wrote.
 
+## The stones: funerals, closure, and things fading
+
+The afternoon after a death the whole village walks out to the stones, at the south edge of the
+land, and buries them. Whoever grieves them most says the words, or the oldest does. Everyone who
+stands there has their grief halved and shared, the ones who believe in the sky find the dead
+somewhere better and it helps, everyone opens a little and is reminded that time is short and to
+hold what they have, and standing together builds trust. Click the stones to see who lies there,
+what was said over them, and how many came. A death while something is landing waits a day.
+
+Things fade, the way they do. At every season's turn grudges thin toward nothing, gone in about
+five years; wounds older than two years that no one keeps reopening wear down to scars; memories
+older than a year blur unless they were heavy. People remember, and go on.
+
+## The other fire
+
+Out past the pale there is another people. By the middle of the second year their smoke is seen
+on the far hills, or sooner if a scout walks near; then their fire shows on the map, tents in a
+ring, and the village knows their name and their leader's. They hunt the same deer, and every
+deer the village takes with them watching cools them a little; when the deer run short they blame
+the village. Warm, they send a trader to the edge every week or so with fish, clay and stone, who
+leaves with food. Cold and hungry, they come in the night: dogs, axes in hands at the hearth, the
+hall and fences hold them off and cost them one of their own; if nothing holds them they take food
+from the shelf, wood from the pile and coin from the till, and hurt whoever was at the fire. A
+villager can carry food out to the edge and leave it for them (`send`), which warms them and
+divides the village on whether that was wise. The sky's one hand in it costs two attention: one
+star over both fires all night, which warms them and brings a trader in the morning. Click their
+fire to see what has passed between the fires. A second Creator holding their fire is the next
+thing after this.
+
 ## The sky turns a card
 
 The weather is a tarot deck. Seventy-eight cards, one deck, shuffled and drawn down; the Creator

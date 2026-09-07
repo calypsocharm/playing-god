@@ -17,6 +17,7 @@ import * as Art from './arts.js';
 import * as T from './threats.js';
 import * as C from './civic.js';
 import * as Tarot from './tarot.js';
+import * as Rv from './rival.js';
 
 export const TICKS_PER_DAY = 6;
 export const TICK_NAMES = ['dawn', 'morning', 'midday', 'afternoon', 'evening', 'night'];
@@ -74,11 +75,13 @@ export { CAMP_SPOTS };
 
 // The edge of the known world, where scouts walk out from.
 PLACES.edge = { x: 39, y: 12, label: 'the edge', sheltered: false };
+PLACES.graves = { x: 7, y: 23, label: 'the stones', sheltered: false };   // where the dead are given back, and remembered
+PLACES.rival = { x: Rv.SPOT.x, y: Rv.SPOT.y, label: 'the far fire', sheltered: false };   // another people, shown once seen
 export const isFound = (w, key) => !!(w.found && w.found[key]);
 // Places the viewer may draw: the fixed ones plus whatever scouts have found.
 function visiblePlaces(w) {
   const out = {};
-  for (const [k, p] of Object.entries(PLACES)) if (!I.FRONTIER.some(f => f.key === k) || isFound(w, k)) out[k] = p;
+  for (const [k, p] of Object.entries(PLACES)) { if (k === 'rival') { if (w.rival?.seen) out[k] = { ...p, label: w.rival.name }; continue; } if (!I.FRONTIER.some(f => f.key === k) || isFound(w, k)) out[k] = p; }
   return out;
 }
 // Restore found places onto the map after a load.
@@ -148,7 +151,7 @@ export function createWorld(saved) {
     saved.mod = saved.mod || { bannedIps: {}, bannedTokens: {}, muted: {} };
     saved.store.loans = saved.store.loans || {}; saved.store.project = saved.store.project ?? null; saved.store.wagesPaid = saved.store.wagesPaid || 0;
     if (saved.store.coin < 120 && !saved.store.funded) { saved.store.coin += 200; saved.store.funded = true; }
-    C.ensure(saved); Tarot.ensure(saved);
+    C.ensure(saved); Tarot.ensure(saved); Rv.ensure(saved); if (saved.rival?.seen) reveal(saved, saved.rival.x, saved.rival.y, 5);
     for (const a of saved.agents) { if (a.inv && a.inv.coin == null) a.inv.coin = 3; a.upgrades = a.upgrades || {}; }
     if (!saved.threat && !saved.ended) rollThreat(saved);
     return saved;
@@ -177,7 +180,7 @@ export function createWorld(saved) {
     log: [],             // everything, for the record
   };
   seedVillage(w);
-  Tarot.ensure(w);
+  Tarot.ensure(w); Rv.ensure(w);
   rollThreat(w);
   return w;
 }
@@ -187,7 +190,7 @@ export const simDate = (w, day = w.day) => w.startMs + day * DAY_MS;
 // ---------- the weather's attention ----------
 // A god who can do anything every tick has nothing to decide. Attention is scarce and refills
 // with the seasons. Where you spend it is what becomes real.
-export const GOD_COSTS = { weather: 2, traveler: 3, nudge: 1, wood: 1, destiny: 2, fulfil: 0, omen: 1, gift: 3, sense: 3, warn: 1, draw: 1, pause: 0, resume: 0 };
+export const GOD_COSTS = { weather: 2, traveler: 3, nudge: 1, wood: 1, destiny: 2, fulfil: 0, omen: 1, gift: 3, sense: 3, warn: 1, draw: 1, parley: 2, pause: 0, resume: 0 };
 
 // A gift wakes. `how` is a phrase: 'in the quiet at the creek', 'when the sky touched you'.
 // A sense opens. Always on from then; the body pays for it every day.
@@ -605,6 +608,7 @@ export function step(w, remoteActions) {
   const isNight = w.tick === TICKS_PER_DAY - 1;
   if (isNight) nightPhase(w);
   else dayPhase(w, remoteActions);
+  if (w.tick === 3) funeralIfDue(w);
   w.tick = (w.tick + 1) % TICKS_PER_DAY;
   if (w.tick === 0) newDay(w);
 }
@@ -641,6 +645,7 @@ function dayPhase(w, remoteActions) {
     if (act.type === 'buy' || act.type === 'sell') dest = 'store';
     if (act.type === 'borrow' || act.type === 'repay' || act.type === 'deposit' || act.type === 'draw') dest = 'bank';
     if (act.type === 'vote') dest = 'council';
+    if (act.type === 'send') dest = 'edge';
     if (act.type === 'upgrade') dest = 'home';
     if (act.type === 'craft') dest = null;   // you make things where you stand
     if (act.type === 'sit') dest = act.to && (PLACES[act.to] || act.to === 'home') ? act.to : null;
@@ -833,6 +838,7 @@ function dayPhase(w, remoteActions) {
       case 'deposit': { if (a.location === 'bank') C.deposit(w, a, act.n, remember, event); break; }
       case 'draw': { if (a.location === 'bank') C.withdraw(w, a, act.n, remember, event); break; }
       case 'vote': { if (a.location === 'council') C.vote(w, a, act.for, remember, event); break; }
+      case 'send': { if (a.location === 'edge') Rv.send(w, a, act.n, rivalContext(w)); break; }
       case 'sell': {
         const item = act.item, n = Math.max(1, Math.min(10, Math.floor(act.n || 1)));
         const price = I.sellPrice(w.store, item);
@@ -1125,7 +1131,7 @@ function dayPhase(w, remoteActions) {
         if (!['meadow', 'forest'].includes(a.location)) break;
         a.body.energy = B.clamp(a.body.energy - 0.12);
         if ((w.deer || 0) > 0 && Math.random() < (a.inv.axe > 0 ? 0.45 : 0.33)) {
-          w.deer -= 1; const shown = A.alive(w).find(x => x.kind === 'deer'); if (shown) shown.alive = false;
+          w.deer -= 1; const shown = A.alive(w).find(x => x.kind === 'deer'); if (shown) shown.alive = false; Rv.deerTaken(w);
           a.inv.food += 2.5; a.skills = a.skills || {}; a.skills.hunting = (a.skills.hunting || 0) + 1;
           event(w, `${a.name} brings down a deer at ${PLACES[a.location].label}.`, 'work', [a.id]);
           remember(w, a, 'You took a deer. Its eye was open the whole time. There is meat for days.', 0.7);
@@ -1331,6 +1337,7 @@ function die(w, a, forcedCause) {
   const cause = forcedCause || (a.ill ? R.KINDS[a.ill.kind] : a.body.food < 0.15 ? 'hunger' : a.body.warmth < 0.15 ? 'the cold' : 'injuries');
   a.causeOfDeath = cause;
   (w.seasonDeaths = w.seasonDeaths || []).push({ name: a.name, cause });
+  (w.funerals = w.funerals || []).push({ for: a.id, name: a.name, day: w.day, cause, age: a.ageAtDeath });
   if (w.winterDeaths != null) w.winterDeaths += 1;
   const griefCount = alive(w).filter(o => trustOf(o, a) > 0.25).length;
   if (cause === 'old age' && griefCount >= 3 && !w.goals.oldAndMourned) { w.goals.oldAndMourned = { done: w.day }; event(w, `A question answered: ${GOALS.oldAndMourned}.`, 'healed'); }
@@ -1501,6 +1508,7 @@ function nightPhase(w) {
   }
   A.nightly(w, w.agents, PLACES, W.seasonOf(w.day, w.weather), yearDays(w), remember, event, (k) => isFound(w, k));   // fed, laid, aged, taken by wolves
   storeNight(w);       // the market cart, the tithe, the council's project and ballot
+  Rv.nightly(w, rivalContext(w));   // the other fire: they hunt, trade, or raid
   measureNight(w);     // the instruments: is care outrunning harm, are wounds healing
   R.illnessNightly(w, alive(w), W.seasonOf(w.day, w.weather), w.weather.daysPerSeason, remember, event);
   {
@@ -1767,6 +1775,7 @@ function narrate(w, a, act) {
     case 'repay': return s('at the bank', `${a.name} pays the bank back.`, 'work');
     case 'deposit': return s('at the bank', `${a.name} puts coin in the bank.`, 'work');
     case 'draw': return s('at the bank', `${a.name} takes coin out of the bank.`, 'work');
+    case 'send': return s('at the edge', `${a.name} carries food out to the edge for ${w.rival?.name || 'the far fire'}.`, 'care');
     case 'vote': return s('voting', `${a.name} is at the meeting house, voting for the ${I.BUILDS[act.for]?.label || 'something'}.`, 'talk');
     case 'upgrade': return s(`building a ${act.what}`, `${a.name} works on a ${I.UPGRADES[act.what]?.label || act.what} at home.`, 'work');
     case 'build': return s(`building`, `${a.name} works on the ${act.what} at ${place(I.BUILDS[act.what]?.at || 'hearth')}.`, 'work');
@@ -1941,6 +1950,45 @@ function newDay(w) {
   }
 }
 
+// ---------- funerals ----------
+// The afternoon after a death the village walks out to the stones together and gives the dead back.
+// Closure is a thing people do, not a thing that happens: grief halves for everyone who stood there,
+// the ones who believe find them somewhere better, and everyone is reminded that time is short.
+const FUNERAL_WORDS = [
+  (n, age, cause) => `We give ${n} back to the ground. ${age} years, and every one of them here with us. ${cause === 'old age' ? 'They were tired, and now they are not.' : `The ${cause} took them and it will not take the rest of us today.`}`,
+  (n, age) => `${n} was ${age}. Say their name when you pass the stones, so they are not gone twice.`,
+  (n) => `Wherever ${n} is, it is warmer than here and the shelf is never bare. Go well.`,
+  (n) => `${n} is in the ground and in all of us. That is the whole of it. Come to the fire after.`,
+];
+function funeralIfDue(w) {
+  const q = w.funerals || []; if (!q.length) return;
+  const f = q[0];
+  if (w.day < f.day + 1) return;                                       // the afternoon after
+  if (w.threat?.landed === w.day) return;                              // not while something is landing
+  q.shift();
+  const living = alive(w).filter(a => !F.isInfant(w, a) && !(a.ill && a.ill.severity > 0.6) && a.body.overwhelmed <= 0);
+  if (!living.length) return;
+  const mourners = living.filter(o => (o.grief || []).some(g => g.for === f.for));
+  const speaker = [...mourners].sort((x, y) => (y.grief.find(g => g.for === f.for)?.intensity || 0) - (x.grief.find(g => g.for === f.for)?.intensity || 0))[0] || oldestOf(living);
+  const words = pick(FUNERAL_WORDS)(f.name, f.age ?? '?', f.cause || 'end');
+  for (const a of living) { a.location = 'graves'; a.pos = { x: PLACES.graves.x + rnd(-1.6, 1.6), y: PLACES.graves.y + rnd(-1.2, 0.6) }; }
+  w.graves = w.graves || []; w.graves.push({ for: f.for, name: f.name, day: w.day, cause: f.cause, age: f.age, words, by: speaker.name, mourners: living.length });
+  if (w.graves.length > 200) w.graves.shift();
+  event(w, `The village walks out to the stones and buries ${f.name}. ${speaker.name} says: "${words}"`, 'healed', living.map(a => a.id));
+  for (const a of living) {
+    const g = (a.grief || []).find(x => x.for === f.for);
+    if (g) { g.intensity *= 0.5; g.shared += living.length - 1; g.buried = w.day; a.exposures.closeness = true; }
+    const believes = (a.faith || 0) > 0.1;
+    remember(w, a, `You stood at the stones with everyone while ${f.name} was buried. ${speaker === a ? 'You said the words.' : `${speaker.name} said: "${words}"`}${believes ? ` You believe ${f.name} is somewhere better now, and it helps.` : ''} You will not always have time either. Hold what you have.`, 0.9);
+    a.body.openness = B.clamp(a.body.openness + 0.03);
+    if (believes) { B.soothe(a.body, 0.1); a.faith = B.clamp((a.faith || 0) + 0.02, -1, 1); }
+    if (a.partner || (a.children || []).length) B.gladden(a.body, 0.05);
+    for (const o of living) if (o !== a && Math.random() < 0.5) bumpTrust(a, o, 0.03);
+  }
+  remember(w, speaker, `You spoke over ${f.name}'s grave with the whole village listening.`, 1);
+}
+function oldestOf(list) { return [...list].sort((x, y) => (y.bornDay ?? 0) - (x.bornDay ?? 0))[list.length - 1]; }
+
 // ---------- the cards ----------
 // Everything a card may do, it does through the village's own machinery.
 function cardContext(w) {
@@ -1960,6 +2008,7 @@ function cardContext(w) {
   };
 }
 function drawCard(w, by) { return Tarot.draw(w, cardContext(w), by); }
+function rivalContext(w) { return { ...cardContext(w), animals: () => A.alive(w), reveal: (x, y, r) => reveal(w, x, y, r), yearDays: () => yearDays(w) }; }
 
 // ---------- threats and the season's weighing ----------
 
@@ -1992,6 +2041,14 @@ function closeSeason(w) {
     w.ended = { day: w.day, why: 'two seasons of loss', alive: alive(w).length };
     w.paused = true;
     event(w, `Two seasons of loss, one after the other. The hearth goes cold and no one has the heart to light it. ${w.god.name} is left holding the book.`, 'death');
+  }
+  // Things fade. Grudges thin toward nothing over about five years; old wounds no one keeps reopening
+  // wear down to scars; memories older than a year blur unless they were heavy.
+  const yd = yearDays(w);
+  for (const a of alive(w)) {
+    for (const id of Object.keys(a.trust || {})) if (a.trust[id] < 0) a.trust[id] = Math.min(0, a.trust[id] + 0.025);
+    for (const r of [...a.wounds]) if (w.day - r.day > yd * 2 && (r.contradictions || 0) >= 0) { r.strength -= 0.03; if (r.strength <= 0) { a.wounds = a.wounds.filter(x => x !== r); a.scars.push({ trigger: r.trigger, belief: r.belief, healedDay: w.day, woundedDay: r.day }); remember(w, a, `Something that used to run you has worn down to nothing. You can barely remember why it mattered.`, 0.7); w.seasonHealed = (w.seasonHealed || 0) + 1; } }
+    for (const m of a.memories) if (w.day - m.day > yd && m.weight < 0.9) m.weight *= 0.9;
   }
   w.seasonStartDay = w.day; w.seasonDeaths = []; w.seasonBorn = []; w.seasonHealed = 0; w.seasonHolidays = 0; w.seasonBuilt = 0;
 }
@@ -2091,6 +2148,7 @@ export function godAct(w, msg) {
       if (r.error) { w.god.attention = Math.min(w.god.max, w.god.attention + cost); w.god.acts.pop(); }
       return r;
     }
+    case 'parley': { const r = Rv.parley(w, rivalContext(w)); if (r.error) { w.god.attention = Math.min(w.god.max, w.god.attention + cost); w.god.acts.pop(); } return r; }
     case 'draw': { const rec = drawCard(w, 'creator'); return { ok: true, text: `${rec.name}: ${rec.meaning}. ${rec.text}` }; }
     case 'pause': w.paused = true; return { ok: true };
     case 'resume': w.paused = false; return { ok: true };
@@ -2117,6 +2175,7 @@ export function snapshotFor(a, w) {
     builds: w.builds, found: w.found || {}, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
     store: { shelf: w.store.shelf, coin: w.store.coin, prices: Object.fromEntries(Object.keys(I.STORE_PRICES).map(k => [k, { buy: I.buyPrice(w.store, k), sell: I.sellPrice(w.store, k) }])), project: w.council.project },
     ...C.snapshot(w, a),
+    rival: Rv.snapshot(w, a),
     location: a.location,
     near: near.map(o => ({ id: o.id, name: o.name, visible: (o.ill ? (o.ill.kind === 'fever' ? 'feverish, ' : 'coughing, ') : '') + B.visibleState(o.body), ill: !!o.ill, trust: trustOf(a, o), tightness: o.body.tightness, overwhelmed: o.body.overwhelmed > 0, hungry: o.body.food < 0.3, carries: o.inv, wants: o.wants, grieving: (o.grief || []).length > 0, isChild: F.isChild(w, o), partner: o.partner || null })),
     age: ageOf(w, a),
@@ -2152,6 +2211,7 @@ export function viewFor(a, w) {
     ...(w.threat && !w.threat.landed && (w.threat.known || a.sense?.kind === 'clairvoyant') ? [`${w.threat.known ? 'Everyone says' : 'No one else has seen it, but you have:'} ${w.threat.name} is coming in ${Math.max(1, w.threat.lands - w.day)} day${w.threat.lands - w.day === 1 ? '' : 's'}. What would help: ${w.threat.help}.`] : []),
     ...(w.threat?.landed && w.day - w.threat.landed <= 3 ? [w.threat.text] : []),
     ...C.felt(w, a),
+    ...Rv.felt(w, a),
     ...(a.destiny && !a.destiny.fulfilled ? [`There is a pull in you toward something. If you had to say it: ${a.destiny.text.replace(/^(this one|they|he|she|this person)\s+will\s+/i, 'you will ')}`] : a.destiny?.fulfilled ? ['You did the thing you were made for. Whatever comes now is extra.'] : [])];
   const feelings = s.others.map(o => {
     const t = o.trust;
@@ -2201,6 +2261,7 @@ export function viewFor(a, w) {
       'repay {n: <coin>}  (pay the bank back)',
       'deposit {n: <coin>}  (put coin in the bank, where no one can take it; it grows a little each season)',
       'draw {n: <coin>}  (take your coin out of the bank)',
+      ...(w.rival?.seen ? [`send {n: <food>}  (carry food to the edge and leave it for ${w.rival.name}; they are ${Rv.moodWord(w.rival.mood)} toward the village)`] : []),
       `vote {for: ${w.council.ballot ? w.council.ballot.options.join('|') : '<what is on the ballot>'}}  (at the meeting house, when a ballot is open: what the village builds next)`,
       'sell {item: <thing>, n: <how many>}  (at the store, for coin; it pays less for what it already has plenty of)',
       'upgrade {what: garden|bighouse|fence}  (at home, with coin and materials; yours for life and shared with your partner)',
@@ -2265,6 +2326,8 @@ export function publicState(w) {
     threat: w.threat ? { ...w.threat, word: T.readinessWord(w.threat.readiness || 0), daysLeft: w.threat.landed ? 0 : w.threat.lands - w.day } : null,
     reports: (w.reports || []).slice(-4), threatLog: (w.threatLog || []).slice(-8), ended: w.ended || null,
     card: w.lastCard || null, cards: (w.cards || []).slice(-12), deckLeft: (w.deck || []).length,
+    rival: Rv.publicState(w),
+    graves: (w.graves || []).slice(-40), funeralsDue: (w.funerals || []).length,
     holidays: w.holidays || [], holidayToday: w.holidayToday || null, pendingHoliday: w.pendingHoliday ? { by: w.pendingHoliday.by, reason: w.pendingHoliday.reason } : null, sick: alive(w).filter(a => a.ill).length,
     agents: w.agents.map(a => ({
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
@@ -2395,6 +2458,8 @@ export function normaliseAction(w, raw) {
     if (type === 'save') act.type = 'deposit';
     if (type === 'take_out' || type === 'takeout') act.type = 'draw';
     act.n = Number(raw.n || raw.amount || raw.coin || 0) || undefined;
+  } else if (type === 'send' || type === 'gift_food' || type === 'offer') {
+    act.type = 'send'; act.n = Number(raw.n || raw.amount || raw.food || 2) || 2;
   } else if (type === 'vote') {
     const want = String(raw.for || raw.what || raw.to || raw.option || '').toLowerCase();
     const opts = w.council?.ballot?.options || [];
