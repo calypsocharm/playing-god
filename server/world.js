@@ -16,7 +16,7 @@ export const TICKS_PER_DAY = 6;
 export const TICK_NAMES = ['dawn', 'morning', 'midday', 'afternoon', 'evening', 'night'];
 const DAY_MS = 86400000;
 
-export const MAP = { w: 40, h: 24 };
+export const MAP = { w: 54, h: 24 };   // x 0..39 is the village's land; past the edge at 39 is where a camp goes
 export const PLACES = {
   hearth: { x: 20, y: 12, label: 'the hearth', sheltered: false },
   well:   { x: 26, y: 13, label: 'the well',   sheltered: false },
@@ -25,10 +25,11 @@ export const PLACES = {
   meadow: { x: 8,  y: 5,  label: 'the meadow', sheltered: false },
   quarry: { x: 35, y: 20, label: 'the quarry', sheltered: false },
   road:   { x: 2,  y: 12, label: 'the road',   sheltered: false },
-  camp:   { x: 30, y: 6,  label: 'the camp',   sheltered: false },   // a second fire, if anyone ever leaves to light one
+  camp:   { x: 47, y: 12, label: 'the camp',   sheltered: false },   // a second fire past the edge, if anyone ever leaves to light one
   store:  { x: 24, y: 16, label: 'the store',  sheltered: false },   // the village's shared shelf, by the well
 };
-const CAMP_SPOTS = [{ x: 28, y: 3 }, { x: 33, y: 2 }, { x: 27, y: 8 }, { x: 33, y: 9 }, { x: 37, y: 5 }, { x: 36, y: 12 }, { x: 24, y: 4 }, { x: 38, y: 2 }];
+const CAMP_SPOTS = [{ x: 44, y: 8 }, { x: 50, y: 8 }, { x: 44, y: 16 }, { x: 50, y: 16 }, { x: 47, y: 6 }, { x: 47, y: 18 }, { x: 52, y: 12 }, { x: 43, y: 12 }, { x: 51, y: 4 }, { x: 51, y: 20 }];
+export { CAMP_SPOTS };
 
 // The edge of the known world, where scouts walk out from.
 PLACES.edge = { x: 39, y: 12, label: 'the edge', sheltered: false };
@@ -80,6 +81,19 @@ export function createWorld(saved) {
     for (const a of saved.agents) { for (const m of I.MATERIALS) if (a.inv && a.inv[m] == null) a.inv[m] = 0; for (const k of Object.keys(I.ITEMS)) if (a.inv && a.inv[k] == null) a.inv[k] = 0; }
     saved.found = saved.found || {};
     restoreFound(saved);
+    // Camps used to sit inside the village's own land. Move an old camp out past the edge.
+    if (saved.camp?.founded) {
+      const campers = saved.agents.filter(a => a.settlement === 'camp' && a.home && a.home.x < 41);
+      if (campers.length) {
+        const spots = [...CAMP_SPOTS]; const moved = new Map();
+        for (const p of campers) {
+          const key = `${p.home.x},${p.home.y}`;
+          const spot = moved.get(key) || spots.shift() || { x: 42 + Math.floor(Math.random() * 11), y: 3 + Math.floor(Math.random() * 18) };
+          moved.set(key, spot); p.home = { ...spot };
+          if (p.location === 'home' || p.location === 'camp') p.pos = { ...spot };
+        }
+      }
+    }
     saved.chapters = saved.chapters || [];
     backfillChapters(saved);
     saved.store = saved.store || I.newStore();
@@ -209,7 +223,7 @@ export const GOALS = {
   hall:            'The hall stands',
   quietWinter:     'A whole winter passes with no one dying',
   oldAndMourned:   'Someone dies old, and at least three people grieve them',
-  camp:            'A second fire is lit at the forest edge',
+  camp:            'A second fire is lit past the edge',
   tenYears:        'The village sees its tenth year',
   namedKind:       'The village calls the sky the Kind One',
   frontier:        'A scout comes back from past the edge with news of new land',
@@ -324,7 +338,7 @@ function titleChapter(w, seasonIdx, upToDay) {
   let title = null;
   let e;
   if ((e = t(/has died of (hunger|the cold|injuries)/))) title = `The ${ch.season} ${e.text.split(' ')[0]} died`;
-  else if ((e = t(/leaves the village for the forest edge/))) title = `The ${ch.season} ${e.text.split(' ')[0]} left`;
+  else if ((e = t(/leaves the village (for the forest edge|and walks out past the edge)/))) title = `The ${ch.season} ${e.text.split(' ')[0]} left`;
   else if ((e = t(/is born to/))) title = `The ${ch.season} of ${e.text.match(/name them (\w+)/)?.[1] || 'the child'}`;
   else if ((e = t(/has died in their sleep/))) title = `The ${ch.season} ${e.text.split(' ')[0]} slept`;
   else if ((e = t(/comes back from past the edge/))) title = `The ${ch.season} of ${e.text.match(/call it (the \w+)/)?.[1] || 'new land'}`;
@@ -1599,7 +1613,7 @@ function narrate(w, a, act) {
 }
 
 // ---------- the camp ----------
-// A few people who trust each other and have soured on the rest walk to the forest edge and
+// A few people who trust each other and have soured on the rest walk out past the edge and
 // light their own fire. There is one camp. It has no hall and no granary, only what they carry.
 
 function followersOf(w, L) {
@@ -1620,14 +1634,14 @@ export function splitOff(w, L, why = 'soured') {
   const spots = [...CAMP_SPOTS];
   for (const p of leavers) {
     p.settlement = 'camp';
-    const spot = spots.shift() || { x: 28 + Math.floor(rnd(0, 10)), y: 2 + Math.floor(rnd(0, 8)) };
+    const spot = spots.shift() || { x: 42 + Math.floor(rnd(0, 11)), y: 3 + Math.floor(rnd(0, 18)) };
     p.home = { ...spot };
     if (p.partner && leavers.includes(byId(w, p.partner))) byId(w, p.partner).home = { ...spot };
     p.location = 'camp'; p.pos = { x: PLACES.camp.x + rnd(-1.5, 1.5), y: PLACES.camp.y + rnd(-1.5, 1.5) };
-    remember(w, p, p === L ? `You led ${followers.map(f => f.name).join(', ')} out of the village and lit a fire at the edge of the trees.` : `You left the village with ${L.name} and lit a fire at the edge of the trees.`, 1);
+    remember(w, p, p === L ? `You led ${followers.map(f => f.name).join(', ')} out of the village and lit a fire past the edge, out of sight of the hearth.` : `You left the village with ${L.name} and lit a fire past the edge, out of sight of the hearth.`, 1);
   }
   for (const o of alive(w)) if (!leavers.includes(o)) { for (const p of leavers) if (!F.isChild(w, p)) bumpTrust(o, p, -0.1); remember(w, o, `${L.name} took ${followers.map(f => f.name).join(', ')} and left for the forest. They have their own fire now.`, 0.8); }
-  event(w, `${L.name} leaves the village for the forest edge with ${followers.map(f => f.name).join(', ')}. They raise a fire of their own. ${w.camp.name} begins.`, 'god', leavers.map(p => p.id));
+  event(w, `${L.name} leaves the village and walks out past the edge with ${followers.map(f => f.name).join(', ')}. They raise a fire of their own. ${w.camp.name} begins.`, 'god', leavers.map(p => p.id));
   w.lessons = w.lessons || [];
   w.lessons.push({ kind: 'split', text: `${L.name} and the others left. The village could not hold them.`, day: w.day, until: w.day + w.weather.daysPerSeason * 2 });
   return true;
@@ -1869,7 +1883,7 @@ export function viewFor(a, w) {
     foodStored: a.inv.food < 0.3 ? 'none to spare' : a.inv.food < 1 ? 'a little' : 'enough',
     fieldToday: s.yieldToday < 0.1 ? 'the field gives nothing now' : s.yieldToday < 0.3 ? 'the field gives little' : 'the field is giving',
     hearth: (fireOf(w, a) === 'camp' ? (s.hearthWood > 0 ? 'your camp fire has wood' : 'your camp fire is out, there is no wood') : (s.hearthWood > 0 ? 'the hearth has wood' : 'the hearth is cold, there is no wood')),
-    belong: fireOf(w, a) === 'camp' ? `You belong to ${w.camp.name} at the forest edge, not to the village. ${w.camp.leader === a.id ? 'You lead it.' : ''}` : (w.camp.founded ? `You belong to the village. ${w.camp.name} sits apart at the forest edge.` : ''),
+    belong: fireOf(w, a) === 'camp' ? `You belong to ${w.camp.name}, past the edge, out of sight of the village hearth. ${w.camp.leader === a.id ? 'You lead it.' : ''}` : (w.camp.founded ? `You belong to the village. ${w.camp.name} sits apart, past the edge.` : ''),
     carrying: I.describeInventory(a.inv),
     coin: `You have ${Math.floor(a.inv.coin || 0)} coin.${w.store.loans?.[a.id] ? ` You owe the store ${w.store.loans[a.id].owed}.` : ''}${w.store.project ? ` The store pays a coin per material for work on the ${w.store.project}.` : ''}`,
     store: `The store (by the well) holds: ${I.describeStore(w.store)}. It has ${w.store.coin} coin to pay with.`,
@@ -1913,7 +1927,7 @@ export function viewFor(a, w) {
       'share {target: <person name>}  (give food)',
       'comfort {target: <person name>}  (stay with them while it is bad)',
       'bond {target: <person name>}  (ask them to be yours and share a roof; they may pull back)',
-      'split  (leave the village for the forest edge with everyone who trusts you, and light your own fire)',
+      'split  (leave the village and walk out past the edge with everyone who trusts you, and light your own fire)',
       'pray {say: "<what you ask of the sky>"}  (no one knows if anything listens)',
       'leave  (end your bond; they will feel abandoned)',
       'tend {target: <child name>}  (feed and hold a child in front of you)',

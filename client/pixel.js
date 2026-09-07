@@ -65,6 +65,12 @@ export function groundLayer(map, season, harvest) {
 export const HOUSE = sprite([
   '......bb........', '.....bbbb.......', '....bbbbbb......', '...bbbbbbbb..kk.', '..bbbbbbbbbb.kk.', '.bbbbbbbbbbbbkk.', 'bBBBBBBBBBBBBBBb', '.wwwwwwwwwwwwww.', '.wwwwwWWwwwwwww.', '.wwwwwWWwwwwwww.', '.wwyywWWwwwyyww.', '.wwyywWWwwwyyww.', '.wwwwwWWwwwwwww.', '.wwwwwWWwwwwwww.', '.wwwwwWWwwwwwww.', 'DDDDDDDDDDDDDDDD',
 ], 'house');
+export const TENT = sprite([
+  '................', '.......t........', '......ttt.......', '.....ttttt......', '....tttTttt.....', '...ttttTtttt....', '..tttttTttttt...', '.ttttttTtttttt..', 'ttttttTkTtttttt.', 'tttttTkkkTttttt.', 'ttttTkkkkkTtttt.', 'tttTkkkkkkkTttt.', 'ttTkkkkkkkkkTtt.', 'tTkkkkkkkkkkkTt.', 'DDDDDDDDDDDDDDDD', '................',
+], 'tent');
+export const TENT_DARK = sprite([
+  '................', '.......R........', '......RRR.......', '.....RRRRR......', '....RRRRRRR.....', '...RRRRRRRRR....', '..RRRRRRRRRRR...', '.RRRRRRRRRRRRR..', 'RRRRRRkkkRRRRRR.', 'RRRRRkkkkkRRRRR.', 'RRRRkkkkkkkRRRR.', 'RRRkkkkkkkkkRRR.', 'RRkkkkkkkkkkkRR.', 'RkkkkkkkkkkkkkR.', 'DDDDDDDDDDDDDDDD', '................',
+], 'tent-dark');
 export const HOUSE_DARK = sprite([
   '......RR........', '.....RRRR.......', '....RRRRRR......', '...RRRRRRRR.....', '..RRRRRRRRRR....', '.RRRRRRRRRRRR...', 'RkkkkkkkkkkkkkkR', '.WWWWWWWWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', 'DDDDDDDDDDDDDDDD',
 ], 'house-dark');

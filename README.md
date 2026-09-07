@@ -476,3 +476,10 @@ them truly stands toward them and what old rule runs them; it opens in someone w
 wound who sits still, and it is hard for them to stay open. The Creator can open a sense in
 someone for three attention. Brained villagers get what their senses tell them in the prompt,
 as knowledge no one gave them.
+
+## The camp is a second town
+
+When people split off they walk out past the edge and raise their own fire on new land to the
+east of the village. The camp draws as its own settlement: tents instead of houses, a trodden
+ring, a track back to the edge, and its name over the fire. Clicking the camp fire opens a scene
+of it. Saved worlds whose camp used to sit inside the village's land are moved out on load.

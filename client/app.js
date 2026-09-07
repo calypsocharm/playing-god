@@ -279,7 +279,15 @@ function draw() {
     if (k === 'camp' && !state.camp?.founded) continue;
     const c = toScreen(p.x, p.y);
     if (k === 'hearth') { tile(state.hearth.wood > 0 ? PX.fire(t) : PX.FIRE_OUT, p.x, p.y, 2.2); }
-    else if (k === 'camp') { tile(state.camp.wood > 0 ? PX.fire(t + 0.5) : PX.FIRE_OUT, p.x, p.y, 1.8); }
+    else if (k === 'camp') {
+      // A second town: a worn track out from the edge, a ring of trodden ground, its own fire and name.
+      for (let x = 40; x < p.x - 1; x++) tile(PX.ROAD, x, 12, 1);
+      ctx.strokeStyle = 'rgba(155,139,106,.55)'; ctx.lineWidth = Math.max(2, S * 0.12); ctx.setLineDash([S * 0.5, S * 0.35]); ctx.beginPath(); ctx.arc(c.x, c.y, S * 6.2, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(155,139,106,.10)'; ctx.fill();
+      tile(state.camp.wood > 0 ? PX.fire(t + 0.5) : PX.FIRE_OUT, p.x, p.y, 1.8);
+      ctx.fillStyle = 'rgba(255,210,138,.9)'; ctx.font = `bold ${Math.max(11, Math.min(16 * devicePixelRatio, S * 0.55))}px system-ui`; ctx.textAlign = 'center';
+      ctx.fillText(state.camp.name || 'the camp', c.x, c.y - S * 6.8);
+    }
     else if (k === 'well') tile(PX.WELL, p.x, p.y, 1.8);
     else if (k === 'field') { for (let dx = -1; dx <= 1; dx++) for (let dy = -0.5; dy <= 0.5; dy++) tile(isWinter ? PX.FIELD_WINTER : PX.FIELD, p.x + dx * 2, p.y + dy * 2, 2); }
     else if (k === 'forest') { for (let i = 0; i < 9; i++) { const ang = i * 0.7, rr = 1.1 + (i % 3) * 0.6; tile(isWinter ? PX.PINE_SNOW : PX.PINE, p.x + Math.cos(ang) * rr, p.y + Math.sin(ang) * rr * 0.8, 1.6); } }
@@ -300,7 +308,7 @@ function draw() {
       if (ph > 0) { ctx.globalAlpha = h.done ? 0.9 : 0.25 + ph * 0.4; ctx.strokeStyle = '#c9a36a'; ctx.lineWidth = Math.max(2, S * 0.18); ctx.beginPath(); ctx.arc(c.x, c.y, S * 1.9, 0, 7); ctx.stroke(); if (h.done) { ctx.fillStyle = 'rgba(201,163,106,0.2)'; ctx.fill(); } ctx.globalAlpha = 1; }
     }
     ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = `${Math.max(10, Math.min(14 * devicePixelRatio, S * 0.45))}px system-ui`; ctx.textAlign = 'center';
-    ctx.fillText(k === 'camp' ? (state.camp?.name || p.label) : p.label, c.x, c.y + S * (k === 'field' ? 2.7 : k === 'forest' ? 2.6 : 1.9));
+    if (k !== 'camp') ctx.fillText(p.label, c.x, c.y + S * (k === 'field' ? 2.7 : k === 'forest' ? 2.6 : 1.9));
   }
 
   // homes: houses, lit when someone is inside, dark for the dead
@@ -312,7 +320,9 @@ function draw() {
     const someoneIn = state.agents.some(b => b.alive && homeKey(b.home) === key && b.location === 'home');
     const ups = state.agents.filter(b => homeKey(b.home) === key).reduce((acc, b) => Object.assign(acc, b.upgrades || {}), {});
     if (ups.garden) tile(PX.GARDEN, a.home.x + 1.3, a.home.y + 0.3, 1.4);
-    tile(anyAlive ? (ups.bighouse ? PX.BIGHOUSE : PX.HOUSE) : PX.HOUSE_DARK, a.home.x, a.home.y, ups.bighouse ? 2.1 : 1.7);
+    const camper = state.agents.some(b => b.alive && homeKey(b.home) === key && b.settlement === 'camp') || a.home.x > 40;
+    if (camper) tile(anyAlive ? PX.TENT : PX.TENT_DARK, a.home.x, a.home.y, 1.7);
+    else tile(anyAlive ? (ups.bighouse ? PX.BIGHOUSE : PX.HOUSE) : PX.HOUSE_DARK, a.home.x, a.home.y, ups.bighouse ? 2.1 : 1.7);
     if (someoneIn && dark > 0) { const c = toScreen(a.home.x, a.home.y); ctx.fillStyle = 'rgba(255,200,90,.7)'; ctx.fillRect(c.x - S * 0.55, c.y + S * 0.05, S * 0.2, S * 0.2); ctx.fillRect(c.x + S * 0.35, c.y + S * 0.05, S * 0.2, S * 0.2); }
     if (!anyAlive) { const c = toScreen(a.home.x, a.home.y); ctx.strokeStyle = '#ddd'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(c.x, c.y + S * 0.6); ctx.lineTo(c.x, c.y + S * 1.2); ctx.moveTo(c.x - S * 0.2, c.y + S * 0.75); ctx.lineTo(c.x + S * 0.2, c.y + S * 0.75); ctx.stroke(); }
   }
@@ -854,7 +864,7 @@ function renderPanels() {
   const loans = (s.store?.loans || []).filter(l => l.owed > 0);
   const st = s.store ? `<br>Store: ${shelf || 'empty'} · ${s.store.coin} coin in the till${s.store.project ? ` · <b style="color:var(--warm)">paying wages for the ${esc(s.store.project)}</b>` : ''}${s.store.wagesPaid ? ` · ${s.store.wagesPaid} paid in wages so far` : ''}${loans.length ? `<br>Owe the store: ${loans.map(l => `${esc(l.name)} ${l.owed}${l.defaulted ? ' (not paying)' : ''}`).join(', ')}` : ''}` : '';
   const frontier = `${st}<br>Known land: ${found.length ? found.join(', ') : 'only what you see'}${s.frontierLeft ? ` · ${s.frontierLeft} place${s.frontierLeft === 1 ? '' : 's'} still out past the edge` : ' · the frontier is mapped'}`;
-  const fam = `<br>${couples} couple${couples === 1 ? '' : 's'} · ${kids} child${kids === 1 ? '' : 'ren'}${expecting ? ` · ${expecting} expecting` : ''}${s.camp?.founded ? `<br><b style="color:var(--warm)">${esc(s.camp.name)}</b> at the forest edge: ${campers} people, fire wood ${s.camp.wood}` : ''}`;
+  const fam = `<br>${couples} couple${couples === 1 ? '' : 's'} · ${kids} child${kids === 1 ? '' : 'ren'}${expecting ? ` · ${expecting} expecting` : ''}${s.camp?.founded ? `<br><b style="color:var(--warm)">${esc(s.camp.name)}</b>, past the edge: ${campers} people, fire wood ${s.camp.wood}` : ''}`;
   $('villageSummary').innerHTML = `${alive.length} alive · ${s.weather.sky} · hearth wood ${s.hearth.wood}<br>` +
     Object.entries(branches).map(([k, v]) => `${v} ${k}`).join(' · ') + fam + frontier + `<br>${builds}${lessons}`;
   $('events').innerHTML = [...s.events].reverse().map(e => `<div class="ev ${e.kind}"><span class="t">d${e.day} ${['dawn', 'morn', 'mid', 'aft', 'eve', 'night'][e.tick]}</span>${esc(e.text)}</div>`).join('');
