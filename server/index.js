@@ -184,7 +184,7 @@ function handle(ws, c, m) {
       if (a.owner && a.owner !== c.token) {
         // A higher self who has been gone a village year has let go, whether they meant to or not. The Creator may always take someone back.
         const away = a.connected ? 0 : world.day - (a.ownerSeen ?? world.day);
-        if (!c.godOk && away < World.yearDays(world)) return send(ws, { type: 'error', error: `${a.name} already has a higher self${away ? `, away ${away} days; after ${World.yearDays(world)} they can be claimed` : ''}` });
+        if (!c.godOk && away < world.weather.daysPerSeason) return send(ws, { type: 'error', error: `${a.name} already has a higher self${away ? `, away ${away} days; after a season (${world.weather.daysPerSeason} days) they can be claimed` : ''}` });
         const old = [...clients.values()].find(x => x.token === a.owner); if (old) old.owned.delete(a.id);
         World.remember(world, a, 'The voice you had went quiet a long time ago. A different one is there now, or the same one changed.', 0.8);
       }

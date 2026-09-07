@@ -2086,7 +2086,7 @@ export function publicState(w) {
       near: a.alive ? sameSpot(w, a).map(o => o.id) : [],
       selfSummary: a.selfSummary, thought: a.thought, lastSaid: a.lastSaid,
       transits: a.transits.map(t => `${t.planet} ${t.aspect} ${t.point}`),
-      brain: a.owner ? a.brain : (a.lent ? 'lent' : a.brain), owned: !!a.owner, connected: a.connected, autopilot: a.autopilot, ownerAway: a.owner && !a.connected ? w.day - (a.ownerSeen ?? w.day) : 0, claimable: !a.owner || (!a.connected && (w.day - (a.ownerSeen ?? w.day)) >= yearDays(w)), doing: a.doing || '', doingText: a.doingText || '',
+      brain: a.owner ? a.brain : (a.lent ? 'lent' : a.brain), owned: !!a.owner, connected: a.connected, autopilot: a.autopilot, ownerAway: a.owner && !a.connected ? w.day - (a.ownerSeen ?? w.day) : 0, claimable: !a.owner || (!a.connected && (w.day - (a.ownerSeen ?? w.day)) >= w.weather.daysPerSeason), doing: a.doing || '', doingText: a.doingText || '',
       voicedBy: a.lent && !a.owner ? (a.voicedName || 'someone') : null, voicedSince: a.lent && !a.owner ? a.voicedSince : null,
       bornDay: a.bornDay, diedDay: a.diedDay,
     })),

@@ -584,7 +584,7 @@ function renderCommune(a, compact = false) {
   if (!a.alive) return a.guidance ? `<div class="muted">Guided: "${esc(a.guidance)}"</div>` : '';
   if (!owned.has(a.id)) {
     const canTake = a.claimable || (a.owned && godOk);
-    const who = !a.owned ? 'No one is their higher self yet.' : a.connected ? 'Someone else is their higher self, and is here now.' : `Their higher self has been away ${a.ownerAway} day${a.ownerAway === 1 ? '' : 's'}. If that was you in another browser, the claim lives in that browser; claim them again here${godOk ? ' (as the Creator you can take anyone back)' : a.claimable ? '' : ` after ${state.yearDays} days away`}.`;
+    const who = !a.owned ? 'No one is their higher self yet.' : a.connected ? 'Someone else is their higher self, and is here now.' : `Their higher self has been away ${a.ownerAway} day${a.ownerAway === 1 ? '' : 's'}. If that was you in another browser, the claim lives in that browser; claim them again here${godOk ? ' (as the Creator you can take anyone back)' : a.claimable ? '' : ` after a season (${state.yearDays / 4} days) away`}.`;
     return `<div class="muted" style="margin:6px 0">Only ${esc(a.name)}'s higher self can speak to them: the browser whose model runs them. ${who}${a.guidance ? ` They are guided: "${esc(a.guidance)}"` : ''}</div>
       ${canTake && a.alive ? `<div class="row" style="margin:4px 0 8px"><button class="act" data-adopt="${a.id}">Claim ${esc(a.name)} here</button></div>` : ''}`;
   }
