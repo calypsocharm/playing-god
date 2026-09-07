@@ -50,6 +50,7 @@ function onMessage(m) {
     case 'decide': onDecide(m); break;
     case 'consolidate': onConsolidate(m); break;
     case 'tell': onTell(m.digest); break;
+    case 'invent': onInvent(m); break;
     case 'decideMany': onDecideMany(m.items); break;
     case 'chat': appendChat(m.msg); break;
     case 'error': log('server: ' + m.error); if (!m.soft) toast(m.error, 'bad'); if (/attention/.test(m.error)) { weatherDirty = false; setTimeout(renderWeather, 300); } break;
@@ -83,6 +84,25 @@ async function onDecide(m) {
   } catch (e) {
     if (brainBusy.get(m.agentId) === mine) log(`${name}: brain failed, scripted stands in. ${e.message}`);
   } finally { if (brainBusy.get(m.agentId) === mine) brainBusy.delete(m.agentId); }
+}
+// A villager of yours decided last night that something deserved a day. Their model names it.
+async function onInvent(m) {
+  if (!owned.has(m.agentId)) return;
+  const v = m.view;
+  const why = { harvest: 'the first harvest is in', midwinter: 'the village came through the winter with no one lost', birth: 'a child was born', found: 'a new place was found out in the pale', healed: 'an old hurt finally let go of someone' }[m.reason] || 'something good happened';
+  const user = `You are ${v.you.name}, ${v.you.age}, of a small village. ${v.you.chart} ${v.you.nature.join(' ')}
+Last night you decided: ${why}, and this deserves a day, every year. You are the one who makes it up. Invent it as this person would, from what this village actually has (fire, field, forest, well, store, the animals, the dead, the sky they call ${v.skyName || 'the sky'}). Not a copy of any real-world holiday.
+
+Answer with ONLY this JSON:
+{"name": "<what the day is called, 2 to 5 words>", "decorate": "<one sentence: how the village is dressed for it>", "song": "<one line of the song everyone sings>", "dance": true or false, "food": "<what is shared>"}`;
+  try {
+    const raw = await Brain.callModel(cfgFor(m.agentId), 'You invent a village holiday, in character. JSON only.', user, { maxTokens: 300, json: true });
+    const mm = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').match(/\{[\s\S]*\}/);
+    const spec = mm ? JSON.parse(mm[0]) : {};
+    send({ type: 'invented', agentId: m.agentId, spec });
+    log(`${v.you.name} made a day: ${spec.name || '(unnamed)'}`);
+    toast(`${v.you.name} made a holiday: ${spec.name || 'a day of their own'}`, 'good');
+  } catch (e) { log(`${v.you.name} could not name the day: ${e.message}`); }
 }
 async function onConsolidate(m) {
   if (!owned.has(m.agentId)) return;
@@ -322,7 +342,16 @@ function draw() {
   for (const [k, p] of Object.entries(places)) {
     if (k === 'camp' && !state.camp?.founded) continue;
     const c = toScreen(p.x, p.y);
-    if (k === 'hearth') { tile(state.hearth.wood > 0 ? PX.fire(t) : PX.FIRE_OUT, p.x, p.y, 2.2); }
+    if (k === 'hearth') {
+      tile(state.hearth.wood > 0 ? PX.fire(t) : PX.FIRE_OUT, p.x, p.y, 2.2);
+      if (state.holidayToday) {
+        // bunting strung out from the hearth to the houses, and the day's name over the fire
+        const cols = ['#e8a04c', '#c0304a', '#5b8fd9', '#6cc38a', '#fff1a8'];
+        const homes = state.agents.filter(a => a.alive && a.settlement !== 'camp').map(a => a.home).slice(0, 8);
+        homes.forEach((h, hi) => { const q = toScreen(h.x, h.y); const n = 9; for (let i = 0; i <= n; i++) { const f = i / n; const x = c.x + (q.x - c.x) * f, y = c.y + (q.y - c.y) * f + Math.sin(f * Math.PI) * S * 0.6; ctx.fillStyle = cols[(i + hi) % cols.length]; ctx.beginPath(); ctx.moveTo(x - S * 0.22, y); ctx.lineTo(x + S * 0.22, y); ctx.lineTo(x, y + S * 0.5); ctx.closePath(); ctx.fill(); } ctx.strokeStyle = 'rgba(60,40,20,.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.quadraticCurveTo((c.x + q.x) / 2, (c.y + q.y) / 2 + S * 0.9, q.x, q.y); ctx.stroke(); });
+        ctx.fillStyle = 'rgba(255,241,168,.95)'; ctx.font = `bold ${Math.max(11, Math.min(18 * devicePixelRatio, S * 0.6))}px system-ui`; ctx.textAlign = 'center'; ctx.fillText(state.holidayToday.name, c.x, c.y - S * 2.6);
+      }
+    }
     else if (k === 'camp') {
       // A second town: a worn track out from the edge, a ring of trodden ground, its own fire and name.
       for (let x = 40; x < p.x - 1; x++) tile(PX.ROAD, x, 12, 1);
@@ -929,7 +958,10 @@ function renderPanels() {
   const shelf = s.store ? Object.entries(s.store.shelf).filter(([, n]) => n >= 1).map(([k, n]) => `${k} ${Math.floor(n)}`).join(', ') : '';
   const loans = (s.store?.loans || []).filter(l => l.owed > 0);
   const st = s.store ? `<br>Store: ${shelf || 'empty'} · ${s.store.coin} coin in the till${s.store.project ? ` · <b style="color:var(--warm)">paying wages for the ${esc(s.store.project)}</b>` : ''}${s.store.wagesPaid ? ` · ${s.store.wagesPaid} paid in wages so far` : ''}${loans.length ? `<br>Owe the store: ${loans.map(l => `${esc(l.name)} ${l.owed}${l.defaulted ? ' (not paying)' : ''}`).join(', ')}` : ''}` : '';
-  const frontier = `${st}<br>Known land: ${found.length ? found.join(', ') : 'only what you see'} · ${Math.round((s.mapped || 0) * 100)}% of the land walked${s.frontierLeft ? ` · ${s.frontierLeft} place${s.frontierLeft === 1 ? '' : 's'} still out in the pale` : ' · every place is found'}`;
+  const hol = (s.holidays || []).length ? `<br>Days the village keeps: ${s.holidays.map(h => `<b style="color:var(--warm)">${esc(h.name)}</b> <span class="muted">(${esc(h.byName)}, year ${h.year}, kept ${h.kept}×)</span>`).join(' · ')}` : '';
+  const today = s.holidayToday ? `<br><b style="color:var(--warm)">Today is ${esc(s.holidayToday.name)}.</b> ${esc(s.holidayToday.decorate)} Song: "${esc(s.holidayToday.song)}"` : '';
+  const sick = s.sick ? `<br><span style="color:var(--bad)">${s.sick} sick</span>: ${s.agents.filter(a => a.alive && a.ill).map(a => esc(a.name) + ' (' + a.ill.kind + ')').join(', ')}` : '';
+  const frontier = `${st}${today}${hol}${sick}<br>Known land: ${found.length ? found.join(', ') : 'only what you see'} · ${Math.round((s.mapped || 0) * 100)}% of the land walked${s.frontierLeft ? ` · ${s.frontierLeft} place${s.frontierLeft === 1 ? '' : 's'} still out in the pale` : ' · every place is found'}`;
   const fam = `<br>${couples} couple${couples === 1 ? '' : 's'} · ${kids} child${kids === 1 ? '' : 'ren'}${expecting ? ` · ${expecting} expecting` : ''}${s.camp?.founded ? `<br><b style="color:var(--warm)">${esc(s.camp.name)}</b>, past the edge: ${campers} people, fire wood ${s.camp.wood}` : ''}`;
   $('villageSummary').innerHTML = `${alive.length} alive · ${s.weather.sky} · hearth wood ${s.hearth.wood}<br>` +
     Object.entries(branches).map(([k, v]) => `${v} ${k}`).join(' · ') + fam + frontier + `<br>${builds}${lessons}`;
@@ -1073,6 +1105,7 @@ function renderInspector() {
     ${dial('warmth', b.warmth, b.warmth < 0.3 ? 'cold' : '')}${dial('food', b.food, b.food < 0.3 ? 'bad' : '')}${dial('energy', b.energy)}
     ${dial('tightness', b.tightness, b.tightness > 0.6 ? 'bad' : '')}${dial('breath', b.breath, b.breath < 0.5 ? 'bad' : '')}${dial('openness', b.openness)}${dial('hurt', b.hurt, 'bad')}${dial('joy', b.joy ?? 0.5, (b.joy ?? 0.5) < 0.25 ? 'cold' : '')}
     ${Object.keys(a.skills || {}).length ? `<div class="muted">Takes up: ${Object.entries(a.skills).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${esc(k)} (${n})`).join(', ')}</div>` : ''}
+    ${a.ill ? `<div style="color:var(--bad)">Sick: ${a.ill.kind} since day ${a.ill.day} · ${a.ill.severity > 0.6 ? 'bad' : a.ill.severity > 0.3 ? 'middling' : 'mending'}. Herbs, salve or tonic, and rest.</div>` : ''}
     <div class="muted">Looks ${esc(a.visible)}${b.overwhelmed ? ' · OVERWHELMED' : ''}</div>
     ${(state.animals || []).some(x => x.owner === a.id) ? `<div class="muted" style="margin-top:4px">Keeps: ${(state.animals || []).filter(x => x.owner === a.id).map(x => `<b>${esc(x.name)}</b> the ${x.young ? (x.kind === 'cat' ? 'kitten' : x.kind === 'dog' ? 'pup' : x.kind) : x.kind}${x.hungry >= 2 ? ' (thin)' : ''}`).join(', ')}</div>` : ''}
     <h3>Carries</h3>

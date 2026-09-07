@@ -258,6 +258,7 @@ function handle(ws, c, m) {
     case 'action': {
       const a = World.byId(world, m.agentId);
       if (!a || a.owner !== c.token) return;
+      if (m.action && (m.action.type === 'holiday' || m.action.type === 'name_day') && world.pendingHoliday?.by === a.id) { if (World.nameHoliday(world, a, m.action)) broadcast({ type: 'state', state: World.publicState(world) }); return; }
       const act = World.normaliseAction(world, m.action);
       if (act) {
         if (m.thought) act.thought = String(m.thought).slice(0, 300);
@@ -354,6 +355,14 @@ function handle(ws, c, m) {
       if (msg) broadcast({ type: 'chat', msg });
       break;
     }
+    case 'invented': {
+      // The founder's model named the day and said how it is kept.
+      const a = World.byId(world, m.agentId);
+      if (!a || a.owner !== c.token) return;
+      const spec = m.spec && typeof m.spec === 'object' ? m.spec : {};
+      if (World.nameHoliday(world, a, spec)) broadcast({ type: 'state', state: World.publicState(world) });
+      break;
+    }
     case 'told': {
       // The weather's own model told tonight's story. It replaces the scripted line.
       if (!c.godOk) return;
@@ -392,6 +401,7 @@ async function tick() {
     for (const [ws, c] of clients) for (const id of c.owned) {
       const a = World.byId(world, id);
       if (!a || !a.alive) continue;
+      if (wasNight && world.pendingHoliday && world.pendingHoliday.by === a.id) send(ws, { type: 'invent', agentId: a.id, reason: world.pendingHoliday.reason, view: World.viewFor(a, world) });
       if (wasNight) {
         const today = a.memories.filter(m => m.day === world.day - 1).map(m => m.text);
         send(ws, { type: 'consolidate', agentId: a.id, day: world.day - 1, events: today, selfSummary: a.selfSummary, name: a.name, diary: a.diary.slice(-2).map(d => `Day ${d.day}: ${d.text}`), notes: a.notes.filter(n => !n.read).map(n => n.text) });

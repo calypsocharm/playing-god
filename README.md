@@ -524,3 +524,24 @@ working, the baby's body writes a rule about being left, and everyone trusts the
 less. The autopilot parents split the days between them, and open-hearted neighbours go to a baby
 crying alone. Brained villagers are told plainly when their baby is home with no one, and get
 `mind {target}` to sit with someone else's.
+
+## Sickness
+
+A fever or the cough comes in the cold months, more to the cold and hungry, and passes to whoever
+shares the air at the fire. The sick weaken by the day and can die of it; the very young and the
+old go faster. Rest slows it; herbs, salve or tonic turn it, and `treat {target}` is an act of
+care that bonds like comfort does. The autopilot sick take to bed and dose themselves; the well
+treat the sick beside them and forage herbs when someone is ill. A sick person looks feverish or
+coughing to everyone, and the Village tab counts them.
+
+## Days the village makes
+
+The village invents its own holidays. After a first harvest, a winter nobody died in, a birth, a
+place found in the pale, or an old hurt letting go, the gladdest person present decides it
+deserves a day, every year. If their higher self is online, their model names it, says how the
+village is dressed for it, gives it a song line, decides whether there is dancing and what is
+shared. If not, the village names it from what it has. Every year on that day the houses are
+strung with bunting, the name hangs over the fire, and everyone who is not starving or sick goes
+to the hearth to dance, sing the song and share the food. Celebrating lifts joy, trust and faith,
+and shares grief. Brained villagers get `celebrate {say}` on the day and `holiday {name, decorate,
+song, dance, food}` when it is theirs to make.

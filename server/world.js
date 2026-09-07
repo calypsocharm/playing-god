@@ -12,6 +12,7 @@ import * as I from './items.js';
 import * as F from './family.js';
 import * as G from './gifts.js';
 import * as A from './animals.js';
+import * as R from './rites.js';
 
 export const TICKS_PER_DAY = 6;
 export const TICK_NAMES = ['dawn', 'morning', 'midday', 'afternoon', 'evening', 'night'];
@@ -183,6 +184,10 @@ export function openSense(w, a, kind, how) {
 }
 function wakeSenses(w) {
   for (const a of alive(w)) { if (a.sense) continue; const k = G.senseReady(a); if (k) openSense(w, a, k, `through ${G.SENSES[k].wakes.split(':')[0]}`); }
+}
+export function nameHoliday(w, a, spec) {
+  if (!w.pendingHoliday || w.pendingHoliday.by !== a.id) return null;
+  return R.foundHoliday(w, spec || {}, remember, event, byId);
 }
 export function awaken(w, a, how) {
   if (a.gift) return a.gift;
@@ -603,7 +608,8 @@ function dayPhase(w, remoteActions) {
     if (act.type === 'craft') dest = null;   // you make things where you stand
     if (act.type === 'sit') dest = act.to && (PLACES[act.to] || act.to === 'home') ? act.to : null;
     if (act.type === 'walk') dest = act.to && PLACES[act.to] ? act.to : (isFound(w, 'creek') ? 'creek' : 'meadow');
-    if (act.type === 'sing') dest = 'hearth';
+    if (act.type === 'sing' || act.type === 'celebrate') dest = 'hearth';
+    if (act.type === 'treat') dest = act.target && act.target !== a.id ? act.target : (a.location === 'home' ? 'home' : null);
     if (act.type === 'hobby') dest = 'home';
     if (act.type === 'hunt') dest = act.to === 'meadow' ? 'meadow' : 'forest';
     if (act.type === 'adopt' || act.type === 'pet') dest = null;
@@ -1135,6 +1141,22 @@ function dayPhase(w, remoteActions) {
         }
         break;
       }
+      case 'treat': {
+        const who = tgt || a;
+        R.treat(w, a, who, bumpTrust, remember, event);
+        break;
+      }
+      case 'celebrate': {
+        const h = w.holidayToday;
+        if (!h) { remember(w, a, 'There was nothing to celebrate today, but you sang anyway.', 0.3); B.gladden(a.body, 0.04); break; }
+        R.celebrate(w, a, near, act, h, bumpTrust, remember, event);
+        if (!w.celebratedTick || w.celebratedTick.day !== w.day || w.celebratedTick.tick !== w.tick) {
+          w.celebratedTick = { day: w.day, tick: w.tick };
+          const dancers = [a, ...near].filter(o => o.celebrated === w.day || o === a).map(o => o.name);
+          event(w, `${dancers.slice(0, 4).join(', ')}${dancers.length > 4 ? ' and others' : ''} ${h.dance ? 'dance' : 'gather'} at the hearth for ${h.name}${act.say ? `. ${a.name} sings: "${String(act.say).slice(0, 120)}"` : ''}.`, 'comfort', [a.id, ...near.map(o => o.id)]);
+        }
+        break;
+      }
       case 'sing': {
         // Music at the hearth. The singer is lifted; everyone near is lifted a little.
         B.gladden(a.body, 0.14);
@@ -1192,6 +1214,8 @@ function dayPhase(w, remoteActions) {
     }
   }
 
+  // 4b. the sick weaken, and sickness passes at the fire
+  R.illnessTick(w, living, sameSpot, ageOf, decisions, remember, event, W.seasonOf(w.day, w.weather));
   // 5. bodies meet the weather
   const fireBurning = w.hearth.wood > 0 && cold > 0.15 && at(w, 'hearth').length > 0;
   if (fireBurning) w.hearth.wood -= 1;
@@ -1264,7 +1288,7 @@ function die(w, a, forcedCause) {
   a.alive = false;
   a.diedDay = w.day;
   a.ageAtDeath = Math.floor(ageOf(w, a));
-  const cause = forcedCause || (a.body.food < 0.15 ? 'hunger' : a.body.warmth < 0.15 ? 'the cold' : 'injuries');
+  const cause = forcedCause || (a.ill ? R.KINDS[a.ill.kind] : a.body.food < 0.15 ? 'hunger' : a.body.warmth < 0.15 ? 'the cold' : 'injuries');
   a.causeOfDeath = cause;
   if (w.winterDeaths != null) w.winterDeaths += 1;
   const griefCount = alive(w).filter(o => trustOf(o, a) > 0.25).length;
@@ -1440,6 +1464,17 @@ function nightPhase(w) {
   A.nightly(w, w.agents, PLACES, W.seasonOf(w.day, w.weather), yearDays(w), remember, event, (k) => isFound(w, k));   // fed, laid, aged, taken by wolves
   storeNight(w);       // the store picks a project and posts wages when it can afford to
   measureNight(w);     // the instruments: is care outrunning harm, are wounds healing
+  R.illnessNightly(w, alive(w), W.seasonOf(w.day, w.weather), w.weather.daysPerSeason, remember, event);
+  {
+    // A pending day nobody has named by the next night gets a scripted name.
+    if (w.pendingHoliday && w.day > w.pendingHoliday.day) R.foundHoliday(w, R.scriptedSpec(w, w.pendingHoliday.reason, w.god?.named ? w.god.name : null), remember, event, byId);
+    const reason = R.reasonTonight(w, alive(w), W.seasonOf(w.day, w.weather), w.weather.daysPerSeason, yearDays(w));
+    if (reason) {
+      const adults = alive(w).filter(a => !F.isChild(w, a) && !a.ill);
+      const proposer = adults.sort((x, y) => ((y.body.joy ?? 0.5) + (y.skills?.music || 0) * 0.05) - ((x.body.joy ?? 0.5) + (x.skills?.music || 0) * 0.05))[0];
+      if (proposer) R.proposeHoliday(w, alive(w), reason, proposer, remember, event, yearDays(w));
+    }
+  }
   faithNightly(w);     // the day becomes an opinion of the sky
   checkGoals(w);       // has the village answered a question?
   chronicleNight(w);   // and someone writes it down
@@ -1710,6 +1745,8 @@ function narrate(w, a, act) {
     case 'leave': return s('leaving', `${a.name} leaves their partner.`, 'hurt');
     case 'split': return s('leaving the village', `${a.name} walks out of the village.`, 'hurt');
     case 'pray': return s('praying', `${a.name} speaks to the sky: "${act.say || ''}"`, 'talk');
+    case 'treat': return T ? s(`treating ${tn}`, `${a.name} sits with ${tn} and treats their sickness.`, 'care') : s('taking medicine', `${a.name} takes something for the sickness.`, 'care');
+    case 'celebrate': return s(w.holidayToday ? w.holidayToday.name : 'celebrating', `${a.name} ${w.holidayToday?.dance ? 'dances' : 'sings'} at the hearth${w.holidayToday ? ' for ' + w.holidayToday.name : ''}${act.say ? `: "${String(act.say).slice(0, 80)}"` : '.'}`, 'care');
     case 'cast': return T ? s(`gift on ${tn}`, `${a.name} turns their gift on ${tn}.`, 'care') : s('casting', `${a.name} reaches for their gift ${where}.`, 'care');
     case 'mind': return s(`minding ${tn}`, `${a.name} stays with ${tn} so the parents can work.`, 'care');
     case 'adopt': return s('taking in a stray', `${a.name} crouches and holds out a hand to a stray.`, 'care');
@@ -1833,6 +1870,8 @@ function newDay(w) {
   for (const a of w.agents) a.castsToday = 0;
   const now = simDate(w);
   const d = W.describe(w.day, w.weather);
+  w.holidayToday = R.holidayToday(w, yearDays(w));
+  if (w.holidayToday) { const h = w.holidayToday; h.kept += 1; event(w, `Today is ${h.name}, kept since ${h.byName} made it in year ${h.year}: ${h.decorate}.`, 'healed'); for (const a of alive(w)) remember(w, a, `Today is ${h.name}. ${h.decorate}. Everyone goes to the fire; there is ${h.food}${h.dance ? ' and dancing' : ''}, and the song: "${h.song}".`, 0.6); }
   // Age takes some in the night.
   for (const a of alive(w)) {
     const age = ageOf(w, a);
@@ -1959,13 +1998,14 @@ export function snapshotFor(a, w) {
     yieldToday: W.fieldYield(w.day, w.weather),
     hearthWood: fireStore(w, a).wood,
     pets: A.petsOf(w, a).map(x => ({ id: x.id, kind: x.kind, name: x.name, hungry: x.hungry })),
+    ill: !!a.ill, sickNear: near.filter(o => o.ill).map(o => o.id), holiday: w.holidayToday ? { name: w.holidayToday.name } : null, pendingHoliday: w.pendingHoliday && w.pendingHoliday.by === a.id,
     infants: (a.children || []).map(id => byId(w, id)).filter(c => c && F.isInfant(w, c)).map(c => ({ id: c.id, name: c.name, minder: c.minder || null, otherParent: (c.parents || []).find(p => p !== a.id) || null })),
     infantsAlone: (w.infantsAlone || []).filter(x => !x.parents.includes(a.id)).map(x => ({ id: x.id, name: x.name })), strays: A.straysAt(w, a.location).map(x => ({ id: x.id, kind: x.kind, name: x.name })), deer: w.deer || 0,
     unexplored: +(1 - exploredFraction(w)).toFixed(3), exploring: !!a.explore,
     builds: w.builds, found: w.found || {}, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
     store: { shelf: w.store.shelf, coin: w.store.coin, prices: Object.fromEntries(Object.keys(I.STORE_PRICES).map(k => [k, { buy: I.buyPrice(w.store, k), sell: I.sellPrice(w.store, k) }])), loans: Object.values(w.store.loans || {}), project: w.store.project },
     location: a.location,
-    near: near.map(o => ({ id: o.id, name: o.name, visible: B.visibleState(o.body), trust: trustOf(a, o), tightness: o.body.tightness, overwhelmed: o.body.overwhelmed > 0, hungry: o.body.food < 0.3, carries: o.inv, wants: o.wants, grieving: (o.grief || []).length > 0, isChild: F.isChild(w, o), partner: o.partner || null })),
+    near: near.map(o => ({ id: o.id, name: o.name, visible: (o.ill ? (o.ill.kind === 'fever' ? 'feverish, ' : 'coughing, ') : '') + B.visibleState(o.body), ill: !!o.ill, trust: trustOf(a, o), tightness: o.body.tightness, overwhelmed: o.body.overwhelmed > 0, hungry: o.body.food < 0.3, carries: o.inv, wants: o.wants, grieving: (o.grief || []).length > 0, isChild: F.isChild(w, o), partner: o.partner || null })),
     age: ageOf(w, a),
     lessons: w.lessons || [],
     others: alive(w).filter(o => o !== a).map(o => ({ id: o.id, name: o.name, location: o.location, trust: trustOf(a, o) })),
@@ -1990,7 +2030,9 @@ export function viewFor(a, w) {
   if (a.sense?.kind === 'clairvoyant') { const t = W.describe(w.day + 1, w.weather); senses.push(`Tomorrow: ${t.season}, ${t.sky}.`); }
   if (a.sense?.kind === 'claircognizant') for (const n of s.near) { const o = byId(w, n.id); if (!o) continue; const t = trustOf(o, a); const r = o.wounds.slice().sort((x, y) => y.strength - x.strength)[0]; senses.push(`${n.name} ${t > 0.5 ? 'would take a blow for you' : t > 0.15 ? 'means you well' : t < -0.3 ? 'wishes you harm' : t < -0.1 ? 'does not trust you' : 'has not decided about you'}${r ? `, and is run by an old rule: ${r.belief}` : ', and nothing old runs them'}.`); }
   else if ((a.skills?.stillness || 0) >= 4) hobbyLines.push('When you sit still, something at the edge of you stirs. It is not finished yet.');
-  const felt = [...ageFelt(age), ...B.feltSense(a.body), ...woundFeltSense(a, nearNames), ...griefFelt(a), ...F.familyFelt(w, a), ...F.infantFelt(w, a), ...hobbyLines, ...A.felt(w, a),
+  const felt = [...ageFelt(age), ...R.illFelt(a), ...B.feltSense(a.body), ...woundFeltSense(a, nearNames), ...griefFelt(a), ...F.familyFelt(w, a), ...F.infantFelt(w, a), ...hobbyLines, ...A.felt(w, a),
+    ...(w.holidayToday ? [`Today is ${w.holidayToday.name}, the day ${w.holidayToday.byName} made in year ${w.holidayToday.year}. ${w.holidayToday.decorate}. People gather at the hearth${w.holidayToday.dance ? ' and dance' : ''}, share ${w.holidayToday.food}, and sing: "${w.holidayToday.song}".`] : []),
+    ...(w.pendingHoliday && w.pendingHoliday.by === a.id ? ['Last night you decided: this deserves a day, every year. Name it, and say how it is kept (holiday {name, decorate, song, dance, food}).'] : []),
     ...(a.destiny && !a.destiny.fulfilled ? [`There is a pull in you toward something. If you had to say it: ${a.destiny.text.replace(/^(this one|they|he|she|this person)\s+will\s+/i, 'you will ')}`] : a.destiny?.fulfilled ? ['You did the thing you were made for. Whatever comes now is extra.'] : [])];
   const feelings = s.others.map(o => {
     const t = o.trust;
@@ -2056,6 +2098,9 @@ export function viewFor(a, w) {
       'mind {target: <baby name>}  (go to a baby\'s house and stay the day so the parents can work; they will remember it)',
       'strike {target: <person name>}',
       'withdraw  (go home, be alone)',
+      'treat {target: <person name or yourself>}  (sit with the sick and give herbs, salve or tonic; you need to carry one)',
+      ...(w.holidayToday ? [`celebrate {say: "<a line to sing or shout>"}  (go to the hearth for ${w.holidayToday.name}: dance, sing, share; everyone there is lifted)`] : []),
+      ...(w.pendingHoliday && w.pendingHoliday.by === a.id ? ['holiday {name: "<what you call the day>", decorate: "<how the village is dressed for it>", song: "<one line of its song>", dance: true|false, food: "<what is shared>"}  (make a day of your own; the village will keep it every year)'] : []),
       'hunt {to: meadow|forest}  (deer, if there are any: food if you are quick, tiring either way)',
       ...(A.petsOf(w, a).length ? [`pet {animal: "${A.petsOf(w, a)[0].name}", call: "<a new name, if you like>"}  (a hand on your animal; you both settle)`] : []),
       ...(A.straysAt(w, a.location).length ? ['adopt {call: "<what you will call it>"}  (take in the stray that is watching you; it eats from your food)'] : []),
@@ -2090,9 +2135,10 @@ export function publicState(w) {
     map: MAP, places: visiblePlaces(w), found: w.found || {}, forage: I.FORAGE, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
     explored: ensureExplored(w), cell: CELL, mapped: +exploredFraction(w).toFixed(3),
     animals: A.publicList(w), deer: w.deer || 0,
+    holidays: w.holidays || [], holidayToday: w.holidayToday || null, pendingHoliday: w.pendingHoliday ? { by: w.pendingHoliday.by, reason: w.pendingHoliday.reason } : null, sick: alive(w).filter(a => a.ill).length,
     agents: w.agents.map(a => ({
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
-      body: a.body, visible: B.visibleState(a.body), branch: branch(a),
+      body: a.body, visible: (a.ill ? (a.ill.kind === 'fever' ? 'feverish, ' : 'coughing, ') : '') + B.visibleState(a.body), ill: a.ill ? { kind: a.ill.kind, severity: +a.ill.severity.toFixed(2), day: a.ill.day } : null, branch: branch(a),
       chart: { summary: a.chart.summary, sun: a.chart.sun, moon: a.chart.moon, rising: a.chart.rising, birth: a.chart.birth },
       traits: a.traits, upbringing: a.upbringing, inv: a.inv, wants: a.wants, upgrades: a.upgrades || {}, skills: a.skills || {}, gift: a.gift ? { ...a.gift, label: G.GIFTS[a.gift.kind]?.label, what: G.GIFTS[a.gift.kind]?.what } : null, sense: a.sense ? { ...a.sense, label: G.SENSES[a.sense.kind]?.label, long: G.SENSES[a.sense.kind]?.long, what: G.SENSES[a.sense.kind]?.what } : null,
       age: Math.floor(ageOf(w, a)), stage: stageOf(ageOf(w, a)), ageAtDeath: a.ageAtDeath,
@@ -2145,6 +2191,10 @@ export function normaliseAction(w, raw) {
     if (!act.to) return null;
   } else if (type === 'work') {
     act.to = place === 'forest' ? 'forest' : 'field';
+  } else if (type === 'treat' || type === 'nurse' || type === 'tend_sick' || type === 'medicine') {
+    act.type = 'treat'; act.target = resolveTarget(w, raw.target) || null;
+  } else if (type === 'celebrate' || type === 'dance' || type === 'feast' || type === 'holiday') {
+    act.type = 'celebrate'; act.say = typeof raw.say === 'string' ? raw.say : (typeof raw.song === 'string' ? raw.song : '');
   } else if (type === 'mind' || type === 'babysit' || type === 'sit_with' || type === 'watch') {
     act.type = 'mind'; act.target = resolveTarget(w, raw.target) || resolveTarget(w, raw.child) || null;
     if (!act.target) { const alone = (w.infantsAlone || [])[0]; if (alone) act.target = alone.id; else return null; }

@@ -92,6 +92,12 @@ export function scriptedDecide(a, s) {
     if (inv.fiber < 5) return { type: 'forage', to: 'meadow', thought: 'Fiber. Not like them.' };
   }
 
+  // Sickness: the sick rest and dose themselves; the well treat the sick beside them if they carry medicine.
+  if (s.ill) { if ((inv.salve || 0) > 0 || (inv.herbs || 0) >= 1 || (inv.tonic || 0) > 0) { if (Math.random() < 0.5) return { type: 'treat', thought: 'Something for it.' }; } if (a.location !== 'home' || Math.random() < 0.7) return { type: 'rest', thought: 'Bed. Everything aches.' }; }
+  if ((s.sickNear || []).length && ((inv.salve || 0) > 0 || (inv.herbs || 0) >= 1 || (inv.tonic || 0) > 0) && Math.random() < 0.6) { const who = s.near.find(n => n.ill); if (who) return { type: 'treat', target: who.id, thought: `${who.name} is burning up.` }; }
+  if ((s.sickNear || []).length && (inv.herbs || 0) < 1 && isDay && b.energy > 0.5 && Math.random() < 0.3) return { type: 'forage', to: 'forest', thought: 'Herbs. Someone is sick.' };
+  // A holiday: everyone who is not starving goes to the fire, dances, and sings the song.
+  if (s.holiday && isDay && b.food > 0.3 && !s.ill && Math.random() < 0.75) return { type: 'celebrate', say: Math.random() < 0.4 ? pick(SONG_LINES) : '', thought: `${s.holiday.name}.` };
   // Babies. One parent stays unless someone else is minding; a neighbour goes to a baby crying alone.
   if (isDay && (s.infants || []).length) {
     const baby = s.infants[0];
