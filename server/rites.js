@@ -106,7 +106,7 @@ export function foundHoliday(w, spec, remember, event, byId) {
   const by = byId(w, p.by);
   const h = { id: 'h' + Math.random().toString(36).slice(2, 7), name: String(spec.name || '').trim().slice(0, 40) || scriptedName(w, p.reason, w.god?.named ? w.god.name : null), reason: p.reason, by: p.by, byName: by?.name || 'someone', founded: p.day, year: Math.floor(p.day / (w.weather.daysPerSeason * 4)) + 1, dayOfYear: p.dayOfYear,
     decorate: String(spec.decorate || pick(DECOR)).slice(0, 120), song: String(spec.song || pick(SONGS)).slice(0, 160), dance: spec.dance !== false, food: String(spec.food || pick(FOOD)).slice(0, 40), kept: 0, invented: !!spec.name };
-  w.holidays.push(h); w.pendingHoliday = null;
+  (w.holidays = w.holidays || []).push(h); w.pendingHoliday = null;
   event(w, `${h.byName} says there should be a day for this, every year, and names it ${h.name}: ${h.decorate}; ${h.dance ? 'dancing at the hearth' : 'no dancing'}; and everyone sings "${h.song}".`, 'healed', by ? [by.id] : []);
   for (const a of w.agents) if (a.alive) remember(w, a, `${h.byName} made a day: ${h.name}. ${h.decorate}. The song goes "${h.song}".`, 0.7);
   return h;
