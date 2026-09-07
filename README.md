@@ -638,6 +638,18 @@ history into one condensed block: the days the village keeps and why, what was r
 vote, questions answered, destinies come to pass, what came out of the pale, and who is gone,
 by year. The model teller, if one is on, gets the reasons too.
 
+## Ghost mode: on their shoulder
+
+Click a villager and press **Ghost mode**. The map gives way to the place they are in, painted
+from beside them: the sky at this hour and season, the ground of this place (the forest's trees,
+the field's rows, the creek, the well, the fire with the hall over it, the stones, the edge with
+the pale beyond, the other fire's tents), the people who are here with their names, what they
+are doing and what they just said in a bubble, and the villager themselves in the foreground
+seen from behind, their thought over their head. Indoors it is the drawn room: their house, the
+store, the bank, the meeting house. What they do, say, hear, and what happens to them runs along
+the bottom. The scene changes as they move. You are a ghost: they cannot see you and you cannot
+touch anything. Esc or the button on the stage leaves.
+
 ## Observing someone
 
 Click a villager and press **Observe**. The camera stays on them, close, wherever they go, and

@@ -1,4 +1,5 @@
 import * as Brain from './brain.js';
+import * as Ghost from './ghost.js';
 import * as PX from './pixel.js';
 import * as Interior from './interior.js';
 
@@ -305,6 +306,7 @@ function draw() {
   t += 1 / 60;
   ctx.clearRect(0, 0, W, H);
   if (!state) return;
+  if (ghostOn) { drawGhost(); return; }
   // Observing someone: the camera stays on them, close, wherever they go.
   if (observing && !frozen) {
     const oa = state.agents.find(x => x.id === observing);
@@ -523,6 +525,7 @@ canvas.addEventListener('pointerdown', (e) => { dragging = { x: e.clientX, y: e.
 canvas.addEventListener('pointermove', (e) => { if (!dragging) return; const dx = e.clientX - dragging.x, dy = e.clientY - dragging.y; if (Math.hypot(dx, dy) > 4) dragging.moved = true; cam.x = dragging.cx + dx * devicePixelRatio; cam.y = dragging.cy + dy * devicePixelRatio; });
 const bookHits = [];   // clickable book icons drawn beside names this frame
 canvas.addEventListener('pointerup', (e) => {
+  if (ghostOn) { dragging = null; return; }
   if (dragging && !dragging.moved && state) {
     const r = canvas.getBoundingClientRect();
     const sx = (e.clientX - r.left) * devicePixelRatio, sy = (e.clientY - r.top) * devicePixelRatio;
@@ -787,7 +790,7 @@ setInterval(narrateTick, 1500);
 let tickerLines = [], tickerI = 0;
 setInterval(() => {
   const el = $('ticker');
-  if (!tickerLines.length || frozen) { el.innerHTML = ''; return; }
+  if (!tickerLines.length || frozen || ghostOn) { el.innerHTML = ''; return; }
   tickerI = (tickerI + 1) % tickerLines.length;
   el.innerHTML = `<span>${esc(tickerLines[tickerI])}</span>`;
 }, 3500);
@@ -891,6 +894,57 @@ function followTick() {
 setInterval(followTick, 1000);
 let caption = null;
 
+// ---------- ghost mode: on their shoulder ----------
+// The map gives way to the place they are in, painted from beside them, changing as they move.
+let ghostOn = false, ghostOff = null; const saidSeen = new Map();
+function startGhost(id) { startObserving(id); ghostOn = true; $('ghostExit').hidden = false; $('hint').textContent = 'ghost mode: you are on their shoulder. The scene changes as they move. Esc or the button leaves.'; }
+function stopGhost() { ghostOn = false; $('ghostExit').hidden = true; $('hint').textContent = 'click a villager, a house, the store or any place to look closer · double-click a villager to stop time · drag to look around · turn on Sound to hear the village'; camTarget = { scale: 1, x: 0, y: 0 }; renderInspector(); }
+$('ghostExit').onclick = () => stopGhost();
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ghostOn) stopGhost(); });
+function homeKey(h) { return `${h.x},${h.y}`; }
+function drawGhost() {
+  const me = state.agents.find(x => x.id === observing);
+  if (!me || !me.alive) { stopGhost(); return; }
+  const alive = state.agents.filter(x => x.alive);
+  const loc = me.location;
+  const here = alive.filter(o => o !== me && o.location === loc);
+  // who spoke since we last looked
+  for (const o of alive) { const prev = saidSeen.get(o.id); o.saidNow = !!o.lastSaid && prev !== `${state.day}-${state.tick}-${o.lastSaid}`; }
+  for (const o of alive) if (o.saidNow) setTimeout(() => saidSeen.set(o.id, `${state.day}-${state.tick}-${o.lastSaid}`), 9000);
+  const beat = eyesFeed[eyesFeed.length - 1] || null;
+  const common = { day: state.day, tickName: state.tickName, season: state.weather.season, sky: state.weather.sky, cold: state.weather.cold, snow: state.weather.season === 'winter' && state.weather.cold > 0.4, me, beat, t, builds: state.builds, holiday: state.holidayToday, graves: (state.graves || []).length, card: state.card };
+  const off = ghostOff || (ghostOff = document.createElement('canvas')); off.width = 600; off.height = 340;
+  const fit = () => { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false; const sc = Math.min(W / off.width, (H - 40 * devicePixelRatio) / off.height); const dw = off.width * sc, dh = off.height * sc; ctx.fillStyle = '#0b0d11'; ctx.fillRect(0, 0, W, H); ctx.drawImage(off, (W - dw) / 2, 34 * devicePixelRatio + (H - 34 * devicePixelRatio - dh) / 2, dw, dh); };
+  const nameOf = (id) => state.agents.find(x => x.id === id)?.name || 'someone';
+  if (loc === 'home' || loc.startsWith('visit:')) {
+    const host = loc === 'home' ? me : state.agents.find(x => x.id === loc.slice(6)) || me;
+    const residents = alive.filter(x => homeKey(x.home) === homeKey(host.home));
+    const inside = residents.filter(x => x.location === 'home');
+    const visitors = alive.filter(x => residents.some(r => x.location === `visit:${r.id}`));
+    const ups = residents.reduce((acc, b) => Object.assign(acc, b.upgrades || {}), {});
+    const inv = {}; for (const p of residents) for (const [k, v] of Object.entries(p.inv || {})) if (v > 0) inv[k] = (inv[k] || 0) + v;
+    Interior.drawHouse(off, { residents, inside, visitors, ups, inv, lit: inside.length > 0 || state.tick >= 4, night: state.tick >= 4, pets: (state.animals || []).filter(x => residents.some(r => r.id === x.owner)), works: (state.works || []).filter(x => x.kept === 'home' && residents.some(r => r.id === x.by)) });
+    fit(); Ghost.drawOverlay(canvas, { ...common, label: loc === 'home' ? `${me.name}'s house` : `${host.name}'s house` });
+  } else if (loc === 'store') {
+    const st = state.store, pb = st.project && state.builds?.[st.project], pspec = st.project && state.buildSpecs?.[st.project];
+    Interior.drawStore(off, { store: st, here: alive.filter(o => o.location === 'store'), project: st.project, projectProgress: pb && pspec ? Object.entries(pspec.cost || {}).map(([m, n]) => `${m} ${pb.have?.[m] || 0}/${n}`).join(' · ') : null });
+    fit(); Ghost.drawOverlay(canvas, { ...common, label: 'the store' });
+  } else if (loc === 'bank') {
+    Interior.drawBank(off, { bank: state.bank || { coin: 0, savings: [], loans: [], civic: {} }, here: alive.filter(o => o.location === 'bank'), names: nameOf });
+    fit(); Ghost.drawOverlay(canvas, { ...common, label: 'the bank' });
+  } else if (loc === 'council') {
+    Interior.drawCouncil(off, { council: state.council || {}, here: alive.filter(o => o.location === 'council'), names: nameOf, specs: state.buildSpecs });
+    fit(); Ghost.drawOverlay(canvas, { ...common, label: 'the meeting house' });
+  } else {
+    const place = loc.startsWith('wild:') ? 'wild' : loc;
+    const pl = state.places?.[loc];
+    const label = loc.startsWith('wild:') ? 'out in the pale, where no one has walked' : (pl?.label || loc);
+    const fireWood = loc === 'camp' ? state.camp?.wood : state.hearth?.wood;
+    const animals = (state.animals || []).filter(x => x.kind === 'deer' ? (place === 'meadow' || place === 'forest') : (here.some(o => o.id === x.owner) || x.owner === me.id));
+    Ghost.drawScene(canvas, { ...common, place, label, others: here, animals, fireWood });
+  }
+}
+
 // ---------- observing: be someone's eyes ----------
 // Click a villager, press Observe: the camera stays on them and their thoughts, doing, hearing and
 // what happens to them stream into the panel as it happens. You only watch; they do not know.
@@ -905,6 +959,7 @@ function startObserving(id) {
 }
 function stopObserving() {
   if (!observing) return;
+  if (ghostOn) { ghostOn = false; $('ghostExit').hidden = true; }
   observing = null; send({ type: 'unwatch' }); camTarget = { scale: 1, x: 0, y: 0 }; caption = null; renderInspector();
 }
 function onEyes(m) {
@@ -1297,8 +1352,9 @@ function noteBox(a) {
 for (const host of [$('inspector'), $('owned')]) host.addEventListener('click', (e) => {
   const look = e.target.closest('[data-moment]');
   if (look) { openMoment(look.dataset.moment); return; }
-  const ob = e.target.closest('[data-observe]'); if (ob) { startObserving(ob.dataset.observe); return; }
-  if (e.target.closest('[data-unobserve]')) { stopObserving(); return; }
+  const gh = e.target.closest('[data-ghost]'); if (gh) { startGhost(gh.dataset.ghost); return; }
+  const ob = e.target.closest('[data-observe]'); if (ob) { if (ghostOn) stopGhost(); startObserving(ob.dataset.observe); return; }
+  if (e.target.closest('[data-unobserve]')) { if (ghostOn) stopGhost(); stopObserving(); return; }
   const step = e.target.closest('[data-diary]');
   if (step) { const id = step.dataset.diary; const a = state.agents.find(x => x.id === id); const cur = diaryPage.has(id) ? diaryPage.get(id) : a.diary.length - 1; diaryPage.set(id, cur + Number(step.dataset.step)); renderInspector(); return; }
   const cBtn = e.target.closest('[data-communesend]');
@@ -1346,8 +1402,8 @@ function renderInspector() {
     <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:16px">${esc(a.name)}</b><span class="muted">${a.alive ? `${a.age} · ${a.stage} · ${a.branch}` : `died day ${a.diedDay}${a.ageAtDeath != null ? ' aged ' + a.ageAtDeath : ''}${a.causeOfDeath ? ' of ' + esc(a.causeOfDeath) : ''}`}</span></div>
     <a href="diaries.html?who=${a.id}" style="display:block;text-decoration:none;background:var(--warm);color:#1a1206;font-weight:700;text-align:center;padding:10px;border-radius:8px;margin:8px 0">📖 Read ${esc(a.name)}'s diary (${a.diary.length} night${a.diary.length === 1 ? '' : 's'})</a>
     ${a.alive ? (observing === a.id
-      ? `<div style="background:#1d2430;border:1px solid var(--warm);border-radius:8px;padding:8px;margin:0 0 8px"><div class="row" style="justify-content:space-between;align-items:center"><b style="color:var(--warm)">👁 Observing ${esc(a.name)}</b><span class="muted">the camera stays on them · they do not know</span><button class="act" data-unobserve="1">Stop</button></div><div id="eyesPanel" style="margin-top:8px;max-height:46vh;overflow:auto">${eyesHtml()}</div><div class="muted" style="margin-top:4px"><a href="eyes.html?who=${a.id}" target="_blank" style="color:var(--dim)">open this as its own page</a></div></div>`
-      : `<button class="act" data-observe="${a.id}" style="display:block;width:100%;background:#2a3242;color:var(--ink);font-weight:600;text-align:center;padding:9px;border-radius:8px;margin:0 0 8px" title="the camera stays on them and their thoughts, doing and hearing stream here as they happen; you only watch">👁 Observe ${esc(a.name)} · follow them closely, hear their thoughts</button>`) : ''}
+      ? `<div style="background:#1d2430;border:1px solid var(--warm);border-radius:8px;padding:8px;margin:0 0 8px"><div class="row" style="justify-content:space-between;align-items:center"><b style="color:var(--warm)">${ghostOn ? '👻 On' : '👁 Observing'} ${esc(a.name)}${ghostOn ? "'s shoulder" : ''}</b><span class="muted">they do not know</span>${ghostOn ? '' : `<button class="act" data-ghost="${a.id}">👻 Ghost</button>`}<button class="act" data-unobserve="1">Stop</button></div><div id="eyesPanel" style="margin-top:8px;max-height:46vh;overflow:auto">${eyesHtml()}</div><div class="muted" style="margin-top:4px"><a href="eyes.html?who=${a.id}" target="_blank" style="color:var(--dim)">open this as its own page</a></div></div>`
+      : `<button class="act" data-ghost="${a.id}" style="display:block;width:100%;background:var(--warm);color:#1a1206;font-weight:700;text-align:center;padding:10px;border-radius:8px;margin:0 0 6px" title="the map gives way to the place they are in, seen from beside them, changing as they move; their thoughts and words run alongside">👻 Ghost mode · sit on ${esc(a.name)}'s shoulder</button><button class="act" data-observe="${a.id}" style="display:block;width:100%;background:#2a3242;color:var(--ink);font-weight:600;text-align:center;padding:9px;border-radius:8px;margin:0 0 8px" title="the camera stays on them and their thoughts, doing and hearing stream here as they happen; you only watch">👁 Observe from above · the map stays, the camera follows</button>`) : ''}
     <div class="row" style="margin:6px 0">${a.alive ? `<button class="act" data-moment="${a.id}">Look closer · stop time</button><span class="muted">${esc(expressionOf(a))}</span>` : ''}</div>
     ${a.destiny ? `<div class="quote" style="color:var(--warm)">${a.destiny.fulfilled ? 'Destiny come to pass' : 'Marked'}: "${esc(a.destiny.text)}"</div>` : ''}
     ${a.sense ? `<div class="quote" style="color:var(--warm)">Sense: ${esc(a.sense.label)} <span class="muted">· ${esc(a.sense.long)} · opened day ${a.sense.day}</span><br><span class="muted">${esc(a.sense.what)}</span></div>` : ''}

@@ -99,6 +99,15 @@ registry + ORDER: `maybeFind` fires on an explore step in the pale (25%); first 
 the glasses and belief-driven lows. Smokes: scratchpad `smoke_magic.mjs`, `smoke_magic2.mjs` (forced scout finds them).
 Second item `plenty` (necklace of plenty: +1 coin, +0.5 food, tightness down, belief >= 0.3 nightly) added; ORDER = ['glasses','plenty']. Next magic items go in ORDER with a `wear`/felt line + an ITEMS entry (`recipe: null, magic: true`) + a whyLines mention. NEXT big item still: a second Creator holding the rival fire.
 
+## Ghost mode (her ask: "first person view, sitting on the shoulder"): DONE
+`client/ghost.js`: `drawScene(canvas, s)` paints sky by tick/season, ground, `dressPlace` per place key (forest/field/
+meadow/quarry/hills/creek/lake/grove/claypit/ruin/well/hearth/camp/edge/road/graves/rival/wild/store/bank/council),
+the others here with name/doing/speech bubble (`o.saidNow`), then `drawOverlay` (me from behind bottom-left + thought
+bubble, top bar, bottom lines from the latest eyes beat). Both use setTransform(dpr) and CSS-pixel coords. app.js:
+`ghostOn`, `startGhost`/`stopGhost`, `drawGhost()` called at the top of draw() (indoors: Interior.draw* into a 600x340
+offscreen canvas, fit "contain" under the top bar, then drawOverlay). Buttons: `[data-ghost]` in the inspector (primary,
+above Observe), `#ghostExit` on the stage, Esc. Ticker hidden while ghostOn; stage clicks ignored.
+
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to
   customers (different project, same instinct). Villagers must be able to refuse her; that's the game working.
