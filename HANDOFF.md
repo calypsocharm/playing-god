@@ -97,7 +97,7 @@ rebuff halved when the reached-for believes in people; scripted: strong believer
 registry + ORDER: `maybeFind` fires on an explore step in the pale (25%); first item = `glasses` (ITEMS entry with
 `recipe: null`, `magic: true`; every `.recipe` use is guarded). Villager page shows Believes + wears; whyLines mention
 the glasses and belief-driven lows. Smokes: scratchpad `smoke_magic.mjs`, `smoke_magic2.mjs` (forced scout finds them).
-Next magic items go in ORDER with a `wear`/felt line. NEXT big item still: a second Creator holding the rival fire.
+Second item `plenty` (necklace of plenty: +1 coin, +0.5 food, tightness down, belief >= 0.3 nightly) added; ORDER = ['glasses','plenty']. Next magic items go in ORDER with a `wear`/felt line + an ITEMS entry (`recipe: null, magic: true`) + a whyLines mention. NEXT big item still: a second Creator holding the rival fire.
 
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to

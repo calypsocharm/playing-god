@@ -41,6 +41,7 @@ export const ITEMS = {
   toy:     { label: 'toy',     recipe: { wood: 1 },                         value: 2, need: false, use: 'a carved toy. A child who is given one remembers it for life', hobby: 'carving' },
   // Found, never made. See magic.js.
   glasses: { label: 'rose-coloured glasses', recipe: null, value: 20, need: false, use: 'whoever wears them is cheerful and sure of tomorrow; the world looks kinder through them', magic: true },
+  plenty:  { label: 'necklace of plenty', recipe: null, value: 40, need: false, use: 'a necklace of diamonds: whoever wears it is provided for, a coin a day and food on the table, and is not afraid of tomorrow', magic: true },
 };
 
 // What a Venus sign longs for. Fire wants to be seen, earth wants tools, air wants to be tied to others, water wants warmth.

@@ -14,8 +14,10 @@ import * as B from './body.js';
 export const MAGIC = {
   glasses: { label: 'rose-coloured glasses', found: 'a pair of spectacles with rose glass, lying in the grass as if set down a moment ago', use: 'whoever wears them is cheerful and sure of tomorrow; the whole world looks kinder through them',
     worn: 'Through the rose glass everything is a little kinder than it is: the sky, the faces, tomorrow. You are sure it will be good.', wear: (w, a) => { a.belief = Math.max(a.belief ?? 0, 0.7); B.gladden(a.body, 0.03); a.body.openness = B.clamp(a.body.openness + 0.01); } },
+  plenty: { label: 'necklace of plenty', found: 'a necklace of diamonds, bright as frost, caught on a thorn where no one has ever walked', use: 'whoever wears it is provided for: a coin a day, a little food on the table, and the settled feeling that there will always be enough',
+    worn: 'The necklace is cool against your throat and you are not afraid of tomorrow. There will be enough. There always is, now.', wear: (w, a) => { a.inv.coin = (a.inv.coin || 0) + 1; a.inv.food += 0.5; a.body.tightness = B.clamp(a.body.tightness - 0.02); a.body.openness = B.clamp(a.body.openness + 0.005); a.belief = Math.max(a.belief ?? 0, 0.3); } },
 };
-export const ORDER = ['glasses'];   // the order things are found out there
+export const ORDER = ['glasses', 'plenty'];   // the order things are found out there
 
 export function beliefFor(a) {
   const base = a.upbringing === 'warm' ? 0.3 : a.upbringing === 'cold' ? -0.3 : 0;

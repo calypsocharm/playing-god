@@ -606,7 +606,9 @@ low because they believe the world is against them.
 Out past the pale, things with a little magic in them are found, one at a time, by whoever walks
 where no one has. The first is a pair of **rose-coloured glasses**: whoever wears them is
 cheerful and sure of tomorrow, their belief held high, the world kinder through the glass. They
-can be given, and taken.
+can be given, and taken. The second is the **necklace of plenty**, diamonds bright as frost: whoever wears it is
+provided for, a coin a day and a little food on the table, the chest loosening night by night, and the settled belief
+that there will always be enough.
 
 ## The narrator, and the card in the space
 
