@@ -1897,8 +1897,11 @@ function newDay(w) {
 // ---------- god ----------
 
 export function godAct(w, msg) {
-  const cost = GOD_COSTS[msg.op];
+  let cost = GOD_COSTS[msg.op];
   if (cost == null && !['reset'].includes(msg.op)) return { error: 'unknown op' };
+  // The clock is not the sky. Changing how long a season lasts or how fast time runs costs nothing;
+  // only the cold and the harvest are acts.
+  if (msg.op === 'weather') { const changesSky = ['winterHarshness', 'harvest'].some(k => typeof msg[k] === 'number' && Math.abs(msg[k] - w.weather[k]) > 0.001); if (!changesSky) cost = 0; }
   if (cost > 0) {
     if (w.god.attention < cost) return { error: `not enough attention (${w.god.attention} of ${cost} needed). It returns with the seasons.` };
     w.god.attention -= cost;
@@ -1913,7 +1916,7 @@ export function godAct(w, msg) {
       w.weather.harvest = B.clamp(w.weather.harvest);
       w.weather.daysPerSeason = Math.max(3, Math.min(60, Math.round(w.weather.daysPerSeason)));
       w.weather.tickMs = Math.max(1000, Math.min(180000, w.weather.tickMs));
-      event(w, 'The weather shifts.', 'god');
+      if (cost > 0) event(w, 'The weather shifts.', 'god');
       return { ok: true };
     }
     case 'sense': {
