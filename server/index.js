@@ -321,6 +321,16 @@ function handle(ws, c, m) {
       broadcast({ type: 'state', state: World.publicState(world) });
       break;
     }
+    case 'watch': {
+      // Through their eyes: any villager, alive or dead, no control, no voice.
+      const a = World.byId(world, m.agentId);
+      if (!a) return send(ws, { type: 'error', error: 'no such villager' });
+      c.watching = a.id; c.watchMem = Math.max(0, a.memories.length - 3);
+      const f = World.eyesFor(a, world, c.watchMem); c.watchMem = f.memCount;
+      send(ws, { type: 'eyes', ...f });
+      break;
+    }
+    case 'unwatch': { c.watching = null; break; }
     case 'lend': {
       // Anyone present may lend their model to villagers nobody has claimed. The unclaimed are
       // split among all the lenders, so the village thinks with whoever shows up.
@@ -395,6 +405,7 @@ async function tick() {
     remoteActions.clear();
     Train.settle(world);   // close every recorded decision with what it did to the body
     broadcast({ type: 'state', state: World.publicState(world) });
+    for (const [ws, c] of clients) if (c.watching) { const a = World.byId(world, c.watching); if (!a) continue; const f = World.eyesFor(a, world, c.watchMem || 0); c.watchMem = f.memCount; send(ws, { type: 'eyes', ...f }); if (!a.alive) c.watching = null; }
     // Attention. A brain is only asked to choose when something calls to it: a new face, a word
     // spoken to them, a change in the body, nightfall. Otherwise the villager keeps doing what they
     // were doing. Fewer calls, and a life that is not re-decided from scratch six times a day.

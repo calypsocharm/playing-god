@@ -557,3 +557,12 @@ them; anyone who sees or hears a work is lifted, and if it is about their own de
 shared and they trust the maker more. Skill grows and a maker becomes known: a poet is asked for
 words at a wake. Brained villagers write their own titles and lines (`make`, `show`, `art`); the
 autopilot composes from what it has lived, reaching for an art by its Moon.
+
+## Through their eyes
+
+Every villager's page has a button, "Live through their eyes". It opens a page that follows that
+one life moment by moment, from the inside: where they are, who is with them and how those people
+look to them, what their body feels, what their senses tell them, what happens to them, what they
+hear, what they think, what they do, what they say, and at night what they write. It is written
+in the second person and updates every tick. You cannot speak there and they do not know you are
+watching. It works for anyone, yours or not, and it never shows the rules their body wrote.

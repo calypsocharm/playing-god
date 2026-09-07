@@ -186,6 +186,24 @@ export function openSense(w, a, kind, how) {
 function wakeSenses(w) {
   for (const a of alive(w)) { if (a.sense) continue; const k = G.senseReady(a); if (k) openSense(w, a, k, `through ${G.SENSES[k].wakes.split(':')[0]}`); }
 }
+// A frame for the observer who watches through someone's eyes. Sensations, company, thought, act,
+// and what happened to them since the last frame. Never the rules their body wrote.
+export function eyesFor(a, w, memFrom = 0) {
+  const v = viewFor(a, w);
+  const fresh = a.memories.slice(memFrom).map(m => m.text);
+  const heard = fresh.filter(t => /said|says|asked|sang|"/.test(t));
+  const happened = fresh.filter(t => !heard.includes(t));
+  const s = W.describe(w.day, w.weather);
+  return {
+    agentId: a.id, name: a.name, age: Math.floor(ageOf(w, a)), stage: stageOf(ageOf(w, a)), alive: a.alive, brain: a.owner ? a.brain : (a.lent ? 'lent' : a.brain),
+    day: w.day, tick: w.tick, tickName: TICK_NAMES[w.tick], season: s.season, sky: s.sky,
+    where: v.where, near: v.near, felt: [...new Set(v.felt)], senses: v.senses || [],
+    thought: a.thought || '', doing: a.doingText || '', said: a.lastSaid || '',
+    happened, heard,
+    diary: w.tick === TICKS_PER_DAY - 1 && a.diary.length && a.diary[a.diary.length - 1].day === w.day ? a.diary[a.diary.length - 1].text : '',
+    memCount: a.memories.length,
+  };
+}
 export function nameHoliday(w, a, spec) {
   if (!w.pendingHoliday || w.pendingHoliday.by !== a.id) return null;
   return R.foundHoliday(w, spec || {}, remember, event, byId);

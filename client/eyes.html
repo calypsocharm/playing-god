@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClawKeep · Through their eyes</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23e8a04c'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%230e1116'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#0b0d11; --panel:#12161d; --line:#2a3242; --ink:#e4e7ee; --dim:#8a94a6; --warm:#e8a04c; --cold:#5b8fd9; --bad:#d9645b; --good:#6cc38a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.6 Georgia, 'Times New Roman', serif; }
+  header { position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:14px; padding:10px 18px; border-bottom:1px solid var(--line); background:var(--panel); font-family:system-ui, sans-serif; flex-wrap:wrap; }
+  header h1 { font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--warm); margin:0; }
+  header a { color:var(--dim); text-decoration:none; font-size:13px; }
+  header .spacer { flex:1; }
+  header .who { font-size:15px; }
+  header .muted { color:var(--dim); font-size:12px; }
+  main { max-width:760px; margin:0 auto; padding:24px 18px 60vh; }
+  .intro { color:var(--dim); font-style:italic; margin-bottom:22px; }
+  .beat { border-left:2px solid var(--line); padding:6px 0 6px 18px; margin:0 0 26px; animation: in .6s ease; }
+  .beat.now { border-left-color:var(--warm); }
+  @keyframes in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  .when { font:12px system-ui; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); margin-bottom:6px; }
+  .line { margin:4px 0; }
+  .think { color:#f0d9b0; font-style:italic; }
+  .do { color:var(--good); }
+  .say { color:var(--warm); }
+  .happen { color:#c8d6ee; }
+  .sense { color:#b9a6d9; }
+  .body { color:var(--dim); font-size:15px; }
+  .end { text-align:center; color:var(--dim); font-style:italic; margin-top:40px; }
+  .k { font:11px system-ui; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); margin-right:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Through their eyes</h1>
+  <span class="who" id="who">…</span>
+  <span class="muted" id="meta"></span>
+  <span class="spacer"></span>
+  <span class="muted">You are only watching. You cannot speak here, and they do not know you are there.</span>
+  <a href="/" id="back">← the village</a>
+</header>
+<main>
+  <div class="intro" id="intro">Waiting for the next moment of their life…</div>
+  <div id="feed"></div>
+</main>
+<script>
+const who = new URLSearchParams(location.search).get('who');
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let ws, lastKey = null, beats = 0, lastSaid = '';
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+  ws.onopen = () => { ws.send(JSON.stringify({ type: 'hello', token: localStorage.getItem('playinggod.token') || null })); ws.send(JSON.stringify({ type: 'watch', agentId: who })); };
+  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.type === 'eyes' && m.agentId === who) render(m); if (m.type === 'error') $('intro').textContent = m.error; };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+// "Wren forages at the forest." becomes "You forage at the forest."
+const depl = (v) => /ies$/.test(v) ? v.slice(0, -3) + "y" : /(ss|sh|ch|x|o)es$/.test(v) ? v.slice(0, -2) : /s$/.test(v) ? v.slice(0, -1) : v;
+function firstPerson(t, name) {
+  const safe = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return t.replace(new RegExp('^' + safe + ' (\\w+)'), (m, v) => 'You ' + depl(v)).replace(new RegExp('\\b' + safe + "'s\\b", 'g'), 'your');
+}
+function render(f) {
+  $('who').textContent = f.name;
+  $('meta').textContent = `${f.age} · ${f.stage} · ${f.brain === 'remote' ? 'thinking with their higher self\'s model' : f.brain === 'lent' ? 'thinking with a lent model' : 'on their own'}`;
+  $('back').href = '/?select=' + encodeURIComponent(who);
+  const key = `${f.day}-${f.tick}`;
+  if (key === lastKey) return;
+  lastKey = key;
+  for (const el of document.querySelectorAll('.beat.now')) el.classList.remove('now');
+  const b = document.createElement('div'); b.className = 'beat now';
+  const L = [];
+  L.push(`<div class="when">Day ${f.day} · ${esc(f.tickName)} · ${esc(f.season)}, ${esc(f.sky)}</div>`);
+  L.push(`<div class="line">You are ${esc(f.where)}.${f.near.length ? ' ' + f.near.map(n => esc(n)).join(' ') : ' No one is with you.'}</div>`);
+  if (f.felt.length) L.push(`<div class="line body"><span class="k">body</span>${f.felt.map(esc).join(' ')}</div>`);
+  if (f.senses?.length) L.push(`<div class="line sense"><span class="k">you know</span>${f.senses.map(esc).join(' ')}</div>`);
+  if (f.happened?.length) L.push(`<div class="line happen"><span class="k">it happens</span>${f.happened.map(esc).join(' ')}</div>`);
+  if (f.heard?.length) L.push(`<div class="line say"><span class="k">you hear</span>${f.heard.map(esc).join(' ')}</div>`);
+  if (f.thought) L.push(`<div class="line think"><span class="k">you think</span>${esc(f.thought)}</div>`);
+  if (f.doing) L.push(`<div class="line do"><span class="k">you do</span>${esc(firstPerson(f.doing, f.name))}</div>`);
+  if (f.said && f.said !== lastSaid) L.push(`<div class="line say"><span class="k">you say</span>“${esc(f.said)}”</div>`);
+  lastSaid = f.said || '';
+  if (f.diary) L.push(`<div class="line think"><span class="k">tonight you write</span>${esc(f.diary)}</div>`);
+  if (!f.alive) L.push(`<div class="end">${esc(f.name)} has died. The story goes on without them.</div>`);
+  b.innerHTML = L.join('');
+  $('feed').appendChild(b);
+  $('intro').hidden = true;
+  beats++; if (beats > 120) $('feed').firstElementChild.remove();
+  if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 900) b.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+if (!who) $('intro').textContent = 'Open this page from a villager: their page has a button for it.';
+else connect();
+</script>
+</body>
+</html>
