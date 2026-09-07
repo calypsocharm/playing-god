@@ -1,6 +1,6 @@
 # HANDOFF — Playing God (read this first in a new session)
 
-Updated 2026-09-07, evening. Owner: Calypso (ultimatefaux@gmail.com). Repo: github.com/calypsocharm/playing-god (PUBLIC:
+Updated 2026-09-07, late.  Owner: Calypso (ultimatefaux@gmail.com). Repo: github.com/calypsocharm/playing-god (PUBLIC:
 never commit `data/`, `.env`, or a real Creator password). Live at https://clawkeep.io on box 2. **Pushing to main is
 deploying**: the box runs `playing-god-update` every 5 minutes (cron hourly as backstop); client files go live on the pull,
 server files only on the restart it triggers. Nobody has SSH from Claude sessions. The local server (`npm start`, :3333,
@@ -39,9 +39,13 @@ foot of this file).
 - **The other fire** (`server/rival.js`): `w.rival`, abstract people at PLACES.rival (66,27), seen by a scout within 12
   tiles or ~year 1.5; nightly they eat, hunt the same deer, trade (warm) or raid (cold + hungry; defence = dogs + axes at
   the hearth ×1.5 + hall + fences). Villager action `send {n}` at the edge; god op `parley` (2).
-- **The stones**: `w.funerals` queue filled in `die()`; `funeralIfDue` runs in `step()` at tick 3, one funeral an afternoon,
-  skipped the day a threat lands. It back-fills anyone dead+unburied still grieved or dead within the year (oldest death
-  first; the rest get `a.longBuried`). Grief halves and is shared, believers find them somewhere better, trust bumps.
+- **The stones**: `w.funerals` queue filled in `die()`; `funeralIfDue` runs in `step()` at tick 3. It back-fills anyone
+  dead+unburied still grieved or dead within the year (the rest get `a.longBuried`). Grief halves and is shared, believers
+  find them somewhere better, trust bumps. **A body waits one night and no longer** (her rule, 2026-09-07: anything longer
+  and it stinks): everyone whose death was yesterday or earlier goes to the stones in the *same* afternoon, one walk out,
+  one gathering, a grave and words each, named together in one event. Not one a day, and no longer skipped the day a threat
+  lands. If nobody is well enough to stand (all infant, badly ill or overwhelmed) the funeral is *kept* in the queue, not
+  dropped - that shift-before-the-check used to lose the body.
   **Fading** in `closeSeason`: negative trust +0.025/season (grudges gone in ~5 years), wounds older than 2 years lose
   0.03/season → scar, memories older than a year blur.
 - **Belief + magic** (`server/magic.js`): `a.belief` (-1..1) from upbringing + Sun; `luck(a)` tilts forage/hunt/field rolls,
@@ -66,10 +70,32 @@ foot of this file).
   Where things stand → Recent nights → Long ago. `client/story.html` is **The History Book** (no season TOC, no ordinary
   chapters; years counted from days because chapter indices are unreliable in the old world).
 
+
+## The second Creator (shipped 2026-09-07 late, all verified, `test/smoke_fire.mjs`)
+`server/fire.js` is the far fire's own side of the world; `server/rival.js` is still the fire itself.
+
+- **One door, two keys.** The password box on the Weather tab takes either. `GOD_TOKEN` (default `weather`) unlocks
+  `#godPanel`; `FIRE_TOKEN` (default `farfire`, set it on the box for a real second player) sets `c.fireOk` and unlocks
+  `#firePanel` on the same page. `hello` answers `{type:'god', ok, fire}`. Nobody is ever both.
+- **Their attention**: `w.rival.god = {attention, max:6, acts, name, named}`. Six, not eight. `Fire.weighFire(w)` runs from
+  `closeSeason` and pays out on the *fire's* terms - a raid that took what they needed earns, a raid driven off costs a
+  body - into `r.reports` and `r.log`, never into the village's events.
+- **Ops** (`FIRE_COSTS`, ws `{type:'fire', op}` -> `World.fireAct`): `feed` 1, `kin` 3, `harden` 2, `offer` 1, `trade` 1,
+  `raid` 2, `refuse` 1, `hold` 0, `name` 0. `kin` and `harden` are **loud** - the village sees the smoke stand double and
+  hears axes - so a build-up is a warning she can answer. `raid`/`hold` set `r.willRaid`/`r.willHold`, latches consumed at
+  the top of `Rv.nightly` ahead of mood and hunger; **hold beats sent**. `refuse` answers the sky's `parley`.
+- **What each side is shown.** `Fire.publicState(w)` is a separate `state.fire` block and it goes **only** to `c.fireOk`
+  connections: `broadcastState()` in index.js sends two payloads, the on-connect state is the village's, and `/api/state`
+  strips it. `rival.held` *is* public on purpose - each Creator should see that the other exists and how much attention
+  they have left to answer with.
+- **Rules learned**: `r.seen` and `g.named` are day numbers and **day 0 is a real day** - test them with `!= null`, never
+  for truth. Everything that got this wrong is fixed; keep it that way.
+- Not done: the second Creator still shares the page, so they see the village map and villagers like any watcher. Only the
+  fire's *own* block is gated. If you want a true blind second player, give them their own page rendering `state.fire`.
+
 ## NEXT (her list, in order)
-1. **A second Creator holding the rival fire** — the last of the picks she made this morning. Another person unlocks
-   `w.rival` with their own password, spends their own attention on their own people, and the two Creators meet through
-   trade, raids and parleys. Hooks are all in `server/rival.js` + the `god` op path in `server/index.js`.
+1. ~~A second Creator holding the rival fire~~ **DONE, see above.** What is left of it:  set a real `FIRE_TOKEN` on box 2 before
+   handing the key to anybody, and decide whether the second player gets their own page.
 2. More magic items when she names them (see the recipe above).
 
 ## Standing preferences / lessons
@@ -88,4 +114,5 @@ foot of this file).
 ## Smoke tests
 `test/smoke_*.mjs`, run with `node test/smoke_threats.mjs` etc. from the repo root. They build fresh worlds in memory and
 read `data/world.json` read-only for the migration checks; none of them write to disk. `smoke_tarot.mjs` turns all 78
-cards and reports effect errors (must be 0).
+cards and reports effect errors (must be 0). `smoke_fire.mjs` and `smoke_funeral3.mjs` are the two new ones.
+All fourteen pass; run them all with `for f in test/smoke_*.mjs; do node $f; done`.
