@@ -607,12 +607,14 @@ function dayPhase(w, remoteActions) {
     if (act.type === 'hobby') dest = 'home';
     if (act.type === 'hunt') dest = act.to === 'meadow' ? 'meadow' : 'forest';
     if (act.type === 'adopt' || act.type === 'pet') dest = null;
+    if (act.type === 'mind') { const c = act.target && byId(w, act.target); dest = c ? (c.location === 'home' ? c.id : c.location) : null; }
     // People who are going to a place move first; people going to a person follow afterwards,
     // so you end up where they went, not where they were.
     if (dest && !byId(w, dest)) moveTo(w, a, dest);
     else if (dest) a.followDest = dest;
   }
   for (const a of living) { if (a.followDest) { moveTo(w, a, a.followDest); a.followDest = null; } }
+  F.careForInfants(w, decisions);
 
   // 2b. what anyone walks, everyone knows. The map grows under their feet.
   for (const a of living) reveal(w, a.pos.x, a.pos.y, a.location.startsWith('wild:') ? 3.5 : 2);
@@ -630,6 +632,7 @@ function dayPhase(w, remoteActions) {
       case 'work': {
         if (a.location === 'field') {
           let y = W.fieldYield(w.day, w.weather);
+          if (a.carrying) y *= 0.6;
           if (a.inv.hoe > 0) { y *= 1.5; if (I.wear(a, 'hoe')) { event(w, `${a.name}'s hoe breaks.`, 'info', [a.id]); remember(w, a, 'Your hoe broke.', 0.4); } }
           if (w.builds.granary?.done) y *= 1.25;
           if ((w.blessedField || 0) >= w.day) y *= 1.5;
@@ -981,6 +984,19 @@ function dayPhase(w, remoteActions) {
       }
       case 'pray': {
         pray(w, a, act.say);
+        break;
+      }
+      case 'mind': {
+        // Sit with someone's baby so the parents can work. The house is where you are now.
+        if (tgt && F.isInfant(w, tgt)) {
+          B.soothe(tgt.body, 0.2);
+          if (a.inv.food >= 0.3 && tgt.body.food < 0.7) { a.inv.food -= 0.3; B.eat(tgt.body, 0.3); }
+          a.attach = a.attach || {}; tgt.tended = tgt.tended || {}; a.attach[tgt.id] = (a.attach[tgt.id] || 0) + 0.5; tgt.tended[a.id] = (tgt.tended[a.id] || 0) + 0.5;
+          for (const pid of tgt.parents || []) { const p = byId(w, pid); if (p && p.alive) { bumpTrust(p, a, 0.06); remember(w, p, `${a.name} minded ${tgt.name} so you could work.`, 0.5); } }
+          B.gladden(a.body, 0.03); a.exposures.closeness = true;
+          if (w.tick === 1) event(w, `${a.name} minds ${tgt.name} for the day.`, 'comfort', [a.id, tgt.id]);
+          remember(w, tgt, `${a.name} stayed with you.`, 0.4);
+        }
         break;
       }
       case 'tend': {
@@ -1695,6 +1711,7 @@ function narrate(w, a, act) {
     case 'split': return s('leaving the village', `${a.name} walks out of the village.`, 'hurt');
     case 'pray': return s('praying', `${a.name} speaks to the sky: "${act.say || ''}"`, 'talk');
     case 'cast': return T ? s(`gift on ${tn}`, `${a.name} turns their gift on ${tn}.`, 'care') : s('casting', `${a.name} reaches for their gift ${where}.`, 'care');
+    case 'mind': return s(`minding ${tn}`, `${a.name} stays with ${tn} so the parents can work.`, 'care');
     case 'adopt': return s('taking in a stray', `${a.name} crouches and holds out a hand to a stray.`, 'care');
     case 'pet': return s('with their animal', `${a.name} sits with their animal, a hand on its back.`, 'care');
     case 'hunt': return s('hunting', `${a.name} goes still in the grass at ${place(act.to || a.location)}, watching for deer.`, 'work');
@@ -1941,7 +1958,9 @@ export function snapshotFor(a, w) {
     weather: W.describe(w.day, w.weather),
     yieldToday: W.fieldYield(w.day, w.weather),
     hearthWood: fireStore(w, a).wood,
-    pets: A.petsOf(w, a).map(x => ({ id: x.id, kind: x.kind, name: x.name, hungry: x.hungry })), strays: A.straysAt(w, a.location).map(x => ({ id: x.id, kind: x.kind, name: x.name })), deer: w.deer || 0,
+    pets: A.petsOf(w, a).map(x => ({ id: x.id, kind: x.kind, name: x.name, hungry: x.hungry })),
+    infants: (a.children || []).map(id => byId(w, id)).filter(c => c && F.isInfant(w, c)).map(c => ({ id: c.id, name: c.name, minder: c.minder || null, otherParent: (c.parents || []).find(p => p !== a.id) || null })),
+    infantsAlone: (w.infantsAlone || []).filter(x => !x.parents.includes(a.id)).map(x => ({ id: x.id, name: x.name })), strays: A.straysAt(w, a.location).map(x => ({ id: x.id, kind: x.kind, name: x.name })), deer: w.deer || 0,
     unexplored: +(1 - exploredFraction(w)).toFixed(3), exploring: !!a.explore,
     builds: w.builds, found: w.found || {}, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
     store: { shelf: w.store.shelf, coin: w.store.coin, prices: Object.fromEntries(Object.keys(I.STORE_PRICES).map(k => [k, { buy: I.buyPrice(w.store, k), sell: I.sellPrice(w.store, k) }])), loans: Object.values(w.store.loans || {}), project: w.store.project },
@@ -1971,7 +1990,7 @@ export function viewFor(a, w) {
   if (a.sense?.kind === 'clairvoyant') { const t = W.describe(w.day + 1, w.weather); senses.push(`Tomorrow: ${t.season}, ${t.sky}.`); }
   if (a.sense?.kind === 'claircognizant') for (const n of s.near) { const o = byId(w, n.id); if (!o) continue; const t = trustOf(o, a); const r = o.wounds.slice().sort((x, y) => y.strength - x.strength)[0]; senses.push(`${n.name} ${t > 0.5 ? 'would take a blow for you' : t > 0.15 ? 'means you well' : t < -0.3 ? 'wishes you harm' : t < -0.1 ? 'does not trust you' : 'has not decided about you'}${r ? `, and is run by an old rule: ${r.belief}` : ', and nothing old runs them'}.`); }
   else if ((a.skills?.stillness || 0) >= 4) hobbyLines.push('When you sit still, something at the edge of you stirs. It is not finished yet.');
-  const felt = [...ageFelt(age), ...B.feltSense(a.body), ...woundFeltSense(a, nearNames), ...griefFelt(a), ...F.familyFelt(w, a), ...hobbyLines, ...A.felt(w, a),
+  const felt = [...ageFelt(age), ...B.feltSense(a.body), ...woundFeltSense(a, nearNames), ...griefFelt(a), ...F.familyFelt(w, a), ...F.infantFelt(w, a), ...hobbyLines, ...A.felt(w, a),
     ...(a.destiny && !a.destiny.fulfilled ? [`There is a pull in you toward something. If you had to say it: ${a.destiny.text.replace(/^(this one|they|he|she|this person)\s+will\s+/i, 'you will ')}`] : a.destiny?.fulfilled ? ['You did the thing you were made for. Whatever comes now is extra.'] : [])];
   const feelings = s.others.map(o => {
     const t = o.trust;
@@ -2033,7 +2052,8 @@ export function viewFor(a, w) {
       'split  (leave the village and walk out past the edge with everyone who trusts you, and light your own fire)',
       'pray {say: "<what you ask of the sky>"}  (no one knows if anything listens)',
       'leave  (end your bond; they will feel abandoned)',
-      'tend {target: <child name>}  (feed and hold a child in front of you)',
+      'tend {target: <child name>}  (feed and hold a child in front of you; with a baby of your own, this is staying home with them)',
+      'mind {target: <baby name>}  (go to a baby\'s house and stay the day so the parents can work; they will remember it)',
       'strike {target: <person name>}',
       'withdraw  (go home, be alone)',
       'hunt {to: meadow|forest}  (deer, if there are any: food if you are quick, tiring either way)',
@@ -2086,7 +2106,7 @@ export function publicState(w) {
       near: a.alive ? sameSpot(w, a).map(o => o.id) : [],
       selfSummary: a.selfSummary, thought: a.thought, lastSaid: a.lastSaid,
       transits: a.transits.map(t => `${t.planet} ${t.aspect} ${t.point}`),
-      brain: a.owner ? a.brain : (a.lent ? 'lent' : a.brain), owned: !!a.owner, connected: a.connected, autopilot: a.autopilot, ownerAway: a.owner && !a.connected ? w.day - (a.ownerSeen ?? w.day) : 0, claimable: !a.owner || (!a.connected && (w.day - (a.ownerSeen ?? w.day)) >= w.weather.daysPerSeason), doing: a.doing || '', doingText: a.doingText || '',
+      brain: a.owner ? a.brain : (a.lent ? 'lent' : a.brain), owned: !!a.owner, connected: a.connected, autopilot: a.autopilot, ownerAway: a.owner && !a.connected ? w.day - (a.ownerSeen ?? w.day) : 0, claimable: !a.owner || (!a.connected && (w.day - (a.ownerSeen ?? w.day)) >= w.weather.daysPerSeason), doing: a.doing || '', doingText: a.doingText || '', carrying: a.carrying || null, minder: a.minder || null,
       voicedBy: a.lent && !a.owner ? (a.voicedName || 'someone') : null, voicedSince: a.lent && !a.owner ? a.voicedSince : null,
       bornDay: a.bornDay, diedDay: a.diedDay,
     })),
@@ -2125,6 +2145,10 @@ export function normaliseAction(w, raw) {
     if (!act.to) return null;
   } else if (type === 'work') {
     act.to = place === 'forest' ? 'forest' : 'field';
+  } else if (type === 'mind' || type === 'babysit' || type === 'sit_with' || type === 'watch') {
+    act.type = 'mind'; act.target = resolveTarget(w, raw.target) || resolveTarget(w, raw.child) || null;
+    if (!act.target) { const alone = (w.infantsAlone || [])[0]; if (alone) act.target = alone.id; else return null; }
+    act.to = act.target;
   } else if (type === 'adopt' || type === 'take_in' || type === 'keep') {
     act.type = 'adopt'; act.animal = typeof raw.animal === 'string' ? raw.animal : (typeof raw.target === 'string' ? raw.target : null); act.call = raw.call || raw.name || null;
   } else if (type === 'pet' || type === 'stroke' || type === 'play' || type === 'feed') {

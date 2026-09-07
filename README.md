@@ -513,3 +513,14 @@ barks until dawn. Deer graze the meadow and the forest and can be hunted for mea
 in spring. Animals show on the map beside their people, inside the house scene, and on a
 villager's page under "Keeps". Brained villagers get `adopt`, `pet` (with a `call` to rename),
 `hunt`, and `buy {item: hen|goat}`.
+
+## Babies cannot be left
+
+A child under six must have someone with them. A parent can stay (tend), a neighbour can come and
+mind them for the day, or a parent can carry them on the hip, which is slower and no good for
+hard work: anyone working the field, foraging, hunting, building or exploring cannot carry. If
+nobody is with the baby it cries, the whole village hears it, the parents remember that they kept
+working, the baby's body writes a rule about being left, and everyone trusts the parents a little
+less. The autopilot parents split the days between them, and open-hearted neighbours go to a baby
+crying alone. Brained villagers are told plainly when their baby is home with no one, and get
+`mind {target}` to sit with someone else's.

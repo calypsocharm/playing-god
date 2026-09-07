@@ -308,3 +308,65 @@ export function familyPublic(w, a) {
   ensure(a);
   return { partner: a.partner, children: a.children, parents: a.parents, bondStrength: a.bondStrength, stars: a.stars ?? null, attach: a.attach, tended: a.tended, neglectDays: a.neglectDays, childDays: a.childDays, isChild: isChild(w, a), kinOwner: !!a.kinOwner, comeOfAgeDay: a.comeOfAgeDay };
 }
+
+// ---------- infants ----------
+// A baby (under six) cannot be left. Someone must be with them: a parent at home, a neighbour
+// minding them, or a parent carrying them on the hip (slower, and no good in the field). A baby
+// left alone cries, and everyone learns something about the parents.
+const HARD = new Set(['work', 'forage', 'scout', 'hunt', 'build', 'strike', 'split', 'take']);
+export const isInfant = (w, a) => a.alive && ageOf(w, a) < 6;
+export function careForInfants(w, decisions) {
+  const living = alive(w);
+  w.infantsAlone = [];
+  for (const a of living) a.carrying = null;
+  for (const c of living) {
+    if (!isInfant(w, c)) continue;
+    ensure(c);
+    const parents = c.parents.map(id => byId(w, id)).filter(p => p && p.alive);
+    const homeOf = (o) => o.home.x === c.home.x && o.home.y === c.home.y;
+    const sitters = living.filter(o => o !== c && !isChild(w, o) && (
+      (o.location === 'home' && homeOf(o)) || o.location === `visit:${c.id}` || parents.some(p => o.location === `visit:${p.id}`)));
+    if (sitters.length) {
+      c.location = 'home'; c.pos = { ...c.home };
+      c.minder = sitters[0].id;
+      for (const s of sitters) { if (!parents.includes(s)) { s.attach = s.attach || {}; s.attach[c.id] = (s.attach[c.id] || 0) + 0.2; c.tended = c.tended || {}; c.tended[s.id] = (c.tended[s.id] || 0) + 0.2; } }
+      c.aloneTicks = 0;
+      continue;
+    }
+    // Nobody at the house. A parent whose day is not hard labour carries the baby.
+    const carrier = parents.find(p => !HARD.has(decisions.get(p.id)?.type)) || null;
+    if (carrier) {
+      carrier.carrying = c.id; c.minder = carrier.id;
+      c.location = carrier.location; c.pos = { x: carrier.pos.x - 0.5, y: carrier.pos.y + 0.2 };
+      carrier.body.energy = B.clamp(carrier.body.energy - 0.02);
+      carrier.attach = carrier.attach || {}; carrier.attach[c.id] = (carrier.attach[c.id] || 0) + 0.1;
+      c.aloneTicks = 0;
+      continue;
+    }
+    // Alone. It cries, and it is heard.
+    c.minder = null; c.location = 'home'; c.pos = { ...c.home };
+    c.aloneTicks = (c.aloneTicks || 0) + 1;
+    c.body.tightness = B.clamp(c.body.tightness + 0.12); c.body.breath = B.clamp(c.body.breath - 0.08);
+    w.infantsAlone.push({ id: c.id, name: c.name, home: c.home, parents: parents.map(p => p.id) });
+    if (c.aloneTicks === 2) {
+      c.body.overwhelmed = Math.max(c.body.overwhelmed, 1);
+      event(w, `${c.name}, a baby, cries alone in ${parents[0] ? parents[0].name + "'s" : 'an empty'} house. The whole village can hear it.`, 'wound', [c.id, ...parents.map(p => p.id)]);
+      for (const p of parents) { remember(w, p, `You left ${c.name} alone. You could hear the crying from where you were, and you kept working.`, 0.9); p.attach = p.attach || {}; p.attach[c.id] = Math.max(0, (p.attach[c.id] || 0) - 0.5); }
+      if (parents[0]) emotionalEvent(w, c, 'abandoned', parents[0], 0.45);
+      for (const o of living) if (!parents.includes(o) && o !== c && !isChild(w, o)) bumpTrust(o, parents[0] || o, parents[0] ? -0.04 : 0);
+    }
+  }
+}
+export function infantFelt(w, a) {
+  const L = [];
+  if (a.carrying) { const c = byId(w, a.carrying); if (c) L.push(`${c.name} is on your hip. You are slower with them, and they are ${c.body.warmth < 0.4 ? 'cold against you' : c.body.food < 0.4 ? 'hungry' : 'quiet, watching everything'}. Nothing hard can be done while you carry them.`); }
+  for (const cid of a.children || []) {
+    const c = byId(w, cid); if (!c || !isInfant(w, c)) continue;
+    if (c.minder === a.id) continue;
+    const m = c.minder && byId(w, c.minder);
+    if (m) L.push(m.carrying === c.id ? `${c.name} is with ${m.name}, on their hip, at ${m.location === "home" ? "home" : (PLACES[m.location]?.label || "somewhere")}.` : `${c.name} is at home with ${m.name}.`);
+    else L.push(`${c.name} is at home with NO ONE. A baby cannot be left. Stay with them (tend), take them with you (go anywhere but the field, forest, quarry or the pale), or ask someone to mind them.`);
+  }
+  for (const x of w.infantsAlone || []) if (!(a.children || []).includes(x.id)) L.push(`You can hear ${x.name} crying alone in ${byId(w, x.parents[0])?.name || 'someone'}'s house. You could go and mind them (mind {target: "${x.name}"}).`);
+  return L;
+}

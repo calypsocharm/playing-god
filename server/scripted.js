@@ -92,6 +92,17 @@ export function scriptedDecide(a, s) {
     if (inv.fiber < 5) return { type: 'forage', to: 'meadow', thought: 'Fiber. Not like them.' };
   }
 
+  // Babies. One parent stays unless someone else is minding; a neighbour goes to a baby crying alone.
+  if (isDay && (s.infants || []).length) {
+    const baby = s.infants[0];
+    const other = baby.otherParent;
+    const someoneElse = baby.minder && baby.minder !== a.id;
+    if (!someoneElse) {
+      const myTurn = !other || (s.day % 2 === 0) === (a.id < other);
+      if (myTurn || inv.food < 0.8 && Math.random() < 0.3) return { type: 'tend', target: baby.id, thought: `${baby.name}. Someone has to stay.` };
+    }
+  }
+  if (isDay && (s.infantsAlone || []).length && b.openness > 0.5 && !(s.infants || []).length && Math.random() < 0.35) return { type: 'mind', target: s.infantsAlone[0].id, thought: 'That baby is alone. I can hear it.' };
   // Animals: take in a stray when the heart is low; sit with your animal; hunt when the larder is thin.
   if (s.strays?.length && (b.joy ?? 0.5) < 0.55 && inv.food >= 1 && Math.random() < 0.5) return { type: 'adopt', thought: 'It keeps looking at me.' };
   if (s.pets?.length && (b.joy ?? 0.5) < 0.5 && Math.random() < 0.2) return { type: 'pet', animal: s.pets[0].name, thought: `${s.pets[0].name}.` };
