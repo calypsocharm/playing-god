@@ -18,6 +18,7 @@ import * as T from './threats.js';
 import * as C from './civic.js';
 import * as Tarot from './tarot.js';
 import * as Rv from './rival.js';
+import * as Fire from './fire.js';
 import * as Mg from './magic.js';
 
 export const TICKS_PER_DAY = 6;
@@ -153,7 +154,7 @@ export function createWorld(saved) {
     saved.mod = saved.mod || { bannedIps: {}, bannedTokens: {}, muted: {} };
     saved.store.loans = saved.store.loans || {}; saved.store.project = saved.store.project ?? null; saved.store.wagesPaid = saved.store.wagesPaid || 0;
     if (saved.store.coin < 120 && !saved.store.funded) { saved.store.coin += 200; saved.store.funded = true; }
-    C.ensure(saved); Tarot.ensure(saved); Rv.ensure(saved);
+    C.ensure(saved); Tarot.ensure(saved); Rv.ensure(saved); Fire.ensureGod(saved);
     if (saved.paused && saved.lastCard?.key === 'major:12' && !saved.ended) { saved.paused = false; saved.stillUntil = saved.day + 1; } if (saved.rival?.seen) reveal(saved, saved.rival.x, saved.rival.y, 5);
     for (const a of saved.agents) { if (a.inv && a.inv.coin == null) a.inv.coin = 3; a.upgrades = a.upgrades || {}; }
     if (!saved.threat && !saved.ended) rollThreat(saved);
@@ -183,7 +184,7 @@ export function createWorld(saved) {
     log: [],             // everything, for the record
   };
   seedVillage(w);
-  Tarot.ensure(w); Rv.ensure(w);
+  Tarot.ensure(w); Rv.ensure(w); Fire.ensureGod(w);
   rollThreat(w);
   return w;
 }
@@ -2064,33 +2065,50 @@ function funeralIfDue(w) {
       else a.longBuried = true;
     }
     if (!q.length) return;
-    q.sort((x, y) => x.day - y.day);   // the longest waiting go to the stones first
   }
-  const f = q[0];
-  if (w.day < f.day + 1) return;                                       // the afternoon after
-  if (w.threat?.landed === w.day) return;                              // not while something is landing
-  q.shift();
+  // No one lies out. A body waits one night and no longer, so everybody owed a grave goes to the
+  // stones in the same afternoon: one walk out, one gathering, a grave and words for each of them.
+  const due = q.filter(f => w.day >= f.day + 1).sort((x, y) => x.day - y.day);
+  if (!due.length) return;
   const living = alive(w).filter(a => !F.isInfant(w, a) && !(a.ill && a.ill.severity > 0.6) && a.body.overwhelmed <= 0);
-  if (!living.length) return;
-  const mourners = living.filter(o => (o.grief || []).some(g => g.for === f.for));
-  const speaker = [...mourners].sort((x, y) => (y.grief.find(g => g.for === f.for)?.intensity || 0) - (x.grief.find(g => g.for === f.for)?.intensity || 0))[0] || oldestOf(living);
-  const words = pick(FUNERAL_WORDS)(f.name, f.age ?? '?', f.cause || 'end');
+  if (!living.length) return;                                          // no one well enough to carry them; tomorrow, then
+  w.funerals = q.filter(f => !due.includes(f));
   for (const a of living) { a.location = 'graves'; a.pos = { x: PLACES.graves.x + rnd(-1.6, 1.6), y: PLACES.graves.y + rnd(-1.2, 0.6) }; }
-  w.graves = w.graves || []; w.graves.push({ for: f.for, name: f.name, day: w.day, cause: f.cause, age: f.age, words, by: speaker.name, mourners: living.length });
-  if (w.graves.length > 200) w.graves.shift();
-  event(w, `The village walks out to the stones and buries ${f.name}. ${speaker.name} says: "${words}"`, 'healed', living.map(a => a.id));
+  w.graves = w.graves || [];
+  const said = [];
+  for (const f of due) {
+    const mourners = living.filter(o => (o.grief || []).some(g => g.for === f.for));
+    const speaker = [...mourners].sort((x, y) => (y.grief.find(g => g.for === f.for)?.intensity || 0) - (x.grief.find(g => g.for === f.for)?.intensity || 0))[0] || oldestOf(living);
+    const words = pick(FUNERAL_WORDS)(f.name, f.age ?? '?', f.cause || 'end');
+    w.graves.push({ for: f.for, name: f.name, day: w.day, cause: f.cause, age: f.age, words, by: speaker.name, mourners: living.length });
+    said.push({ f, speaker, words });
+    remember(w, speaker, `You spoke over ${f.name}'s grave with the whole village listening.`, 1);
+  }
+  while (w.graves.length > 200) w.graves.shift();
+  const names = nameList(due.map(f => f.name));
+  event(w, due.length === 1
+    ? `The village walks out to the stones and buries ${names}. ${said[0].speaker.name} says: "${said[0].words}"`
+    : `The village walks out to the stones and buries ${names} in one afternoon, ${due.length} graves side by side. ${said.map(x => `${x.speaker.name} over ${x.f.name}: "${x.words}"`).join(' ')}`,
+    'healed', living.map(a => a.id));
   for (const a of living) {
-    const g = (a.grief || []).find(x => x.for === f.for);
-    if (g) { g.intensity *= 0.5; g.shared += living.length - 1; g.buried = w.day; a.exposures.closeness = true; }
     const believes = (a.faith || 0) > 0.1;
-    remember(w, a, `You stood at the stones with everyone while ${f.name} was buried. ${speaker === a ? 'You said the words.' : `${speaker.name} said: "${words}"`}${believes ? ` You believe ${f.name} is somewhere better now, and it helps.` : ''} You will not always have time either. Hold what you have.`, 0.9);
+    let stoodFor = 0;
+    for (const { f } of said) {
+      const g = (a.grief || []).find(x => x.for === f.for);
+      if (!g) continue;
+      stoodFor++;
+      g.intensity *= 0.5; g.shared += living.length - 1; g.buried = w.day; a.exposures.closeness = true;
+    }
+    const mine = said.filter(x => (a.grief || []).some(y => y.for === x.f.for));
+    const spoke = said.find(x => x.speaker === a);
+    remember(w, a, `You stood at the stones with everyone while ${names} ${due.length === 1 ? 'was' : 'were'} buried${due.length > 1 ? ', all of them in the one afternoon' : ''}. ${spoke ? 'You said the words.' : `${said[0].speaker.name} said: "${said[0].words}"`}${believes && mine.length ? ` You believe ${nameList(mine.map(x => x.f.name))} ${mine.length === 1 ? 'is' : 'are'} somewhere better now, and it helps.` : ''} You will not always have time either. Hold what you have.`, 0.9);
     a.body.openness = B.clamp(a.body.openness + 0.03);
-    if (believes) { B.soothe(a.body, 0.1); a.faith = B.clamp((a.faith || 0) + 0.02, -1, 1); }
+    if (believes) { B.soothe(a.body, 0.1 * Math.max(1, stoodFor)); a.faith = B.clamp((a.faith || 0) + 0.02, -1, 1); }
     if (a.partner || (a.children || []).length) B.gladden(a.body, 0.05);
     for (const o of living) if (o !== a && Math.random() < 0.5) bumpTrust(a, o, 0.03);
   }
-  remember(w, speaker, `You spoke over ${f.name}'s grave with the whole village listening.`, 1);
 }
+const nameList = (xs) => xs.length <= 1 ? (xs[0] || 'no one') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1];
 function oldestOf(list) { return [...list].sort((x, y) => (y.bornDay ?? 0) - (x.bornDay ?? 0))[list.length - 1]; }
 
 // ---------- the cards ----------
@@ -2140,6 +2158,7 @@ function closeSeason(w) {
   if (w.seasonBuilt) { report.earned = Math.min(6, report.earned + 1); report.why.push(`1 for ${w.seasonBuilt === 1 ? 'a building' : w.seasonBuilt + ' buildings'} the village chose and raised`); }
   const interest = C.interest(w, byId, remember); if (interest) event(w, `The bank pays ${interest} coin on what people keep there.`, 'trade');
   w.god.attention = Math.max(0, Math.min(w.god.max, w.god.attention + report.earned));
+  Fire.weighFire(w);   // the far fire is weighed too, on its own terms, in its own log
   event(w, `The ${endedSeason} is weighed: ${report.earned >= 0 ? '+' : ''}${report.earned} attention. ${report.why.join('; ')}.`, 'season');
   if ((w.despair || 0) >= 2 && !w.ended) {
     w.ended = { day: w.day, why: 'two seasons of loss', alive: alive(w).length };
@@ -2158,6 +2177,10 @@ function closeSeason(w) {
 }
 
 // ---------- god ----------
+
+// The second Creator's door. The far fire's own acts, spent out of the far fire's own attention.
+export function fireAct(w, msg) { return Fire.fireAct(w, msg, rivalContext(w)); }
+
 
 export function godAct(w, msg) {
   let cost = GOD_COSTS[msg.op];
@@ -2432,6 +2455,7 @@ export function publicState(w) {
     reports: (w.reports || []).slice(-4), threatLog: (w.threatLog || []).slice(-8), ended: w.ended || null,
     card: w.lastCard || null, cards: (w.cards || []).slice(-12), deckLeft: (w.deck || []).length,
     rival: Rv.publicState(w),
+    fire: Fire.publicState(w),
     graves: (w.graves || []).slice(-40), funeralsDue: (w.funerals || []).length,
     standing: standingNow(w), history: condensedHistory(w),
     holidays: w.holidays || [], holidayToday: w.holidayToday || null, pendingHoliday: w.pendingHoliday ? { by: w.pendingHoliday.by, reason: w.pendingHoliday.reason } : null, sick: alive(w).filter(a => a.ill).length,

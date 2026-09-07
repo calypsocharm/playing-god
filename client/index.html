@@ -205,9 +205,9 @@
   </div>
   <div class="tab" id="tab-agent"><div id="inspector" class="muted">Click a villager on the map.</div></div>
   <div class="tab" id="tab-weather">
-    <div class="muted">The Creator shapes conditions and speaks through the sky. One per world. You cannot reach in and fix anyone.</div>
+    <div class="muted">The Creator shapes conditions and speaks through the sky. One per world. You cannot reach in and fix anyone. <b>One door, two keys:</b> the other one belongs to whoever holds the fire past the pale, and it opens a different panel.</div>
     <div id="godGate">
-      <label>Creator password <span class="muted">· not a weather request. This unlocks the controls below. On your own machine the password is the word <code>weather</code>.</span></label>
+      <label>Password <span class="muted">· not a weather request. This unlocks the controls below. On your own machine the sky's password is the word <code>weather</code>, and the far fire's is <code>farfire</code>.</span></label>
       <div class="row"><input id="godToken" type="password" placeholder="type the password here" style="flex:1" autocomplete="off"><button class="act" id="godLogin">Unlock</button></div>
       <div class="muted" id="godMsg"></div>
     </div>
@@ -255,6 +255,38 @@
       <div class="row"><select id="nudgeA" style="flex:1"></select><select id="nudgeB" style="flex:1"></select><select id="nudgePlace"><option>well</option><option>hearth</option><option>field</option><option>forest</option></select><button class="act" id="btnNudge">Nudge</button></div>
       <h3>Danger</h3>
       <button class="act warn" id="btnReset">Start the world over</button>
+    </div>
+    <div id="firePanel" hidden>
+      <div class="muted">You are not the sky over the village. You are whatever the people past the pale think is watching them: eight or so at a fire out where the map runs out, in the same winter, hunting the same deer. You cannot reach into the village and its Creator cannot reach into you. The two of you only ever meet at the edge.</div>
+      <h3>Your attention <span class="muted" id="fAttnNum"></span></h3>
+      <div class="bar" style="height:10px"><i id="fAttnBar" style="width:0%"></i></div>
+      <div class="muted" style="margin-top:4px">Six, not eight; a smaller fire has a smaller sky. Earned when the season is weighed, and weighed on your terms, not theirs: two for the season turning, one for no one lost at the fire, one for a fire that is fed, one each for trading with the village and for what you carried to their edge, up to two for taking what your people needed. One taken for everyone lost, and one for every night you went at them and were driven back.</div>
+      <h3>Where things stand at the fire</h3>
+      <div id="fireStanding" class="muted">Nothing yet.</div>
+      <h3>Your own</h3>
+      <div class="row">
+        <button class="act" id="btnFeed">Food at the fire</button>
+        <button class="act" id="btnKin">Someone comes down out of the hills</button>
+        <button class="act" id="btnHarden">Sharpen what you have</button>
+      </div>
+      <div class="muted" style="margin-top:4px">Feeding them is quiet. The other two are not: the village hears axes, and sees the smoke stand double.</div>
+      <h3>The edge</h3>
+      <div class="row">
+        <button class="act" id="btnFOffer">Carry food to their edge</button>
+        <button class="act" id="btnFTrade">Send a trader in the morning</button>
+        <button class="act warn" id="btnFRaid">Go at them tonight</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="act" id="btnFHold">Hold them at the fire tonight</button>
+        <button class="act" id="btnFRefuse">Refuse the star</button>
+      </div>
+      <div class="muted" style="margin-top:4px">Going at them when they are awake and armed loses you someone for nothing. Holding costs nothing and is the only way to be sure they stay put.</div>
+      <label style="margin-top:10px">What your people call the thing over their fire <span class="muted">· free · the village hears it eventually</span></label>
+      <div class="row"><input id="fireName" maxlength="24" placeholder="the Dark" style="flex:1"><button class="act" id="btnFName">Name it</button></div>
+      <h3>The last season, weighed</h3>
+      <div id="fireReport" class="muted">No season has turned yet.</div>
+      <h3>What has happened at the fire</h3>
+      <div id="fireLog" class="muted">Nothing yet.</div>
     </div>
   </div>
   <div class="tab" id="tab-watch">

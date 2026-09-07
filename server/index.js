@@ -16,12 +16,14 @@ import * as Train from './training.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 3333);
 const GOD_TOKEN = process.env.GOD_TOKEN || 'weather';
+// One door, two keys. The other key belongs to whoever holds the fire past the pale.
+const FIRE_TOKEN = process.env.FIRE_TOKEN || 'farfire';
 const CLIENT = path.join(ROOT, 'client');
 const MIME = { '.md': 'text/plain; charset=utf-8', '.py': 'text/plain; charset=utf-8', '.jsonl': 'application/jsonl', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
 
 let world = World.createWorld(await Mem.load());
 const remoteActions = new Map();   // agentId -> normalised action for next tick
-const clients = new Map();         // ws -> { role, godOk, owned: Set<agentId>, token }
+const clients = new Map();         // ws -> { role, godOk, fireOk, owned: Set<agentId>, token }
 const uid = () => Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 8);
 
 // ---------- http ----------
@@ -62,7 +64,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' });
     return res.end(JSON.stringify({ name: world.camp?.name || '', day: world.day, yearDays: World.yearDays(world), chapters: world.chapters || [], chronicle: world.chronicle, quotes, skyName: world.god.name, ended: world.ended || null, reports: world.reports || [], history: World.condensedHistory(world), standing: World.standingNow(world), goals: Object.entries(World.GOALS).map(([k, label]) => ({ key: k, label, done: world.goals[k]?.done ?? null })), dead: world.agents.filter(a => !a.alive).map(a => ({ name: a.name, day: a.diedDay, age: a.ageAtDeath, cause: a.causeOfDeath })) }));
   }
-  if (url.pathname === '/api/state') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(World.publicState(world))); }
+  if (url.pathname === '/api/state') { const { fire, ...village } = World.publicState(world); res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(village)); }
   let file = url.pathname === '/' ? '/index.html' : url.pathname;
   file = path.normalize(file).replace(/^(\.\.[/\\])+/, '');
   // The training recipe is served read-only from /train.
@@ -120,6 +122,15 @@ function moderate(m) {
 const wss = new WebSocketServer({ server });
 const send = (ws, msg) => { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); };
 const broadcast = (msg) => { const s = JSON.stringify(msg); for (const ws of clients.keys()) if (ws.readyState === 1) ws.send(s); };
+// The state everyone gets, minus the far fire's own block: its attention, its private log and
+// what it has told its people to do tonight belong to whoever holds that fire, not to the village.
+const broadcastState = () => {
+  const full = World.publicState(world);
+  const { fire, ...village } = full;
+  const forVillage = JSON.stringify({ type: 'state', state: village });
+  const forFire = JSON.stringify({ type: 'state', state: full });
+  for (const [ws, c] of clients) if (ws.readyState === 1) ws.send(c.fireOk ? forFire : forVillage);
+};
 
 // ---------- guardrails ----------
 // Who is on the other end, how fast they may talk, and who has been shown the door.
@@ -140,10 +151,10 @@ wss.on('connection', (ws, req) => {
   if (world.mod.bannedIps[ip]) { ws.close(4003, 'banned'); return; }
   const open = (perIp.get(ip) || 0) + 1; perIp.set(ip, open);
   if (open > 6) { ws.close(4008, 'too many connections'); perIp.set(ip, open - 1); return; }
-  const c = { role: 'spectator', godOk: false, owned: new Set(), token: null, ip, since: Date.now() };
+  const c = { role: 'spectator', godOk: false, fireOk: false, owned: new Set(), token: null, ip, since: Date.now() };
   clients.set(ws, c);
   send(ws, { type: 'welcome', godRequired: true });
-  send(ws, { type: 'state', state: World.publicState(world) });
+  { const { fire, ...village } = World.publicState(world); send(ws, { type: 'state', state: village }); }
 
   ws.on('message', (buf) => {
     if (buf.length > 64 * 1024) return;                                   // nothing legitimate is this big
@@ -162,7 +173,14 @@ wss.on('connection', (ws, req) => {
 function handle(ws, c, m) {
   switch (m.type) {
     case 'hello': {
-      if (m.godToken !== undefined) { c.godOk = m.godToken === GOD_TOKEN; send(ws, { type: 'god', ok: c.godOk }); }
+      if (m.godToken !== undefined) {
+        // The same box takes either key. The village's Creator is never also the far fire's.
+        c.godOk = m.godToken === GOD_TOKEN;
+        c.fireOk = !c.godOk && m.godToken === FIRE_TOKEN;
+        send(ws, { type: 'god', ok: c.godOk, fire: c.fireOk });
+        const full = World.publicState(world); const { fire, ...village } = full;
+        send(ws, { type: 'state', state: c.fireOk ? full : village });
+      }
       if (m.token) c.token = String(m.token).slice(0, 40);
       if (c.token && world.mod.bannedTokens[c.token]) { ws.close(4003, 'banned'); return; }
       // Reconnect any agents this token owns.
@@ -173,11 +191,22 @@ function handle(ws, c, m) {
       if (!c.godOk) return send(ws, { type: 'error', error: 'not the weather' });
       if (['mute', 'unmute', 'boot', 'ban', 'unban', 'delchat'].includes(m.op)) {
         const r = moderate(m); if (r.error) return send(ws, { type: 'error', error: r.error });
-        send(ws, { type: 'result', text: r.text }); broadcast({ type: 'state', state: World.publicState(world) }); return;
+        send(ws, { type: 'result', text: r.text }); broadcastState(); return;
       }
       if (m.op === 'reset') { world = World.createWorld(null); remoteActions.clear(); for (const cc of clients.values()) cc.owned.clear(); Mem.save(world); }
       else { const r = World.godAct(world, m); if (r.error) return send(ws, { type: 'error', error: r.error }); send(ws, { type: 'result', text: r.text || describeGodAct(world, m, r) }); }
-      broadcast({ type: 'state', state: World.publicState(world) });
+      broadcastState();
+      break;
+    }
+    // The far fire's acts. Its Creator can reach their own people and the edge between the two
+    // fires, and nothing else in the village.
+    case 'fire': {
+      if (!c.fireOk) return send(ws, { type: 'error', error: 'that fire is not yours' });
+      if (!allow(c, 'fire', 12, 60000)) return send(ws, { type: 'error', error: 'slow down' });
+      const r = World.fireAct(world, m);
+      if (r.error) return send(ws, { type: 'error', error: r.error });
+      send(ws, { type: 'result', text: r.text || 'Done.' });
+      broadcastState();
       break;
     }
     case 'adopt': {
@@ -219,7 +248,7 @@ function handle(ws, c, m) {
       a.location = 'road'; a.pos = { ...World.PLACES.road };
       send(ws, { type: 'adopted', agentId: a.id, token: c.token, born: true });
       send(ws, { type: 'decide', agentId: a.id, view: World.viewFor(a, world) });
-      broadcast({ type: 'state', state: World.publicState(world) });
+      broadcastState();
       break;
     }
     case 'carry': {
@@ -250,7 +279,7 @@ function handle(ws, c, m) {
       World.event(world, `${a.name} arrives on the road from another village, carrying a diary of ${a.diary.length} nights.`, 'arrive', [a.id]);
       send(ws, { type: 'adopted', agentId: a.id, token: c.token, born: true });
       send(ws, { type: 'decide', agentId: a.id, view: World.viewFor(a, world) });
-      broadcast({ type: 'state', state: World.publicState(world) });
+      broadcastState();
       break;
     }
     case 'release': {
@@ -261,7 +290,7 @@ function handle(ws, c, m) {
     case 'action': {
       const a = World.byId(world, m.agentId);
       if (!a || a.owner !== c.token) return;
-      if (m.action && (m.action.type === 'holiday' || m.action.type === 'name_day') && world.pendingHoliday?.by === a.id) { if (World.nameHoliday(world, a, m.action)) broadcast({ type: 'state', state: World.publicState(world) }); return; }
+      if (m.action && (m.action.type === 'holiday' || m.action.type === 'name_day') && world.pendingHoliday?.by === a.id) { if (World.nameHoliday(world, a, m.action)) broadcastState(); return; }
       const act = World.normaliseAction(world, m.action);
       if (act) {
         if (m.thought) act.thought = String(m.thought).slice(0, 300);
@@ -321,7 +350,7 @@ function handle(ws, c, m) {
       if (!a || a.owner !== c.token) return;
       a.guidance = typeof m.text === 'string' ? m.text.trim().slice(0, 300) : '';
       if (a.guidance) World.remember(world, a, 'Something in you settled on a direction.', 0.5);
-      broadcast({ type: 'state', state: World.publicState(world) });
+      broadcastState();
       break;
     }
     case 'watch': {
@@ -342,7 +371,7 @@ function handle(ws, c, m) {
       c.lend = !!m.on;
       c.lendName = String(m.name || '').slice(0, 24);
       for (const a of world.agents) if (!a.owner) a.lent = [...clients.values()].some(x => x.lend);
-      broadcast({ type: 'state', state: World.publicState(world) });
+      broadcastState();
       break;
     }
     case 'actions': {
@@ -373,13 +402,13 @@ function handle(ws, c, m) {
       const a = World.byId(world, m.agentId);
       if (!a || a.owner !== c.token) return;
       const spec = m.spec && typeof m.spec === 'object' ? m.spec : {};
-      if (World.nameHoliday(world, a, spec)) broadcast({ type: 'state', state: World.publicState(world) });
+      if (World.nameHoliday(world, a, spec)) broadcastState();
       break;
     }
     case 'told': {
       // The weather's own model told tonight's story. It replaces the scripted line.
       if (!c.godOk) return;
-      if (World.setChronicle(world, Number(m.day), m.text)) broadcast({ type: 'state', state: World.publicState(world) });
+      if (World.setChronicle(world, Number(m.day), m.text)) broadcastState();
       break;
     }
     case 'note': {
@@ -387,7 +416,7 @@ function handle(ws, c, m) {
       const a = World.byId(world, m.agentId);
       if (!a || a.owner !== c.token || typeof m.text !== 'string' || !m.text.trim()) return;
       World.leaveNote(world, a, m.text);
-      broadcast({ type: 'state', state: World.publicState(world) });
+      broadcastState();
       break;
     }
   }
@@ -407,7 +436,7 @@ async function tick() {
     World.step(world, remoteActions);
     remoteActions.clear();
     Train.settle(world);   // close every recorded decision with what it did to the body
-    broadcast({ type: 'state', state: World.publicState(world) });
+    broadcastState();
     for (const [ws, c] of clients) if (c.watching) { const a = World.byId(world, c.watching); if (!a) continue; const f = World.eyesFor(a, world, c.watchMem || 0); c.watchMem = f.memCount; send(ws, { type: 'eyes', ...f }); if (!a.alive) c.watching = null; }
     // Attention. A brain is only asked to choose when something calls to it: a new face, a word
     // spoken to them, a change in the body, nightfall. Otherwise the villager keeps doing what they
@@ -472,6 +501,7 @@ async function tick() {
 server.listen(PORT, () => {
   console.log(`Playing God on http://localhost:${PORT}`);
   console.log(`God token: ${GOD_TOKEN}  (set GOD_TOKEN to change)`);
+  console.log(`Far fire token: ${FIRE_TOKEN}  (set FIRE_TOKEN to change) - the second Creator`);
   console.log(`Village: ${world.agents.filter(a => a.alive).length} alive, day ${world.day}`);
   // Self-update: on the box the installer leaves an update script; run it every few minutes so a push
   // to main is live within minutes instead of at the top of the hour. It only restarts when main moved.

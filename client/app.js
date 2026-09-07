@@ -7,6 +7,7 @@ import * as Interior from './interior.js';
 let state = null;
 let selected = null;
 let godOk = false;
+let fireOk = false;
 let token = localStorage.getItem('playinggod.token') || null;
 const owned = new Set();
 const display = new Map(); // agentId -> {x,y} smoothed position
@@ -41,12 +42,16 @@ function onMessage(m) {
     case 'state':
       if (frozen) { heldState = m.state; break; }
       state = m.state; if (wantSelect && selected === wantSelect && state.agents.some(a => a.id === wantSelect)) showTab('agent'); renderPanels(); renderTalkBar(); break;
-    case 'god': godOk = m.ok; $('pillGod').textContent = godOk ? 'you are the Creator' : 'watching'; $('pillGod').classList.toggle('on', godOk); $('godPanel').hidden = !godOk;
-      $('godMsg').textContent = godOk ? 'Unlocked. You are the Creator. The village will only ever know you as the weather. Set the wind and cold with the sliders below.' : 'That is not the password. This box does not take weather; the sliders below do, once unlocked. On your own machine the password is the word: weather';
-      if (godOk) $('godGate').style.opacity = 0.55;
-
-      $('godMsg').style.color = godOk ? 'var(--good)' : 'var(--bad)';
-      if (!godOk && localStorage.getItem('playinggod.god')) log('god token refused'); break;
+    case 'god': godOk = m.ok; fireOk = !!m.fire;
+      $('pillGod').textContent = godOk ? 'you are the Creator' : fireOk ? 'you hold the far fire' : 'watching'; $('pillGod').classList.toggle('on', godOk || fireOk);
+      $('godPanel').hidden = !godOk; $('firePanel').hidden = !fireOk;
+      $('godMsg').textContent = godOk ? 'Unlocked. You are the Creator. The village will only ever know you as the weather. Set the wind and cold with the sliders below.'
+        : fireOk ? 'Unlocked, but not as the sky. You hold the fire past the pale: your own people, your own attention, your own winter. The village is not yours to touch.'
+        : 'That is not a password this door knows. This box does not take weather; the sliders below do, once unlocked. On your own machine the sky is the word: weather, and the far fire is: farfire';
+      if (godOk || fireOk) $('godGate').style.opacity = 0.55;
+      if (fireOk && state) renderFire();   // don't sit blank until the next tick
+      $('godMsg').style.color = (godOk || fireOk) ? 'var(--good)' : 'var(--bad)';
+      if (!godOk && !fireOk && localStorage.getItem('playinggod.god')) log('token refused'); break;
     case 'adopted': token = m.token; localStorage.setItem('playinggod.token', token); owned.add(m.agentId); updateBrainPill(); renderBrainTab(); renderTalkBar(); break;
     case 'decide': onDecide(m); break;
     case 'consolidate': onConsolidate(m); break;
@@ -1238,7 +1243,8 @@ function renderPanels() {
   const fam = `<br>${couples} couple${couples === 1 ? '' : 's'} · ${kids} child${kids === 1 ? '' : 'ren'}${expecting ? ` · ${expecting} expecting` : ''}${s.camp?.founded ? `<br><b style="color:var(--warm)">${esc(s.camp.name)}</b>, past the edge: ${campers} people, fire wood ${s.camp.wood}` : ''}`;
   const ended = s.ended ? `<div class="mem" style="border:1px solid var(--bad);padding:8px;margin-bottom:8px"><b style="color:var(--bad)">The book is closed.</b> Day ${s.ended.day}: ${esc(s.ended.why)}. ${s.ended.alive} were left, and none had the heart to go on. <a href="story.html" style="color:var(--warm)">Read it as a book →</a>${godOk ? ` <button class="act warn" id="btnAgain" style="margin-left:6px">Begin again</button>` : ''}</div>` : '';
   const coming = s.threat && !s.threat.landed && s.threat.known ? `<br><b style="color:var(--warm)">Everyone says ${esc(s.threat.name)} is coming</b> in ${s.threat.daysLeft} day${s.threat.daysLeft === 1 ? '' : 's'}.` : s.threat?.landed && s.day - s.threat.landed <= 3 ? `<br><b style="color:var(--bad)">${esc(s.threat.name[0].toUpperCase() + s.threat.name.slice(1))} has landed.</b> ${esc(s.threat.text || '')}` : '';
-  const rivalLine = s.rival?.seen ? `<br><b style="color:${s.rival.mood === 'hostile' || s.rival.mood === 'cold' ? 'var(--bad)' : 'var(--warm)'}">${esc(s.rival.name[0].toUpperCase() + s.rival.name.slice(1))}</b>, past the pale: ${s.rival.people} people, ${esc(s.rival.mood)} toward the village${s.rival.trader?.day === s.day ? ' · their trader is at the edge' : ''}` : '';
+  const heldLine = s.rival?.held ? ` · <b style="color:var(--warm)">someone is holding that fire</b>, and they call themselves ${esc(s.rival.held.name)} (${s.rival.held.attention} of ${s.rival.held.max} attention left)` : '';
+  const rivalLine = s.rival?.seen != null ? `<br><b style="color:${s.rival.mood === 'hostile' || s.rival.mood === 'cold' ? 'var(--bad)' : 'var(--warm)'}">${esc(s.rival.name[0].toUpperCase() + s.rival.name.slice(1))}</b>, past the pale: ${s.rival.people} people, ${esc(s.rival.mood)} toward the village${s.rival.trader?.day === s.day ? ' · their trader is at the edge' : ''}${heldLine}` : '';
   const cardLine = s.card && s.day - s.card.day <= 1 ? `<br><b style="color:var(--warm)">The sky turned ${esc(s.card.name)}.</b> ${esc(s.card.text)}` : '';
   $('villageSummary').innerHTML = ended + `${alive.length} alive · ${s.weather.sky} · hearth wood ${s.hearth.wood}${coming}${cardLine}${rivalLine}<br>` +
     Object.entries(branches).map(([k, v]) => `${v} ${k}`).join(' · ') + fam + frontier + `<br>${builds}${lessons}`;
@@ -1288,6 +1294,7 @@ function renderPanels() {
   $('goals').innerHTML = goals.map(g => `<div class="mem" style="${g.done != null ? 'color:var(--good)' : 'color:var(--dim)'}">${g.done != null ? '✓' : '·'} ${esc(g.label)}${g.done != null ? ` <span class="muted">day ${g.done}</span>` : ''}</div>`).join('');
   renderInspector();
   renderWeather();
+  renderFire();
   renderBrainTab();
   renderWatchers(s);
 }
@@ -1484,7 +1491,7 @@ function renderWeather() {
   const cardHtml = !cd ? 'No card has been turned.' : `<div class="mem" style="border-left:3px solid ${suitCol(cd.suit)};padding-left:8px"><b style="color:${suitCol(cd.suit)}">${esc(cd.name)}</b> <span class="muted">· ${esc(cd.meaning)} · day ${cd.day} · turned by ${cd.by === 'sky' ? 'the sky itself' : 'you'}</span><br>${esc(cd.text)}</div>`
     + ((state.cards || []).length > 1 ? `<div class="muted" style="margin-top:4px">Before that: ${state.cards.slice(0, -1).reverse().slice(0, 6).map(c => `<span style="color:${suitCol(c.suit)}">${esc(c.name)}</span> <span class="muted">d${c.day}</span>`).join(' · ')}</div>` : '');
   if ($('cardBox').innerHTML !== cardHtml) $('cardBox').innerHTML = cardHtml;
-  $('btnParley').disabled = !can('parley') || !state.rival?.seen; $('btnParley').title = state.rival?.seen ? `${state.rival.name} are ${state.rival.mood} toward the village` : 'no other fire has been seen yet';
+  $('btnParley').disabled = !can('parley') || state.rival?.seen == null; $('btnParley').title = state.rival?.seen != null ? `${state.rival.name} are ${state.rival.mood} toward the village${state.rival.held ? `, and ${state.rival.held.name} is holding them. They can refuse the star.` : ''}` : 'no other fire has been seen yet';
   $('btnDraw').disabled = !can('draw'); $('deckLeft').textContent = `· ${state.deckLeft ?? 78} left in the deck`;
   // What is coming, how ready they are, and whether to tell them.
   const t = state.threat;
@@ -1504,6 +1511,58 @@ function renderWeather() {
   if ($('reportBox').innerHTML !== repHtml) $('reportBox').innerHTML = repHtml;
   if (g.omens && !$('omenKind').options.length) $('omenKind').innerHTML = Object.entries(g.omens).map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join('');
 }
+
+// ---------- the second Creator: the far fire's own panel ----------
+// Only ever drawn from what the far fire is entitled to know: their own people, and what the
+// village has done where they could see it.
+function renderFire() {
+  if (!fireOk || !state) return;
+  const f = state.fire; if (!f) return;
+  const g = f.god || { attention: 0, max: 6, costs: {} };
+  const can = (op) => g.attention >= (g.costs?.[op] ?? 0);
+  $('fAttnNum').textContent = '\u00b7 ' + g.attention + ' of ' + g.max + ' \u00b7 they call you ' + g.name + (g.named != null ? ' since day ' + g.named : ' (unnamed)');
+  $('fAttnBar').style.width = Math.round((g.attention / g.max) * 100) + '%';
+
+  const hungry = f.hungryNights > 0;
+  const bits = [];
+  bits.push('<b>' + esc(cap(f.name)) + '</b>, under ' + esc(f.leader) + ' \u00b7 <b>' + f.people + '</b> at the fire');
+  bits.push('food <b style="color:' + (f.food < 3 ? 'var(--bad)' : 'var(--good)') + '">' + f.food + '</b>' + (hungry ? ' \u00b7 <span style="color:var(--bad)">' + f.hungryNights + ' hungry night' + (f.hungryNights === 1 ? '' : 's') + '</span>' : ''));
+  bits.push('strength <b>' + f.strength + '</b>');
+  bits.push('toward the village: <b style="color:' + (f.mood === 'hostile' || f.mood === 'cold' ? 'var(--bad)' : 'var(--warm)') + '">' + esc(f.mood) + '</b>');
+  const seenLine = f.seen ? 'The village has known you since day ' + f.seen + '.' : 'The village has not seen your fire yet. Until a scout walks near, there is nothing between you and nothing to spend attention on but your own.';
+  const tonight = f.willRaid ? '<b style="color:var(--bad)">They go at the village tonight.</b>' : f.willHold ? '<b>They stay at the fire tonight.</b>' : 'Tonight is up to hunger and mood unless you say otherwise.';
+  const owed = (f.sentToUs ? 'The village has carried <b>' + f.sentToUs + '</b> food out to you. ' : '') + (f.offered ? 'You have carried <b>' + f.offered + '</b> to theirs. ' : '') + (f.trades ? '<b>' + f.trades + '</b> trade' + (f.trades === 1 ? '' : 's') + ' between you. ' : '');
+  const raid = (f.raids || []).slice(-1)[0];
+  const raidLine = raid ? '<br>Last time they went, day ' + raid.day + ': ' + (raid.repelled ? '<span style="color:var(--bad)">driven off, and one did not come home.</span>' : '<span style="color:var(--good)">they took ' + raid.food + ' food, ' + raid.wood + ' wood, ' + raid.coin + ' coin.</span>') : '';
+  const parley = f.parleyOpen ? '<br><b style="color:var(--warm)">The sky has stood one star over both fires.</b> Stand under it and a trader walks in the morning, or refuse it.' : '';
+  $('fireStanding').innerHTML = '<div class="mem">' + bits.join(' \u00b7 ') + '<br>' + seenLine + '<br>' + tonight + (owed ? '<br>' + owed : '') + raidLine + parley + '</div>';
+
+  const dis = (id, op, extra) => { const b = $(id); if (!b) return; b.disabled = !can(op) || !!extra; b.title = 'costs ' + (g.costs?.[op] ?? 0); };
+  dis('btnFeed', 'feed'); dis('btnKin', 'kin', f.people >= 20); dis('btnHarden', 'harden', f.strength >= 8);
+  dis('btnFOffer', 'offer', !f.seen || f.food < 1); dis('btnFTrade', 'trade', !f.seen); dis('btnFRaid', 'raid', !f.seen);
+  dis('btnFHold', 'hold', !f.seen); dis('btnFRefuse', 'refuse', !f.parleyOpen);
+
+  const rep = (f.reports || []).slice(-1)[0];
+  $('fireReport').innerHTML = !rep ? 'No season has turned yet.' :
+    '<div class="mem"><b style="color:' + (rep.earned >= 0 ? 'var(--good)' : 'var(--bad)') + '">' + (rep.earned >= 0 ? '+' : '') + rep.earned + ' attention</b> <span class="muted">\u00b7 day ' + rep.day + '</span><br><span class="muted">' + rep.why.map(esc).join(' \u00b7 ') + '</span><br>' + rep.people + ' at the fire \u00b7 ' + rep.food + ' food \u00b7 ' + esc(rep.mood) + ' toward the village</div>'
+    + ((f.reports || []).length > 1 ? '<div class="muted" style="margin-top:4px">Before that: ' + f.reports.slice(0, -1).reverse().map(r => 'd' + r.day + ' ' + (r.earned >= 0 ? '+' : '') + r.earned).join(' \u00b7 ') + '</div>' : '');
+
+  const lg = (f.log || []).slice().reverse();
+  $('fireLog').innerHTML = lg.length ? lg.map(x => '<div class="mem"><span class="muted">d' + x.day + '</span> ' + esc(x.text) + '</div>').join('') : 'Nothing yet.';
+}
+const cap = (s) => String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1);
+const fire = (op, extra) => send(Object.assign({ type: 'fire', op }, extra || {}));
+$('btnFeed').onclick = () => fire('feed');
+$('btnKin').onclick = () => fire('kin');
+$('btnHarden').onclick = () => fire('harden');
+$('btnFOffer').onclick = () => fire('offer');
+$('btnFTrade').onclick = () => fire('trade');
+$('btnFRaid').onclick = () => { if (confirm('Send them at the village tonight? If it is awake and armed you lose someone for nothing.')) fire('raid'); };
+$('btnFHold').onclick = () => fire('hold');
+$('btnFRefuse').onclick = () => fire('refuse');
+$('btnFName').onclick = () => { const t = $('fireName').value.trim(); if (!t) return; fire('name', { text: t }); $('fireName').value = ''; };
+$('fireName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnFName').click(); });
+
 function sendWeather() {
   send({ type: 'god', op: 'weather', winterHarshness: +$('harsh').value, harvest: +$('harvest').value, daysPerSeason: +$('days').value, tickMs: +$('tickms').value * 1000 });
   weatherDirty = false;
