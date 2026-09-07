@@ -79,7 +79,21 @@ export function show(w, work, maker, o, remember, bumpTrust, fresh = false) {
   else { bumpTrust(o, maker, 0.03); remember(w, o, `${maker.name} ${fresh ? 'showed you' : 'has'} a ${art.label}, "${work.title}": ${work.line}`, 0.5); }
 }
 // At the fire, someone tells a work of theirs. Once a night, if a maker is there and has one.
-export function nightlyTelling(w, atHearth, remember, bumpTrust, event) {
+export function nightlyTelling(w, atHearth, remember, bumpTrust, event, hearLegend) {
+  // First: the legends. What the village has seen that was worth telling twice gets told, by
+  // whoever is at the fire, whether or not they ever made anything. This is how the pale stops
+  // being a rumour: someone says it out loud, and the ones who hear it want to go and look.
+  const legends = (w.legends || []).filter(l => w.day - l.day < 400);
+  if (legends.length && atHearth.length > 1 && Math.random() < 0.4) {
+    const l = [...legends].sort((x, y) => (x.told - y.told) || (y.day - x.day))[0];
+    const teller = pick(atHearth.filter(a => (a.works || []).some(k => k === 'story') || (a.faith || 0) > 0.3)) || pick(atHearth);
+    const listeners = atHearth.filter(o => o !== teller);
+    l.told = (l.told || 0) + 1;
+    for (const o of listeners) hearLegend && hearLegend(w, o, l, teller);
+    remember(w, teller, `You told it at the fire again: ${l.text} They all went quiet for it.`, 0.7);
+    event(w, `${teller.name} tells it at the fire: ${l.text}`, 'wonder', [teller.id, ...listeners.map(o => o.id)]);
+    return;
+  }
   const makers = atHearth.filter(a => (a.works || []).length);
   if (!makers.length || Math.random() < 0.5) return;
   const a = pick(makers);

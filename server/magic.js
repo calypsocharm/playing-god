@@ -52,9 +52,16 @@ export function nightly(w, a) {
 }
 
 // Out in the pale, sometimes, the next thing is found.
-export function maybeFind(w, a, event, remember) {
+// This used to hang off "did the walker arrive exactly at the tile they aimed for", which the map
+// made all but impossible: reveal() clears 4.2 around them as they walk, so the nearest unmapped
+// tile is always further than that, a step is 4, and the arrival window was 4.2 to 5.0 with up to
+// 5 units of jitter thrown on top. In 1243 days of a real village it never once landed. Now it is
+// what the fiction always said it was: a chance on any step taken out past the edge of the map,
+// and a believer in a good world finds good things a little more often than a doubter does.
+export function findChance(a) { return 0.008 * B.clamp(0.5 + (a.belief ?? 0), 0.2, 1.6); }
+export function maybeFind(w, a, event, remember, chance = 0.25) {
   const next = ORDER.find(k => !w.agents.some(x => (x.inv[k] || 0) > 0) && !(w.magicFound || []).includes(k));
-  if (!next || Math.random() > 0.25) return null;
+  if (!next || Math.random() > chance) return null;
   const m = MAGIC[next];
   a.inv[next] = (a.inv[next] || 0) + 1;
   w.magicFound = w.magicFound || []; w.magicFound.push(next);

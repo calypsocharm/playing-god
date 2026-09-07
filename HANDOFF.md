@@ -114,6 +114,29 @@ She said almost everyone was nasty to her in the commune. It was not her and it 
   `COMMUNE_SYSTEM`, so it can be read and tested without a browser or a model:
   **`node test/smoke_commune.mjs <Name>` prints the whole thing for a real villager.**
 
+## Legends at the fire, and a pale that gives things up (2026-09-07 late)
+She asked how anyone could ever find the magic items. They explore plenty - her map is 78% walked and they
+found the lake, hills and ruin on their own - but **nothing had ever been found in 1243 days**, and it was a bug.
+
+- **The find was unreachable.** `Mg.maybeFind` hung off `dist - stepLen <= 1` in the scout step: did the walker
+  arrive at the exact tile they aimed for. `reveal()` clears 4.2 around them as they walk, so the nearest unmapped
+  tile is always further than that; a step is 4; the window was 4.2-5.0, and `nearestUnexplored` throws up to 5
+  units of random jitter on the distance. It never landed once. There are zero "You walked out where no one had
+  been" memories on the live world. Now it fires on **any** scout step taken more than 14 from the hearth, at
+  `Mg.findChance(a)` - about 0.008 a step, tilted by belief, so a believer in a good world finds good things a
+  little more often. On a grown village both items turn up inside ~100 days.
+- **Legends** (`legend(w, text, about)` / `hearLegend(w, o, l, teller)` in world.js, `w.legends`, capped 40).
+  Written when a frontier place is found or something is carried back out of the pale. `Art.nightlyTelling` now
+  tells the **least-told** legend first, by anyone at the fire with a story in them or faith over 0.3 - not only by
+  a maker with a work of their own. Hearing one puts `a.wonder` in the listener (0.35 for the pale) and it decays
+  0.06 a day in `newDay`. `scripted.js` multiplies the scout roll by `1 + wonder * 3`, and the thought changes to
+  "They told it at the fire. I want to see it myself." Measured: 39 scout steps across three villages that never
+  heard it, 93 across three that did.
+- `test/smoke_legends.mjs`. The find is measured on a **grown** village (data/world.json with the magic cleared),
+  because a fresh nine-person village of half children does not reliably turn anything up and should not have to.
+- **Still open, her idea, not built:** a Jesus type - one villager who carries the good news rather than the fire
+  telling it round-robin. Ask her before building it.
+
 ## NEXT (her list, in order)
 1. ~~A second Creator holding the rival fire~~ **DONE, see above.** What is left of it:  set a real `FIRE_TOKEN` on box 2 before
    handing the key to anybody, and decide whether the second player gets their own page.

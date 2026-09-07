@@ -808,15 +808,22 @@ function dayPhase(w, remoteActions) {
           PLACES[found.key] = PLACES[found.key] || { x: found.x, y: found.y, label: found.label, sheltered: false };
           reveal(w, found.x, found.y, 5);
           event(w, `${a.name}, exploring, finds ${found.found}. They call it ${found.label}.`, 'healed', [a.id]);
+          legend(w, `${a.name} walked out past everything anyone knew and found ${found.found}. It is called ${found.label} now, because ${a.name} said so.`, 'pale');
           remember(w, a, `You found ${found.label}: ${found.found}. You were the first.`, 1);
           for (const o of alive(w)) if (o !== a) { remember(w, o, `${a.name} found ${found.label} out in the pale. There is more out there than we knew.`, 0.7); bumpTrust(o, a, 0.06); }
           a.body.tightness = B.clamp(a.body.tightness - 0.15);
           a.explore = null;
           if (!w.goals.frontier) { w.goals.frontier = { done: w.day }; event(w, `A question answered: ${GOALS.frontier}.`, 'healed'); }
-        } else if (dist - stepLen <= 1) {
-          Mg.maybeFind(w, a, event, remember);
-          remember(w, a, `You walked out where no one had been. ${pick(['Grass, wind, and the same sky.', 'Stones and a dead tree. Nothing to eat.', 'You could see the village smoke from there, small.', 'A hollow full of birds that did not know to be afraid of you.'])} You know a little more of the land.`, 0.4);
-          a.explore = null;
+        } else {
+          // Anywhere out past the edge of the known land, not only at the exact tile they aimed for.
+          if (Math.hypot(a.pos.x - PLACES.hearth.x, a.pos.y - PLACES.hearth.y) > 14) {
+            const found = Mg.maybeFind(w, a, event, remember, Mg.findChance(a));
+            if (found) legend(w, `${a.name} came back from the pale with ${Mg.MAGIC[found].label}. ${Mg.MAGIC[found].found[0].toUpperCase() + Mg.MAGIC[found].found.slice(1)}.`, 'pale');
+          }
+          if (dist - stepLen <= 1) {
+            remember(w, a, `You walked out where no one had been. ${pick(['Grass, wind, and the same sky.', 'Stones and a dead tree. Nothing to eat.', 'You could see the village smoke from there, small.', 'A hollow full of birds that did not know to be afraid of you.'])} You know a little more of the land.`, 0.4);
+            a.explore = null;
+          }
         }
         break;
       }
@@ -1562,7 +1569,7 @@ function nightPhase(w) {
   griefNightly(w);   // may move mourners to the hearth for a wake
   wakeSenses(w);     // the ones who listened, sang or sat still enough start to know things
   nightOwls(w);      // the young, the restless and the grieving sit up late at the fire
-  Art.nightlyTelling(w, at(w, 'hearth'), remember, bumpTrust, event);   // and someone says a poem, or sings what they made
+  Art.nightlyTelling(w, at(w, 'hearth'), remember, bumpTrust, event, hearLegend);   // a legend gets told, or someone says a poem, or sings what they made
   F.familyNightly(w); // bonds hold or fray, children are born and grow
   trySplit(w);        // and sometimes a few people walk out to light their own fire
   for (const a of alive(w)) {
@@ -2024,6 +2031,7 @@ function newDay(w) {
     }
   }
   for (const a of alive(w)) {
+    if (a.wonder) a.wonder = +Math.max(0, a.wonder - 0.06).toFixed(3);   // wonder fades if nobody tells it again
     a.transits = transitsFor(a.chart, now);
     for (const t of a.transits) if ((t.planet === 'saturn' || t.planet === 'mars') && !a.memories.some(m => m.text === t.note)) remember(w, a, t.note, 0.3);
   }
@@ -2040,6 +2048,24 @@ function newDay(w) {
     T.readiness(w, alive(w), A.alive(w), w.builds, w.store);
     if (w.day >= w.threat.lands) landThreat(w);
   }
+}
+
+// ---------- legends ----------
+// Some things are worth telling twice. A legend is a line the village keeps and tells at the fire,
+// and hearing one told puts a wonder in people: for a while afterward they want to go and look.
+// This is how anything found out in the pale ever becomes a reason for anyone else to walk out.
+export function legend(w, text, about = 'pale') {
+  w.legends = w.legends || [];
+  if (w.legends.some(l => l.text === text)) return null;
+  const l = { day: w.day, text, about, told: 0 };
+  w.legends.push(l);
+  if (w.legends.length > 40) w.legends.shift();
+  return l;
+}
+// Hearing one. Wonder decays on its own; it is not a permanent hunger, it is having just been told.
+export function hearLegend(w, o, l, teller) {
+  o.wonder = B.clamp((o.wonder || 0) + (l.about === 'pale' ? 0.35 : 0.2), 0, 1);
+  remember(w, o, `${teller ? teller.name + ' told it at the fire: ' : ''}${l.text} You keep thinking about it.`, 0.75);
 }
 
 // ---------- funerals ----------
