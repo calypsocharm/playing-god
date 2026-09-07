@@ -59,7 +59,7 @@ one-line effects in tarot.js. Next (her earlier picks): a rival fire past the pa
 cold+hungry (`raid`, defence = dogs + axes at hearth*1.5 + hall + fences); villager action `send {n}` at the edge; god op
 `parley` cost 2 (star over both fires, trader next morning); `Rv.deerTaken` in the hunt case. Client: tents+fire+smoke
 at the spot once seen, scene branch `k === 'rival'`, Village line, Weather button `btnParley`.
-Funerals: `w.funerals` queue filled in `die()`; `funeralIfDue` runs in `step` at tick 3 the day after: everyone to
+Funerals: `w.funerals` queue filled in `die()` (and `funeralIfDue` back-fills anyone dead+unburied who is still grieved or died within a year; older dead get `longBuried`); `funeralIfDue` runs in `step` at tick 3 the day after: everyone to
 PLACES.graves (7,23), speaker = heaviest griever, words from FUNERAL_WORDS, grief halves + `buried`, faith>0.1 ->
 "somewhere better", openness/trust bumps, `w.graves` log; client STONE sprites + scene. Fading in `closeSeason`: negative
 trust +0.025/season, wounds older than 2y lose 0.03/season -> scar, memories older than 1y blur (weight*0.9).

@@ -384,7 +384,7 @@ export function standingNow(w) {
     card: w.lastCard && w.day - w.lastCard.day <= 2 ? `${w.lastCard.name}: ${w.lastCard.text}` : null,
     rival: w.rival?.seen ? `${w.rival.name} are ${Rv.moodWord(w.rival.mood)}` : null,
     funeralsDue: (w.funerals || []).map(f => f.name),
-    recentDead: w.agents.filter(a => !a.alive && w.day - a.diedDay <= yearDays(w) / 4).map(a => ({ name: a.name, day: a.diedDay, age: a.ageAtDeath, cause: a.causeOfDeath, buried: (w.graves || []).some(g => g.for === a.id) })),
+    recentDead: w.agents.filter(a => !a.alive && w.day - a.diedDay <= Math.max(10, yearDays(w) / 4)).map(a => ({ name: a.name, day: a.diedDay, age: a.ageAtDeath, cause: a.causeOfDeath, buried: (w.graves || []).some(g => g.for === a.id) })),
   };
 }
 // The long history, condensed: what is worth keeping from all those seasons.
@@ -2052,7 +2052,19 @@ const FUNERAL_WORDS = [
   (n) => `${n} is in the ground and in all of us. That is the whole of it. Come to the fire after.`,
 ];
 function funeralIfDue(w) {
-  const q = w.funerals || []; if (!q.length) return;
+  const q = w.funerals = w.funerals || [];
+  // Anyone dead and unburied whom someone still grieves, or who died within the year, is owed a funeral too.
+  if (!q.length) {
+    const buried = new Set((w.graves || []).map(g => g.for));
+    const living = alive(w);
+    for (const a of w.agents) {
+      if (a.alive || buried.has(a.id) || a.longBuried) continue;
+      const grieved = living.some(o => (o.grief || []).some(g => g.for === a.id));
+      if (grieved || w.day - (a.diedDay || 0) <= yearDays(w)) q.push({ for: a.id, name: a.name, day: a.diedDay ?? w.day - 1, cause: a.causeOfDeath, age: a.ageAtDeath });
+      else a.longBuried = true;
+    }
+    if (!q.length) return;
+  }
   const f = q[0];
   if (w.day < f.day + 1) return;                                       // the afternoon after
   if (w.threat?.landed === w.day) return;                              // not while something is landing
