@@ -1234,7 +1234,7 @@ function dayPhase(w, remoteActions) {
       else if (k === 'claircognizant') a.body.openness = B.clamp(a.body.openness - 0.004);
     }
     if (a.body.food < 0.45 && a.inv.bread >= 1) { a.inv.bread -= 1; B.eat(a.body, 0.5); }
-    else if (a.body.food < 0.45 && a.inv.food >= 0.3) { a.inv.food -= 0.3; B.eat(a.body, 0.3); }
+    else if (a.body.food < 0.45 && a.inv.food > 0) { const n = Math.min(0.3, a.inv.food); a.inv.food -= n; B.eat(a.body, n); }
     if (a.body.hurt > 0.3 && a.inv.salve > 0) { a.inv.salve -= 1; a.body.hurt = B.clamp(a.body.hurt - 0.3); remember(w, a, 'You used your salve.', 0.3); }
     if (a.body.tightness > 0.6 && (a.inv.tonic || 0) > 0) { a.inv.tonic -= 1; B.soothe(a.body, 0.25); B.gladden(a.body, 0.05); remember(w, a, 'You drank a tonic. Your chest let go a little.', 0.3); }
     if ((a.inv.quilt || 0) > 0 && a.location === 'home') a.body.warmth = B.clamp(a.body.warmth + 0.03);
@@ -1424,7 +1424,7 @@ function nightPhase(w) {
   F.familyNightly(w); // bonds hold or fray, children are born and grow
   trySplit(w);        // and sometimes a few people walk out to light their own fire
   for (const a of alive(w)) {
-    if (a.body.food < 0.6 && a.inv.food >= 0.3) { a.inv.food -= 0.3; B.eat(a.body, 0.3); }
+    if (a.body.food < 0.6 && a.inv.food > 0) { const n = Math.min(0.3, a.inv.food); a.inv.food -= n; B.eat(a.body, n); }
     B.sleep(a.body);
     if (a.sense?.kind === 'clairaudient') a.body.energy = B.clamp(a.body.energy - 0.1);   // light sleepers
     const age = ageOf(w, a);

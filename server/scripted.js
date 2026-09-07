@@ -16,7 +16,12 @@ export function scriptedDecide(a, s) {
 
   // Survival first.
   if (b.warmth < 0.3) return s.hearthWood > 0 || s.builds?.hall?.done ? { type: 'go', to: 'hearth', thought: 'Cold. The fire.' } : { type: 'withdraw', thought: 'Cold. Home.' };
-  if (b.food < 0.35 && inv.food < 0.3) {
+  if (b.food < 0.5 && inv.food < 0.5) {
+    // Coin buys food in any season; deer are meat in any season; the creek gives fish under the ice.
+    const price = s.store?.prices?.food?.buy || 2;
+    if (isDay && (inv.coin || 0) >= price && (s.store?.shelf?.food || 0) >= 1) return { type: 'buy', item: 'food', n: Math.max(1, Math.min(5, Math.floor((inv.coin || 0) / price), Math.floor(s.store.shelf.food))), thought: 'Coin is no good in the belly.' };
+    if (isDay && (s.deer || 0) > 0 && b.energy > 0.4 && b.warmth > 0.35) return { type: 'hunt', to: 'forest', thought: 'Deer. Meat.' };
+    if (isDay && s.found?.creek && b.warmth > 0.4) return { type: 'forage', to: 'creek', thought: 'Fish, even now.' };
     if (s.yieldToday > 0.1 && isDay) return { type: 'work', to: 'field', thought: 'Hungry. Work.' };
     if (isDay && s.weather.season !== 'winter') return { type: 'forage', to: 'meadow', thought: 'Berries, at least.' };
     const giver = s.near.find(n => n.trust > 0.2);
