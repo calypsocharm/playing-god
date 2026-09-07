@@ -16,8 +16,8 @@ camp past the edge; gifts by Moon element + the four clairs; animals; babies; si
 diaries and the chronicle. Plus everything below.
 
 ## Shipped 2026-09-07 (all live, all verified)
-Anchors are the things to grep for. Every feature has a smoke script in the session scratchpad (`smoke_*.mjs`, run with
-`node <path>`; they import `file:///C:/Users/Calyp/Downloads/PlayingGod/server/world.js`).
+Anchors are the things to grep for. Every feature has a smoke script in `test/` (`node test/smoke_threats.mjs` and friends; see the section at the
+foot of this file).
 
 - **Threats + season score** (`server/threats.js`): a seasonal threat gathers and lands late in the season; `rollThreat` /
   `landThreat` / `T.readiness` daily; god op `warn` (1) names the omen; effects `w.coldSnap` / `drought` / `flood` / `frost`
