@@ -371,6 +371,10 @@ function draw() {
     else if (k === 'grove') tile(PX.GROVE, p.x, p.y, 2.6);
     else if (k === 'claypit') tile(PX.CLAY, p.x, p.y, 2);
     else if (k === 'store') tile(PX.STORE, p.x, p.y, 1.8);
+    else if (k === 'bank') tile(PX.BANK, p.x, p.y, 1.8);
+    else if (k === 'council') tile(PX.MEETING, p.x, p.y, 2);
+    // What the council raised by the well.
+    if (k === 'well') { if (state.builds?.bathhouse?.done) tile(PX.POOL, p.x + 1.6, p.y - 1.4, 1.5); if (state.builds?.wellhouse?.done) { ctx.fillStyle = '#7a5533'; ctx.fillRect(c.x - S * 0.7, c.y - S * 0.9, S * 1.4, S * 0.25); } }
     else if (k === 'edge') { ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.setLineDash([S * 0.3, S * 0.3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(c.x + S * 0.6, c.y - S * 11); ctx.lineTo(c.x + S * 0.6, c.y + S * 11); ctx.stroke(); ctx.setLineDash([]); }
     // Buildings rise beside the hearth as they are raised.
     if (k === 'hearth') {
@@ -378,6 +382,11 @@ function draw() {
       const prog = (b, spec) => b ? Math.min(1, Object.entries(spec.cost).reduce((acc, [m, n]) => acc + Math.min(1, (b.have?.[m] || 0) / n), 0) / Object.keys(spec.cost).length) : 0;
       const pg = prog(g, state.buildSpecs.granary), ph = prog(h, state.buildSpecs.hall);
       if (pg > 0) { ctx.globalAlpha = g.done ? 1 : 0.35 + pg * 0.5; tile(PX.GRANARY, p.x + 2.6, p.y - 0.4, 1.8); ctx.globalAlpha = 1; }
+      // What the council raised here: the common house and the schoolhouse.
+      const cm = state.builds?.commons, sc = state.builds?.school;
+      const pcm = cm ? prog(cm, state.buildSpecs.commons) : 0, psc = sc ? prog(sc, state.buildSpecs.school) : 0;
+      if (pcm > 0) { ctx.globalAlpha = cm.done ? 1 : 0.35 + pcm * 0.5; tile(PX.BIGHOUSE, p.x - 3, p.y - 0.6, 2); ctx.globalAlpha = 1; }
+      if (psc > 0) { ctx.globalAlpha = sc.done ? 1 : 0.35 + psc * 0.5; tile(PX.HOUSE, p.x + 2.4, p.y + 1.6, 1.5); ctx.globalAlpha = 1; }
       if (ph > 0) { ctx.globalAlpha = h.done ? 0.9 : 0.25 + ph * 0.4; ctx.strokeStyle = '#c9a36a'; ctx.lineWidth = Math.max(2, S * 0.18); ctx.beginPath(); ctx.arc(c.x, c.y, S * 1.9, 0, 7); ctx.stroke(); if (h.done) { ctx.fillStyle = 'rgba(201,163,106,0.2)'; ctx.fill(); } ctx.globalAlpha = 1; }
     }
     ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = `${Math.max(10, Math.min(14 * devicePixelRatio, S * 0.45))}px system-ui`; ctx.textAlign = 'center';
@@ -836,22 +845,45 @@ function renderPlace(hit) {
   } else {
     const k = hit.key, pl = hit.pos, label = pl.label || k;
     const here = alive.filter(a => a.location === k);
-    const sprite = k === 'hearth' ? (s.hearth.wood > 0 ? PX.fire(0) : PX.FIRE_OUT) : k === 'camp' ? (s.camp?.wood > 0 ? PX.fire(0) : PX.FIRE_OUT) : k === 'well' ? PX.WELL : k === 'field' ? PX.FIELD : k === 'forest' ? PX.PINE : k === 'road' ? PX.ROAD : k === 'meadow' ? PX.MEADOW : k === 'quarry' ? PX.ROCKS : k === 'creek' ? PX.WATER[0] : k === 'grove' ? PX.GROVE : k === 'claypit' ? PX.CLAY : k === 'store' ? PX.STORE : null;
+    const sprite = k === 'hearth' ? (s.hearth.wood > 0 ? PX.fire(0) : PX.FIRE_OUT) : k === 'camp' ? (s.camp?.wood > 0 ? PX.fire(0) : PX.FIRE_OUT) : k === 'well' ? PX.WELL : k === 'field' ? PX.FIELD : k === 'forest' ? PX.PINE : k === 'road' ? PX.ROAD : k === 'meadow' ? PX.MEADOW : k === 'quarry' ? PX.ROCKS : k === 'creek' ? PX.WATER[0] : k === 'grove' ? PX.GROVE : k === 'claypit' ? PX.CLAY : k === 'store' ? PX.STORE : k === 'bank' ? PX.BANK : k === 'council' ? PX.MEETING : null;
     if (sprite) PX.blit(g, sprite, 10, 10, 140);
     $('moName').textContent = label.replace(/^the /, '').replace(/^\w/, c => c.toUpperCase());
     $('moExpr').textContent = here.length ? `${here.length} here right now.` : 'No one here right now.';
     const buildsHere = Object.entries(s.buildSpecs || {}).filter(([, spec]) => spec.at === k).map(([bk, spec]) => { const b = s.builds?.[bk]; if (b?.done) return `${spec.label || bk}: built`; const have = b?.have || {}; return `${spec.label || bk}: ${Object.entries(spec.cost || {}).map(([m, n]) => `${m} ${have[m] || 0}/${n}`).join(', ')}`; });
     if (k === 'store') {
       const st = s.store;
-      $('moMeta').textContent = `the village shelf · ${st.coin} coin in the till${st.project ? ` · paying wages for the ${st.project}` : ''}`;
-      setMoHeads('On the shelf', 'The ledger', 'Loans out', 'Here now', 'The project');
+      $('moMeta').textContent = `the village shelf · ${st.coin} coin in the till · a tithe of the till goes to the council each night`;
+      setMoHeads('On the shelf', 'The ledger', 'The tithe', 'Here now', 'The council\'s project');
       $('moDoing').innerHTML = Object.entries(st.prices || {}).map(([item, pr]) => `<div class="mem"><b>${esc(item)}</b> <span class="muted">${st.shelf?.[item] || 0} in stock · buy ${pr.buy} · sells for ${pr.sell}</span></div>`).join('');
       $('moSaid').innerHTML = (st.ledger || []).slice(-8).reverse().map(l => `<div class="mem"><span class="muted">d${l.day ?? ''}</span> ${esc(l.who || 'someone')} ${l.bought ? 'bought' : 'sold'} ${l.n} ${esc(l.bought || l.sold || '')} for ${l.coin} coin</div>`).join('') || '<div class="muted">No trade yet.</div>';
-      $('moFelt').innerHTML = (st.loans || []).length ? st.loans.map(l => `<div class="mem">${esc(l.name || 'someone')} owes ${l.owed} coin <span class="muted">· since day ${l.since}</span></div>`).join('') : '<div class="muted">No one owes the store.</div>';
-      $('moCarry').textContent = st.project ? `Commissioning the ${st.project}: a coin per material carried in.${buildsHere.length ? ' ' + buildsHere.join('; ') : ''}` : (buildsHere.join('; ') || 'No project right now.');
+      $('moFelt').innerHTML = `<div class="muted">The store is a shelf now, not a bank. Loans and savings are at the bank; the council paid ${s.council?.income || 0} coin in tithe so far.</div>`;
+      $('moCarry').textContent = st.project ? `The council is raising the ${s.buildSpecs?.[st.project]?.label || st.project}: a coin per material carried in.` : 'No project right now; see the meeting house.';
       $('moScene').hidden = false;
       const pb = st.project && s.builds?.[st.project]; const pspec = st.project && s.buildSpecs?.[st.project];
       Interior.drawStore($('moScene'), { store: st, here, project: st.project, projectProgress: pb && pspec ? Object.entries(pspec.cost || {}).map(([m, n]) => `${m} ${pb.have?.[m] || 0}/${n}`).join(' · ') : null });
+    } else if (k === 'bank') {
+      const bk = s.bank || { coin: 0, savings: [], loans: [], civic: {}, ledger: [] };
+      const nameOf = (id) => s.agents.find(x => x.id === id)?.name || 'someone';
+      $('moMeta').textContent = `${bk.coin} coin in the strongbox · ${bk.savingsTotal || 0} kept by ${bk.savings.length} ${bk.savings.length === 1 ? 'person' : 'people'} · ${bk.interestPaid || 0} paid in interest`;
+      setMoHeads('Kept here', 'The book', 'Owed', 'Here now', 'The council');
+      $('moDoing').innerHTML = bk.savings.length ? bk.savings.slice().sort((x, y) => y.n - x.n).map(r => `<div class="mem"><b>${esc(nameOf(r.id))}</b> <span class="muted">keeps ${r.n} coin</span></div>`).join('') : '<div class="muted">No one keeps coin here yet.</div>';
+      $('moSaid').innerHTML = (bk.ledger || []).slice(-8).reverse().map(l => `<div class="mem"><span class="muted">d${l.day}</span> ${esc(l.who)} ${l.put != null ? `put in ${l.put}` : l.took != null ? `took out ${l.took}` : l.lent != null ? `borrowed ${l.lent}` : `paid back ${l.repaid}`}</div>`).join('') || '<div class="muted">Nothing in the book yet.</div>';
+      $('moFelt').innerHTML = (bk.loans || []).length ? bk.loans.map(l => `<div class="mem">${esc(l.name || 'someone')} owes ${l.owed} coin <span class="muted">· since day ${l.since}${l.defaulted ? ' · not paying' : ''}</span></div>`).join('') : '<div class="muted">No one owes the bank.</div>';
+      $('moCarry').textContent = bk.civic?.owed ? `The council owes the bank ${bk.civic.owed} coin (${bk.civic.lent} lent, ${bk.civic.repaid} paid back).` : `The council owes nothing${bk.civic?.lent ? ` (${bk.civic.lent} lent over time, all paid back)` : ''}.`;
+      $('moScene').hidden = false;
+      Interior.drawBank($('moScene'), { bank: bk, here, names: nameOf });
+    } else if (k === 'council') {
+      const cn = s.council || { project: null, ballot: null, coin: 0, built: [] };
+      const nameOf = (id) => s.agents.find(x => x.id === id)?.name || 'someone';
+      const lb = (key) => s.buildSpecs?.[key]?.label || key;
+      $('moMeta').textContent = cn.ballot ? `a ballot is open until day ${cn.ballot.closes} · ${Object.keys(cn.ballot.votes || {}).length} hands so far` : cn.project ? `raising the ${lb(cn.project)} · ${cn.coin} coin to pay wages with` : `nothing on the board · ${cn.coin} coin in the chest`;
+      setMoHeads('The vote', 'The project', 'Raised by the village', 'Here now', 'The chest');
+      $('moDoing').innerHTML = cn.ballot ? cn.ballot.options.map(key => `<div class="mem"><b>the ${esc(lb(key))}</b> <span class="muted">${cn.ballot.tally?.[key] || 0} hand${(cn.ballot.tally?.[key] || 0) === 1 ? '' : 's'} · ${esc(s.buildSpecs?.[key]?.effect || '')}</span></div>`).join('') + `<div class="muted" style="margin-top:4px">${Object.entries(cn.ballot.votes || {}).map(([id, key]) => `${esc(nameOf(id))} → ${esc(lb(key))}`).join(' · ') || 'No hands yet.'}</div>` : cn.lastResult ? `<div class="muted">Last vote, day ${cn.lastResult.day}: ${cn.lastResult.winner ? `the ${esc(lb(cn.lastResult.winner))}, ${cn.lastResult.tally?.[cn.lastResult.winner]} of ${cn.lastResult.cast} hands` : 'no hands raised'}.</div>` : '<div class="muted">No vote has been held yet.</div>';
+      $('moSaid').innerHTML = cn.project ? `<div class="mem"><b>the ${esc(lb(cn.project))}</b> <span class="muted">${esc(s.buildSpecs?.[cn.project]?.effect || '')}</span><br><span class="muted">${Object.entries(s.buildSpecs?.[cn.project]?.cost || {}).map(([m, n]) => `${m} ${Math.floor(s.builds?.[cn.project]?.have?.[m] || 0)}/${n}`).join(' · ')} · ${cn.wagesPaid} paid in wages</span></div>` : '<div class="muted">No project. A ballot opens when there is something to build.</div>';
+      $('moFelt').innerHTML = (cn.built || []).length ? cn.built.slice().reverse().map(b => `<div class="mem">the <b>${esc(lb(b.key))}</b> <span class="muted">· day ${b.day} · ${b.wages} coin in wages</span></div>`).join('') : '<div class="muted">Nothing raised by vote yet.</div>';
+      $('moCarry').textContent = `${cn.coin} coin in the chest · ${cn.income || 0} taken in tithe from the store · owes the bank ${s.bank?.civic?.owed || 0}${cn.votesCast ? ` · ${cn.votesCast} votes cast over time` : ''}.`;
+      $('moScene').hidden = false;
+      Interior.drawCouncil($('moScene'), { council: cn, here, names: nameOf, specs: s.buildSpecs });
     } else if (k === 'hearth' || k === 'camp') {
       const fire = k === 'hearth' ? s.hearth : s.camp;
       $('moMeta').textContent = `${fire.wood > 0 ? 'the fire is lit' : 'the fire is OUT'} · ${fire.wood || 0} wood on the pile`;
@@ -957,13 +989,17 @@ function renderPanels() {
   const campers = alive.filter(a => a.settlement === 'camp').length;
   const found = Object.keys(s.found || {});
   const shelf = s.store ? Object.entries(s.store.shelf).filter(([, n]) => n >= 1).map(([k, n]) => `${k} ${Math.floor(n)}`).join(', ') : '';
-  const loans = (s.store?.loans || []).filter(l => l.owed > 0);
-  const st = s.store ? `<br>Store: ${shelf || 'empty'} · ${s.store.coin} coin in the till${s.store.project ? ` · <b style="color:var(--warm)">paying wages for the ${esc(s.store.project)}</b>` : ''}${s.store.wagesPaid ? ` · ${s.store.wagesPaid} paid in wages so far` : ''}${loans.length ? `<br>Owe the store: ${loans.map(l => `${esc(l.name)} ${l.owed}${l.defaulted ? ' (not paying)' : ''}`).join(', ')}` : ''}` : '';
+  const loans = (s.bank?.loans || []).filter(l => l.owed > 0);
+  const lb = (key) => s.buildSpecs?.[key]?.label || key;
+  const bt = s.council?.ballot;
+  const st = s.store ? `<br>Store: ${shelf || 'empty'} · ${s.store.coin} coin in the till` : '';
+  const bk = s.bank ? `<br>Bank: ${s.bank.coin} in the strongbox · ${s.bank.savingsTotal || 0} kept by ${s.bank.savings.length}${loans.length ? ` · owed: ${loans.map(l => `${esc(l.name)} ${l.owed}${l.defaulted ? ' (not paying)' : ''}`).join(', ')}` : ''}${s.bank.civic?.owed ? ` · the council owes ${s.bank.civic.owed}` : ''}` : '';
+  const cn = s.council ? `<br>Council: ${bt ? `<b style="color:var(--warm)">a vote is open</b> until day ${bt.closes}: ${bt.options.map(key => `${esc(lb(key))} ${bt.tally?.[key] || 0}`).join(' · ')}` : s.council.project ? `<b style="color:var(--warm)">raising the ${esc(lb(s.council.project))}</b> · ${s.council.coin} coin for wages · ${s.council.wagesPaid} paid` : `nothing on the board · ${s.council.coin} coin in the chest`}${(s.council.built || []).length ? ` · raised by vote: ${s.council.built.map(b => esc(lb(b.key))).join(', ')}` : ''}` : '';
   const arts = (s.works || []).length ? `<br>Works of the village: ${s.works.length}${(s.arts || []).length ? ` · arts of its own: ${s.arts.map(x => `<b style="color:var(--warm)">${esc(x.name)}</b> <span class="muted">(${esc(x.byName)})</span>`).join(', ')}` : ''} · latest: ${s.works.slice(-3).reverse().map(x => `${esc(x.byName)}, "${esc(x.title)}"`).join(' · ')}` : '';
   const hol = (s.holidays || []).length ? `<br>Days the village keeps: ${s.holidays.map(h => `<b style="color:var(--warm)">${esc(h.name)}</b> <span class="muted">(${esc(h.byName)}, year ${h.year}, kept ${h.kept}×)</span>`).join(' · ')}` : '';
   const today = s.holidayToday ? `<br><b style="color:var(--warm)">Today is ${esc(s.holidayToday.name)}.</b> ${esc(s.holidayToday.decorate)} Song: "${esc(s.holidayToday.song)}"` : '';
   const sick = s.sick ? `<br><span style="color:var(--bad)">${s.sick} sick</span>: ${s.agents.filter(a => a.alive && a.ill).map(a => esc(a.name) + ' (' + a.ill.kind + ')').join(', ')}` : '';
-  const frontier = `${st}${today}${hol}${arts}${sick}<br>Known land: ${found.length ? found.join(', ') : 'only what you see'} · ${Math.round((s.mapped || 0) * 100)}% of the land walked${s.frontierLeft ? ` · ${s.frontierLeft} place${s.frontierLeft === 1 ? '' : 's'} still out in the pale` : ' · every place is found'}`;
+  const frontier = `${st}${bk}${cn}${today}${hol}${arts}${sick}<br>Known land: ${found.length ? found.join(', ') : 'only what you see'} · ${Math.round((s.mapped || 0) * 100)}% of the land walked${s.frontierLeft ? ` · ${s.frontierLeft} place${s.frontierLeft === 1 ? '' : 's'} still out in the pale` : ' · every place is found'}`;
   const fam = `<br>${couples} couple${couples === 1 ? '' : 's'} · ${kids} child${kids === 1 ? '' : 'ren'}${expecting ? ` · ${expecting} expecting` : ''}${s.camp?.founded ? `<br><b style="color:var(--warm)">${esc(s.camp.name)}</b>, past the edge: ${campers} people, fire wood ${s.camp.wood}` : ''}`;
   const ended = s.ended ? `<div class="mem" style="border:1px solid var(--bad);padding:8px;margin-bottom:8px"><b style="color:var(--bad)">The book is closed.</b> Day ${s.ended.day}: ${esc(s.ended.why)}. ${s.ended.alive} were left, and none had the heart to go on. <a href="story.html" style="color:var(--warm)">Read it as a book →</a>${godOk ? ` <button class="act warn" id="btnAgain" style="margin-left:6px">Begin again</button>` : ''}</div>` : '';
   const coming = s.threat && !s.threat.landed && s.threat.known ? `<br><b style="color:var(--warm)">Everyone says ${esc(s.threat.name)} is coming</b> in ${s.threat.daysLeft} day${s.threat.daysLeft === 1 ? '' : 's'}.` : s.threat?.landed && s.day - s.threat.landed <= 3 ? `<br><b style="color:var(--bad)">${esc(s.threat.name[0].toUpperCase() + s.threat.name.slice(1))} has landed.</b> ${esc(s.threat.text || '')}` : '';
@@ -1116,7 +1152,7 @@ function renderInspector() {
     ${(state.works || []).some(x => x.by === a.id) ? `<h3>Made</h3>${(state.works || []).filter(x => x.by === a.id).slice(-6).reverse().map(x => `<div class="mem"><b>"${esc(x.title)}"</b> <span class="muted">· ${esc(x.art)} · day ${x.day}${x.moved ? ` · moved ${x.moved}` : ''}</span><br><i>${esc(x.line)}</i></div>`).join('')}` : ''}
     ${(state.animals || []).some(x => x.owner === a.id) ? `<div class="muted" style="margin-top:4px">Keeps: ${(state.animals || []).filter(x => x.owner === a.id).map(x => `<b>${esc(x.name)}</b> the ${x.young ? (x.kind === 'cat' ? 'kitten' : x.kind === 'dog' ? 'pup' : x.kind) : x.kind}${x.hungry >= 2 ? ' (thin)' : ''}`).join(', ')}</div>` : ''}
     <h3>Carries</h3>
-    <div class="muted">${esc(describeInv(a.inv))}</div>
+    <div class="muted">${esc(describeInv(a.inv))}${a.savings ? ` · keeps ${a.savings} coin in the bank` : ''}${a.owes ? ` · <span style="color:var(--bad)">owes the bank ${a.owes}</span>` : ''}${a.vote ? ` · voted for the ${esc(state.buildSpecs?.[a.vote]?.label || a.vote)}` : ''}</div>
     ${Object.keys(a.upgrades || {}).length ? `<div class="muted" style="margin-top:4px">Built at home: ${Object.keys(a.upgrades).map(k => esc(state.upgradeSpecs?.[k]?.label || k)).join(', ')}</div>` : ''}
     ${a.wants ? `<div class="muted" style="margin-top:4px">${a.inv[a.wants] > 0 ? `Has the <b>${esc(a.wants)}</b> they longed for.` : `Longs for a <b>${esc(a.wants)}</b>.`}</div>` : ''}
     ${(a.grief || []).length ? `<h3>Grieving</h3>${a.grief.map(g => `<div class="wound"><div>${esc(g.name)} <span class="muted">· since day ${g.day} · shared ${g.shared}×</span></div>${dial('weight', g.intensity, 'cold')}</div>`).join('')}` : ''}

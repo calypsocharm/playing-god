@@ -9,6 +9,22 @@ import { ELEMENT } from './chart.js';
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
+// What this person would vote for, from what their own life lacks.
+export function preferBuild(a, s) {
+  const opts = s.ballot?.options || []; if (!opts.length) return null;
+  const has = (k) => opts.includes(k);
+  const b = a.body;
+  if ((b.food < 0.5 || a.inv.food < 1) && has('granary')) return 'granary';
+  if ((b.food < 0.5 || a.inv.food < 1) && has('wellhouse')) return 'wellhouse';
+  if (b.warmth < 0.5 && has('hall')) return 'hall';
+  if ((s.ill || (s.sickNear || []).length || b.hurt > 0.3) && has('bathhouse')) return 'bathhouse';
+  if ((a.children || []).length && has('school')) return 'school';
+  if (((a.grief || []).length || (b.joy ?? 0.5) < 0.45 || b.tightness > 0.5) && has('commons')) return 'commons';
+  if ((a.inv.coin || 0) >= 10 && has('road')) return 'road';
+  if (has('commons') && Math.random() < 0.4) return 'commons';
+  return pick(opts);
+}
+
 export function scriptedDecide(a, s) {
   const b = a.body;
   const br = branch(a);
@@ -21,6 +37,7 @@ export function scriptedDecide(a, s) {
   if (b.food < 0.5 && inv.food < 0.5) {
     // Coin buys food in any season; deer are meat in any season; the creek gives fish under the ice.
     const price = s.store?.prices?.food?.buy || 2;
+    if (isDay && (inv.coin || 0) < price && (s.bank?.savings || 0) >= 1 && (s.bank?.coin || 0) >= 1) return { type: 'draw', n: Math.min(6, s.bank.savings), thought: 'What I put by, for now.' };
     if (isDay && (inv.coin || 0) >= price && (s.store?.shelf?.food || 0) >= 1) return { type: 'buy', item: 'food', n: Math.max(1, Math.min(5, Math.floor((inv.coin || 0) / price), Math.floor(s.store.shelf.food))), thought: 'Coin is no good in the belly.' };
     if (isDay && (s.deer || 0) > 0 && b.energy > 0.4 && b.warmth > 0.35) return { type: 'hunt', to: 'forest', thought: 'Deer. Meat.' };
     if (isDay && s.found?.creek && b.warmth > 0.4) return { type: 'forage', to: 'creek', thought: 'Fish, even now.' };
@@ -216,8 +233,12 @@ export function scriptedDecide(a, s) {
     if (lacking.includes('wood') && Math.random() < 0.3) return { type: 'work', to: 'forest', thought: `Wood for the ${store.project}.` };
   }
   // Borrow when hungry and broke; pay back when flush.
-  if (store && isDay && b.food < 0.35 && inv.food < 0.3 && (inv.coin || 0) < 2 && !store.loans?.some(l => l.name === a.name)) return { type: 'borrow', n: 6, thought: 'I will pay it back.' };
-  if (store && isDay && (inv.coin || 0) >= 8 && store.loans?.some(l => l.name === a.name)) return { type: 'repay', n: 4, thought: 'Owe less.' };
+  if (s.bank && isDay && b.food < 0.35 && inv.food < 0.3 && (inv.coin || 0) < 2 && !s.bank.owed && !s.bank.defaulted) return { type: 'borrow', n: 6, thought: 'I will pay it back.' };
+  if (s.bank && isDay && (inv.coin || 0) >= 8 && s.bank.owed > 0) return { type: 'repay', n: 4, thought: 'Owe less.' };
+  // The vote. Everyone with a stake goes to the meeting house once while a ballot is open.
+  if (s.ballot && !s.ballot.voted && isDay && Math.random() < 0.45) return { type: 'vote', for: preferBuild(a, s), thought: 'My hand, for what we need.' };
+  // Savings: coin in the bank cannot be taken, and grows.
+  if (s.bank && isDay && (inv.coin || 0) >= 15 && inv.food >= 1.5 && !s.bank.owed && Math.random() < 0.12) return { type: 'deposit', n: Math.floor((inv.coin || 0) / 2), thought: 'Where no one can take it.' };
   if (store && isDay) {
     if (b.food < 0.4 && inv.food < 0.3 && (inv.coin || 0) >= (store.prices?.food?.buy || 2) && (store.shelf.food || 0) >= 1) return { type: 'buy', item: 'food', n: 2, thought: 'Buy something to eat.' };
     if (winterComing && inv.blanket <= 0 && (inv.coin || 0) >= (store.prices?.blanket?.buy || 10) && (store.shelf.blanket || 0) >= 1) return { type: 'buy', item: 'blanket', n: 1, thought: 'A blanket before the snow.' };
@@ -242,8 +263,9 @@ export function scriptedDecide(a, s) {
   // Fish, if there is a creek and the field is thin.
   if (s.found?.creek && isDay && inv.food < 1.5 && Math.random() < 0.4) return { type: 'forage', to: 'creek', thought: 'The creek.' };
   // Build when carrying a surplus.
-  const unbuilt = Object.keys(I.BUILDS).find(k => !s.builds?.[k]?.done);
-  if (unbuilt && ((inv.wood >= 4) || (inv.stone >= 3)) && Math.random() < 0.5) return { type: 'build', what: unbuilt, thought: `The ${unbuilt}.` };
+  // The old shared builds anyone may start; what the council raises is chosen at the meeting house first.
+  const unbuilt = s.council?.project || Object.keys(I.BUILDS).find(k => !I.BUILDS[k].civic && !s.builds?.[k]?.done);
+  if (unbuilt && ((inv.wood >= 4) || (inv.stone >= 3)) && Math.random() < 0.5) return { type: 'build', what: unbuilt, thought: `The ${I.BUILDS[unbuilt].label}.` };
   if (isDay && Math.random() < 0.2) return { type: 'forage', to: pick(['forest', 'quarry', 'meadow']), thought: 'See what there is.' };
 
   // Ordinary day.

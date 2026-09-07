@@ -138,3 +138,69 @@ export function drawStore(canvas, { store, here, project, projectProgress }) {
   here.forEach((a, i) => person(g, a, spots[i % spots.length][0], spots[i % spots.length][1]));
   if (!here.length) label(g, 'the store is empty; the shelf keeps its own count', W / 2, 280, '#a9a290', 12);
 }
+
+// The bank: a counter, the strongbox, the book of who keeps what and who owes what.
+export function drawBank(canvas, { bank, here, names }) {
+  const g = canvas.getContext('2d'); const W = canvas.width, H = canvas.height;
+  g.imageSmoothingEnabled = false; g.clearRect(0, 0, W, H);
+  wall(g, 0, 0, W, 190, '#3a3f4a');
+  g.fillStyle = '#2b2f38'; for (let x = 0; x < W; x += 24) for (let y = 0; y < 190; y += 12) g.fillRect(x + ((y / 12) % 2) * 12, y, 22, 10);
+  planks(g, 0, 190, W, H - 190);
+  // the strongbox
+  g.fillStyle = '#2b2b2b'; g.fillRect(W - 120, 96, 96, 88); g.fillStyle = '#5f5f5f'; g.fillRect(W - 116, 100, 88, 80); g.fillStyle = '#2b2b2b'; g.fillRect(W - 80, 132, 16, 16);
+  PX.blit(g, icon('coin'), W - 76, 108, 14);
+  label(g, `${bank.coin} coin in the strongbox`, W - 72, 196, '#e8d36a', 10);
+  // the counter
+  g.fillStyle = '#5b3d22'; g.fillRect(24, 200, W / 2 + 40, 30); g.fillStyle = '#4e3620'; g.fillRect(24, 230, W / 2 + 40, 8);
+  // the book: savings on the left page, loans on the right
+  g.fillStyle = '#e8e2d0'; g.fillRect(28, 16, W / 2 + 20, 168); g.fillStyle = '#c9c2b0'; g.fillRect(28 + (W / 2 + 20) / 2, 16, 1, 168);
+  label(g, 'KEPT HERE', 28 + (W / 2 + 20) / 4, 34, '#2b2b2b', 11);
+  label(g, 'OWED', 28 + (W / 2 + 20) * 3 / 4, 34, '#2b2b2b', 11);
+  const sv = (bank.savings || []).slice().sort((a, b) => b.n - a.n).slice(0, 8);
+  sv.forEach((r, i) => label(g, `${names(r.id)} · ${r.n}`, 28 + (W / 2 + 20) / 4, 52 + i * 15, '#4e3620', 10));
+  if (!sv.length) label(g, 'no one keeps coin here yet', 28 + (W / 2 + 20) / 4, 52, '#7a736a', 10);
+  const ln = (bank.loans || []).slice(0, 7);
+  ln.forEach((l, i) => label(g, `${l.name} · ${l.owed}${l.defaulted ? ' (not paying)' : ''}`, 28 + (W / 2 + 20) * 3 / 4, 52 + i * 15, l.defaulted ? '#a83232' : '#4e3620', 10));
+  if (bank.civic?.owed) label(g, `the council · ${bank.civic.owed}`, 28 + (W / 2 + 20) * 3 / 4, 52 + ln.length * 15, '#2b4f7e', 10);
+  if (!ln.length && !bank.civic?.owed) label(g, 'no one owes the bank', 28 + (W / 2 + 20) * 3 / 4, 52, '#7a736a', 10);
+  const spots = [[W / 2 - 90, 290], [W / 2 - 10, 286], [W / 2 + 70, 292], [W / 2 - 160, 288], [W / 2 + 140, 284]];
+  here.forEach((a, i) => person(g, a, spots[i % spots.length][0], spots[i % spots.length][1]));
+  if (!here.length) label(g, 'the bank is empty; the book keeps its own count', W / 2, 280, '#a9a290', 12);
+}
+
+// The meeting house: benches, the ballot board with every hand counted, and the wanted-sign for the project.
+export function drawCouncil(canvas, { council, here, names, specs }) {
+  const g = canvas.getContext('2d'); const W = canvas.width, H = canvas.height;
+  g.imageSmoothingEnabled = false; g.clearRect(0, 0, W, H);
+  wall(g, 0, 0, W, 190, '#4a3626');
+  planks(g, 0, 190, W, H - 190);
+  // benches
+  for (let i = 0; i < 3; i++) { g.fillStyle = '#5b3d22'; g.fillRect(30, 236 + i * 26, W - 60, 8); g.fillStyle = '#4e3620'; g.fillRect(34, 244 + i * 26, 6, 10); g.fillRect(W - 40, 244 + i * 26, 6, 10); }
+  // the board
+  g.fillStyle = '#2b2b2b'; g.fillRect(W / 2 - 170, 14, 340, 166); g.fillStyle = '#3a3a3a'; g.fillRect(W / 2 - 166, 18, 332, 158);
+  const bt = council.ballot;
+  if (bt) {
+    label(g, `THE VOTE · closes day ${bt.closes}`, W / 2, 38, '#e8e2d0', 12);
+    const total = Math.max(1, Object.values(bt.tally || {}).reduce((s, n) => s + n, 0));
+    bt.options.forEach((k, i) => {
+      const n = bt.tally?.[k] || 0, y = 58 + i * 28;
+      label(g, `the ${specs?.[k]?.label || k}`, W / 2 - 156, y + 6, '#e8e2d0', 11, 'left');
+      g.fillStyle = '#5f5f5f'; g.fillRect(W / 2 - 20, y - 6, 150, 14); g.fillStyle = '#e8d36a'; g.fillRect(W / 2 - 20, y - 6, Math.round(150 * n / total), 14);
+      label(g, `${n}`, W / 2 + 146, y + 6, '#e8e2d0', 11, 'right');
+    });
+    const voters = Object.entries(bt.votes || {}).map(([id, k]) => `${names(id)}: ${specs?.[k]?.label || k}`);
+    label(g, voters.length ? voters.slice(0, 5).join(' · ') + (voters.length > 5 ? ' …' : '') : 'no hands yet', W / 2, 170, '#a9a290', 9);
+  } else if (council.project) {
+    label(g, 'WANTED', W / 2, 44, '#e8d36a', 14);
+    label(g, `the ${specs?.[council.project]?.label || council.project}`, W / 2, 68, '#e8e2d0', 13);
+    label(g, specs?.[council.project]?.effect || '', W / 2, 90, '#a9a290', 9);
+    label(g, `a coin a material · ${council.coin} coin to pay with · ${council.wagesPaid} paid so far`, W / 2, 112, '#e8e2d0', 10);
+    if (council.lastResult) label(g, `chosen day ${council.lastResult.day}, ${council.lastResult.tally?.[council.lastResult.winner] ?? ''} of ${council.lastResult.cast} hands`, W / 2, 134, '#a9a290', 9);
+  } else {
+    label(g, 'nothing on the board', W / 2, 90, '#a9a290', 12);
+    label(g, 'a ballot opens when there is something to build', W / 2, 108, '#7a736a', 9);
+  }
+  const spots = [[W / 2 - 120, 300], [W / 2 - 40, 296], [W / 2 + 40, 302], [W / 2 + 120, 298], [W / 2 - 180, 294], [W / 2 + 180, 300]];
+  here.forEach((a, i) => person(g, a, spots[i % spots.length][0], spots[i % spots.length][1]));
+  if (!here.length) label(g, 'empty benches', W / 2, 224, '#a9a290', 12);
+}

@@ -33,13 +33,16 @@ Client: Weather tab "What is coming" (readiness bar, Warn them) + "The last seas
 `threatLog`, `ended`. Smoke script: scratchpad `smoke_threats.mjs` (fresh 3 seasons w/ warn, forced despair, migration of
 data/world.json read-only). Live village will get its first threat rolled on load (migration rolls one if none).
 
-## NEXT (her ask, 2026-09-07): split the store into departments
-"Split up the store into departments: government (villagers vote), the store for getting stuff, and a bank for loans and
-savings, and loaning the government to start projects like building a town community center and things that make life
-better." Design notes: keep `w.store` as the goods shelf; add `w.bank` (savings accounts per villager, loans moved from
-store.loans, lends to the government); add `w.council`/government (villagers vote on a project from a ballot; the government
-borrows from the bank, pays wages, builds civic projects: community centre/hall-of-days, well-house, school, bathhouse etc.
-that raise joy/health/ease). After that, her earlier pick: a rival fire past the pale, then a second Creator.
+## Departments (her ask 2026-09-07): DONE
+`server/civic.js`: bank (savings/draw/borrow/repay, interest at season turn, inheritance, lends to the council with a 30 float)
+and council (ballot every time there is no project and debt <= 60 or a season passed; scripted `preferBuild` votes by need;
+`closeBallot` -> `commission` borrows and seeds the coin cost; `payWage` from council coin in the build action; `nightly`
+= tithe 2% of till, debt paydown, project-finished announcement + joy, civic building effects). New PLACES `bank` (23,19)
+and `council` (17,13); civic BUILDS in items.js (`civic: true`): commons, bathhouse, school, wellhouse; civic builds can
+only be raised as the council's project. Bank action for taking coin out is `draw` (NOT `withdraw`, which means go home).
+Client: BANK/MEETING sprites, bank + meeting-house scenes (`drawBank`, `drawCouncil`), Village tab department lines,
+villager page savings/debt/vote. Migration `C.ensure` splits the till in half and moves loans/project off the store.
+Smoke: scratchpad `smoke_civic.mjs`. Next (her earlier picks): a rival fire past the pale, then a second Creator.
 
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to

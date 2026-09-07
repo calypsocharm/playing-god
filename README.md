@@ -342,15 +342,38 @@ wounds healed, griefs resolved, prayers, acts of the sky, and the bodies at seas
 the table, plain readouts of what matters: is care outrunning harm, are wounds healing faster than
 they form, are bodies settling, is trust rising.
 
-## The store as a bank and a builder
+## The store, the bank, and the meeting house
 
-The till starts with 200 coin (an older world's till is topped up once). Villagers can borrow up
-to 20 coin at a time; the debt grows a tenth each season and is paid back a coin a night
-whenever they can spare it, or in lumps with `repay`. A season without paying and the store
-stops lending to that person and word gets around. When the till holds 60 or more, the store
-commissions the village's next project (the road first, then whatever is unbuilt) and pays a coin
-for every wood and stone brought to it, which is how coin reaches people who have nothing to
-sell. The road makes work and foraging tire people less.
+The village has three departments, and the Creator runs none of them.
+
+The **store** is a shelf: it buys what you bring and sells what it holds, and prices move with
+the shelf. Every night a tithe of the till (two in a hundred, once it holds more than forty) goes
+to the council. Raiders rob the store; they never get into the bank's strongbox.
+
+The **bank** keeps the coin. A villager can put coin in (`deposit`), where no one can take it,
+and it grows a twentieth every season the bank can pay it; take it out again (`draw`) as long as
+the bank has not lent it all out; borrow up to 20 (`borrow`), a tenth more each season, paid back
+a coin a night or in lumps (`repay`), and a season unpaid means the bank stops lending to you and
+word gets around. When someone dies, what they kept in the bank goes to their heir, or to the
+council if no one was close. The bank also lends to the council, keeping thirty back.
+
+The **meeting house** is the village governing itself. When there is nothing being built, a
+ballot opens with up to four things the village could raise: the old shared builds (granary,
+hall, road, pool) and the civic ones, which only the council can raise: a common house (a warm
+room by the hearth that is not the fire; everyone's joy lifts a little each night, more for those
+who gather there), a bathhouse by the well (the sick mend faster, every body lets go a little),
+a schoolhouse (children grow open and pick up the hands of their elders), and a well house
+(water in a drought, and the field still gives). Villagers walk to the meeting house and vote
+(`vote {for}`) for what their own life lacks: the hungry for the granary, the cold for the hall,
+the sick for the bathhouse, parents for the school, the grieving for the common house. After
+three days the hands are counted, ties are settled by lot, and the council takes the project on:
+it borrows from the bank for the coin the build needs and for wages, and pays a coin for every
+material carried to the work while it has coin. When the building stands, everyone remembers
+that they chose it and raised it, and the season it was raised in earns the sky a point. The
+council pays the bank back from the tithe between projects, and will not open a new ballot while
+it owes more than sixty, unless a season has passed. Click the bank or the meeting house on the
+map to see inside: the strongbox and the book of who keeps and owes what; the benches and the
+ballot board with every hand counted.
 
 ## Feedback: consequences you can see
 

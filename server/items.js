@@ -50,6 +50,11 @@ export const BUILDS = {
   hall:    { label: 'hall',    cost: { wood: 64, stone: 30, rope: 8 }, effect: 'a roof over the hearth: warm even when the fire is out, and everyone there counts as sheltered', at: 'hearth' },
   road:    { label: 'road',    cost: { wood: 30, stone: 40 }, effect: 'a laid road from the hearth to the field and the forest: work and foraging tire people less', at: 'hearth' },
   pool:    { label: 'pool',    cost: { stone: 24, clay: 12, coin: 10 }, effect: 'a stone pool at the creek: a summer place, and being there in the heat settles the body', at: 'creek' },
+  // What the council raises when the village votes for it: things that make life better, not only longer.
+  commons:   { label: 'common house', cost: { wood: 50, stone: 20, rope: 6, coin: 20 }, effect: 'a warm room by the hearth that is not the fire: people gather, show what they made, and the low of heart are lifted', at: 'hearth', civic: true },
+  bathhouse: { label: 'bathhouse',    cost: { stone: 30, wood: 20, clay: 10, coin: 15 }, effect: 'hot water and steam by the well: the sick mend faster and every body lets go a little each night', at: 'well', civic: true },
+  school:    { label: 'schoolhouse',  cost: { wood: 30, stone: 10, coin: 25 }, effect: 'children grow open and quick, and pick up the hands of their elders', at: 'hearth', civic: true },
+  wellhouse: { label: 'well house',   cost: { stone: 24, wood: 12, coin: 10 }, effect: 'a roof and a winch over the well: water in a drought, and the field gives even then', at: 'well', civic: true },
 };
 
 // ---------- coin and the store ----------

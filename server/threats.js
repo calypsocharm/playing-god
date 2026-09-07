@@ -13,7 +13,7 @@ export const THREATS = {
   wolves:   { season: 'winter', name: 'a wolf pack', omen: 'Tracks in the snow past the edge, many and large, all going one way.', help: 'dogs, fences, and animals brought in close; no one out past the edge at dusk' },
   sickness: { season: 'spring', name: 'a sickness on the wind', omen: 'The birds are silent in the morning and there is a smell of rot from the pale.', help: 'herbs, salve and tonic laid by; the sick kept apart and rested' },
   flood:    { season: 'spring', name: 'a flood', omen: 'The creek runs brown and loud and the meadow is sodden.', help: 'food stored in the granary; wood and stone kept up off the ground' },
-  drought:  { season: 'summer', name: 'a drought', omen: 'No dew for a week. The well is a hand lower than it was.', help: 'food on the store shelf and in the houses; the pool at the creek; the granary' },
+  drought:  { season: 'summer', name: 'a drought', omen: 'No dew for a week. The well is a hand lower than it was.', help: 'food on the store shelf and in the houses; the well house; the pool at the creek; the granary' },
   fire:     { season: 'summer', name: 'a grass fire', omen: 'The meadow is yellow and the wind has turned to blow across it toward the houses.', help: 'the field cut, water carried, stone houses; wood kept away from the hearth pile' },
   raiders:  { season: 'autumn', name: 'raiders from the pale', omen: 'Strangers were seen at the edge, counting the houses.', help: 'axes in hands at the hearth, dogs, fences, and the hall to shelter in' },
   frost:    { season: 'autumn', name: 'an early frost', omen: 'The leaves went in a night. Ice on the well bucket at dawn.', help: 'the harvest brought in early; food on the shelf; the granary' },
@@ -41,7 +41,7 @@ export function readiness(w, living, animals, builds, store) {
     case 'wolves':   r = Math.min(1, dogs / Math.max(1, n / 4)) * 0.5 + Math.min(1, fences / Math.max(1, n / 3)) * 0.3 + (animals.filter(x => x.owner && (x.kind === 'hen' || x.kind === 'goat')).length === 0 ? 0.2 : 0.1); break;
     case 'sickness': r = Math.min(1, sum(a => (a.inv.herbs || 0) + (a.inv.salve || 0) * 2 + (a.inv.tonic || 0) * 2) / (n * 1.5)) * 0.8 + (living.filter(a => a.ill).length ? 0 : 0.2); break;
     case 'flood':    r = granary * 0.6 + Math.min(1, (store.shelf.food || 0) / (n * 2)) * 0.4; break;
-    case 'drought':  r = Math.min(1, ((store.shelf.food || 0) + sum(a => a.inv.food)) / (n * 5)) * 0.6 + granary * 0.2 + pool * 0.2; break;
+    case 'drought':  r = Math.min(1, ((store.shelf.food || 0) + sum(a => a.inv.food)) / (n * 5)) * 0.5 + granary * 0.2 + pool * 0.1 + (builds.wellhouse?.done ? 0.2 : 0); break;
     case 'fire':     r = Math.min(1, sum(a => a.inv.stone) / (n * 3)) * 0.4 + (w.hearth.wood < n * 2 ? 0.3 : 0.1) + hall * 0.3; break;
     case 'raiders':  r = Math.min(1, sum(a => a.inv.axe) / Math.max(1, n / 2)) * 0.4 + Math.min(1, dogs / Math.max(1, n / 4)) * 0.2 + Math.min(1, fences / Math.max(1, n / 3)) * 0.2 + hall * 0.2; break;
     case 'frost':    r = Math.min(1, ((store.shelf.food || 0) + sum(a => a.inv.food)) / (n * 4)) * 0.7 + granary * 0.3; break;
@@ -116,7 +116,7 @@ export function land(w, living, animals, PLACES, fallIll, remember, event, die, 
       const defenders = at.filter(a => a.inv.axe > 0);
       for (const a of at) B.physicalHit(a.body, (defenders.length ? 0.15 : 0.35) * x);
       for (const a of living) { remember(w, a, `Raiders came out of the pale. ${defenders.length ? defenders.map(d => d.name).join(', ') + ' stood at the hearth with axes and they did not stay long.' : 'No one stood. They took what they wanted.'}`, 1); a.faith = B.clamp((a.faith || 0) - 0.05 * x, -1, 1); }
-      text = `Raiders come out of the pale at dusk. They take ${coin} coin and ${food} food from the store${defenders.length ? `; ${defenders.map(d => d.name).join(', ')} hold the hearth with axes` : '; no one stands against them'}.`;
+      text = `Raiders come out of the pale at dusk. They take ${coin} coin and ${food} food from the store; the bank's strongbox holds${defenders.length ? `; ${defenders.map(d => d.name).join(', ')} hold the hearth with axes` : '; no one stands against them'}.`;
       break;
     }
     case 'frost': {

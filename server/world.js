@@ -15,6 +15,7 @@ import * as A from './animals.js';
 import * as R from './rites.js';
 import * as Art from './arts.js';
 import * as T from './threats.js';
+import * as C from './civic.js';
 
 export const TICKS_PER_DAY = 6;
 export const TICK_NAMES = ['dawn', 'morning', 'midday', 'afternoon', 'evening', 'night'];
@@ -64,6 +65,8 @@ export const PLACES = {
   road:   { x: 2,  y: 12, label: 'the road',   sheltered: false },
   camp:   { x: 47, y: 12, label: 'the camp',   sheltered: false },   // a second fire past the edge, if anyone ever leaves to light one
   store:  { x: 24, y: 16, label: 'the store',  sheltered: false },   // the village's shared shelf, by the well
+  bank:   { x: 23, y: 19, label: 'the bank',   sheltered: false },   // savings no one can take, and loans
+  council:{ x: 17, y: 13, label: 'the meeting house', sheltered: false },   // where the village votes on what it builds
 };
 const CAMP_SPOTS = [{ x: 44, y: 8 }, { x: 50, y: 8 }, { x: 44, y: 16 }, { x: 50, y: 16 }, { x: 47, y: 6 }, { x: 47, y: 18 }, { x: 52, y: 12 }, { x: 43, y: 12 }, { x: 51, y: 4 }, { x: 51, y: 20 }];
 export { CAMP_SPOTS };
@@ -144,6 +147,7 @@ export function createWorld(saved) {
     saved.mod = saved.mod || { bannedIps: {}, bannedTokens: {}, muted: {} };
     saved.store.loans = saved.store.loans || {}; saved.store.project = saved.store.project ?? null; saved.store.wagesPaid = saved.store.wagesPaid || 0;
     if (saved.store.coin < 120 && !saved.store.funded) { saved.store.coin += 200; saved.store.funded = true; }
+    C.ensure(saved);
     for (const a of saved.agents) { if (a.inv && a.inv.coin == null) a.inv.coin = 3; a.upgrades = a.upgrades || {}; }
     if (!saved.threat && !saved.ended) rollThreat(saved);
     return saved;
@@ -159,6 +163,7 @@ export function createWorld(saved) {
     camp: { founded: false, name: '', wood: 0, leader: null, day: null },
     god: newGod(),
     store: I.newStore(),
+    bank: C.newBank(), council: C.newCouncil(),
     mod: { bannedIps: {}, bannedTokens: {}, muted: {} },
     goals: {},           // question key -> { done: day }
     prayers: [],         // what the villagers ask of the sky
@@ -631,7 +636,9 @@ function dayPhase(w, remoteActions) {
     if (act.type === 'forage') dest = (I.FORAGE[act.to] && (PLACES[act.to] || isFound(w, act.to))) ? act.to : 'meadow';
     if (act.type === 'scout') dest = null;   // explorers move themselves, into the pale
     if (act.type === 'build') dest = I.BUILDS[act.what]?.at || 'hearth';
-    if (act.type === 'buy' || act.type === 'sell' || act.type === 'borrow' || act.type === 'repay') dest = 'store';
+    if (act.type === 'buy' || act.type === 'sell') dest = 'store';
+    if (act.type === 'borrow' || act.type === 'repay' || act.type === 'deposit' || act.type === 'draw') dest = 'bank';
+    if (act.type === 'vote') dest = 'council';
     if (act.type === 'upgrade') dest = 'home';
     if (act.type === 'craft') dest = null;   // you make things where you stand
     if (act.type === 'sit') dest = act.to && (PLACES[act.to] || act.to === 'home') ? act.to : null;
@@ -668,7 +675,7 @@ function dayPhase(w, remoteActions) {
       case 'work': {
         if (a.location === 'field') {
           let y = W.fieldYield(w.day, w.weather);
-          if (w.drought && w.day <= w.drought.until) y *= 0.15;
+          if (w.drought && w.day <= w.drought.until) y *= w.builds.wellhouse?.done ? 0.45 : 0.15;
           if (w.flood && w.day <= w.flood.until) y *= 0.5;
           if (w.frost && w.day <= w.frost.until) y = 0;
           if (a.carrying) y *= 0.6;
@@ -819,33 +826,11 @@ function dayPhase(w, remoteActions) {
         } else remember(w, a, (w.store.shelf[item] || 0) < 1 ? `The store had no ${item}.` : `You could not afford ${item} (${price} coin each).`, 0.3);
         break;
       }
-      case 'borrow': {
-        // A loan from the store. Up to 20 owed at once, a tenth added each season, paid back a little each night you can.
-        const n = Math.max(1, Math.min(20, Math.floor(act.n || 5)));
-        const owed = w.store.loans[a.id]?.owed || 0;
-        if (a.location !== 'store') break;
-        if (w.store.loans[a.id]?.defaulted) { remember(w, a, 'The store will not lend to you. You did not pay last time.', 0.5); break; }
-        const room = Math.min(n, 20 - owed, w.store.coin);
-        if (room >= 1) {
-          w.store.coin -= room; a.inv.coin = (a.inv.coin || 0) + room;
-          w.store.loans[a.id] = { owed: owed + room, since: w.store.loans[a.id]?.since ?? w.day, name: a.name };
-          event(w, `${a.name} borrows ${room} coin from the store.`, 'trade', [a.id]);
-          remember(w, a, `You borrowed ${room} coin. You owe the store ${owed + room}.`, 0.5);
-        } else remember(w, a, owed >= 20 ? 'You already owe the store all it will lend.' : 'The store had nothing to lend.', 0.4);
-        break;
-      }
-      case 'repay': {
-        const loan = w.store.loans[a.id];
-        if (!loan || a.location !== 'store') break;
-        const n = Math.min(Math.floor(a.inv.coin || 0), loan.owed, Math.max(1, Math.floor(act.n || loan.owed)));
-        if (n >= 1) {
-          a.inv.coin -= n; w.store.coin += n; loan.owed -= n;
-          event(w, `${a.name} pays ${n} coin back to the store.`, 'trade', [a.id]);
-          remember(w, a, loan.owed <= 0 ? 'You paid the store off. Nothing hangs over you.' : `You paid ${n} back. You still owe ${loan.owed}.`, 0.5);
-          if (loan.owed <= 0) { delete w.store.loans[a.id]; B.soothe(a.body, 0.1); }
-        }
-        break;
-      }
+      case 'borrow': { if (a.location === 'bank') C.borrow(w, a, act.n, remember, event); break; }
+      case 'repay': { if (a.location === 'bank') C.repay(w, a, act.n, remember, event); break; }
+      case 'deposit': { if (a.location === 'bank') C.deposit(w, a, act.n, remember, event); break; }
+      case 'draw': { if (a.location === 'bank') C.withdraw(w, a, act.n, remember, event); break; }
+      case 'vote': { if (a.location === 'council') C.vote(w, a, act.for, remember, event); break; }
       case 'sell': {
         const item = act.item, n = Math.max(1, Math.min(10, Math.floor(act.n || 1)));
         const price = I.sellPrice(w.store, item);
@@ -879,6 +864,7 @@ function dayPhase(w, remoteActions) {
       }
       case 'build': {
         const what = act.what && I.BUILDS[act.what] ? act.what : null;
+        if (what && I.BUILDS[what].civic && w.council.project !== what && !w.builds[what]?.done) { remember(w, a, `The ${I.BUILDS[what].label} is not what the meeting house chose. It is raised by vote, or not at all.`, 0.3); break; }
         if (what && a.location === (I.BUILDS[what].at || 'hearth')) {
           const b = w.builds[what] = w.builds[what] || { have: {}, done: false, builders: {} };
           if (!b.done) {
@@ -890,10 +876,9 @@ function dayPhase(w, remoteActions) {
             }
             if (put.length) {
               b.builders[a.id] = (b.builders[a.id] || 0) + 1;
-              // The store pays for work on the village's projects, a coin a material, while it can.
+              // The council pays for work on the project it was voted, a coin a material, while it has coin.
               const units = put.reduce((sum, p) => sum + Number(p.split(' ')[0]), 0);
-              const wage = Math.min(units, Math.max(0, w.store.coin - 20));
-              if (wage > 0) { w.store.coin -= wage; a.inv.coin = (a.inv.coin || 0) + wage; w.store.wagesPaid = (w.store.wagesPaid || 0) + wage; remember(w, a, `The store paid you ${wage} coin for your work on the ${what}.`, 0.4); }
+              if (w.council.project === what) C.payWage(w, a, units, remember);
               a.body.energy = B.clamp(a.body.energy - 0.08);
               event(w, `${a.name} puts ${put.join(', ')} into the ${what}.`, 'build', [a.id]);
               remember(w, a, `You worked on the ${what}.`, 0.3);
@@ -901,8 +886,8 @@ function dayPhase(w, remoteActions) {
               for (const o of near) if (b.builders[o.id]) { bumpTrust(a, o, 0.04); bumpTrust(o, a, 0.04); }
               if (Object.entries(I.BUILDS[what].cost).every(([m, n]) => (b.have[m] || 0) >= n)) {
                 b.done = true; b.day = w.day;
-                event(w, `The ${what} is finished. ${I.BUILDS[what].effect}.`, 'healed', Object.keys(b.builders));
-                for (const id of Object.keys(b.builders)) { const o = byId(w, id); if (o) remember(w, o, `The ${what} you helped raise is finished.`, 0.8); }
+                if (w.council.project !== what) event(w, `The ${I.BUILDS[what].label} is finished. ${I.BUILDS[what].effect}.`, 'healed', Object.keys(b.builders));
+                for (const id of Object.keys(b.builders)) { const o = byId(w, id); if (o) remember(w, o, `The ${I.BUILDS[what].label} you helped raise is finished.`, 0.8); }
               }
             } else remember(w, a, `You went to build the ${what} but had nothing it needs.`, 0.2);
           }
@@ -1367,6 +1352,7 @@ function die(w, a, forcedCause) {
 
   // Belongings go to kin first, then to whoever the dead trusted most. The thing they longed for goes to the first.
   const heirs = living.map(o => ({ o, t: trustOf(a, o) + (kin.has(o.id) ? 2 : 0) })).filter(h => h.t > 0.1).sort((x, y) => y.t - x.t).slice(0, 3);
+  { const saved = C.inherit(w, a, heirs[0]?.o); if (saved) { if (heirs[0]) remember(w, heirs[0].o, `The bank passed you what ${a.name} kept there: ${saved} coin.`, 0.7); else event(w, `${a.name}'s ${saved} coin in the bank goes to the council; no one was close enough to take it.`, 'trade'); } }
   if (heirs.length) {
     const goods = Object.entries(a.inv).filter(([, n]) => n >= 1 || (n > 0 && false));
     let i = 0;
@@ -1486,14 +1472,8 @@ function nightPhase(w) {
     if (age >= 80) a.body.energy = B.clamp(a.body.energy - 0.15);        // the old do not sleep it all off
     else if (age >= 65) a.body.energy = B.clamp(a.body.energy - 0.07);
     if (a.inv.blanket > 0) a.body.warmth = B.clamp(a.body.warmth + 0.2);
-    // Debts. A little back each night you can spare it; a tenth more each season; a season unpaid and the store stops trusting you.
-    const loan = w.store.loans?.[a.id];
-    if (loan && loan.owed > 0) {
-      if ((a.inv.coin || 0) > 3) { const pay = Math.min(loan.owed, 1); a.inv.coin -= pay; w.store.coin += pay; loan.owed -= pay; loan.lastPaid = w.day; }
-      if (W.dayInSeason(w.day, w.weather) === 0 && w.day > loan.since) loan.owed = Math.ceil(loan.owed * 1.1);
-      if (w.day - (loan.lastPaid ?? loan.since) > w.weather.daysPerSeason && !loan.defaulted) { loan.defaulted = true; event(w, `${a.name} has not paid the store in a season. Word gets around.`, 'trade', [a.id]); for (const o of alive(w)) if (o !== a) bumpTrust(o, a, -0.05); remember(w, a, 'Everyone knows you owe the store and have not paid.', 0.7); }
-      if (loan.owed <= 0) delete w.store.loans[a.id];
-    }
+    // Debts. A little back each night you can spare it; a tenth more each season; a season unpaid and the bank stops trusting you.
+    C.loansNightly(w, a, W.dayInSeason(w.day, w.weather) === 0, w.weather.daysPerSeason, remember, event, bumpTrust, alive(w));
     // What you built for yourself pays every night.
     if (a.upgrades?.bighouse) { a.body.warmth = B.clamp(a.body.warmth + 0.12); a.body.energy = B.clamp(a.body.energy + 0.08); }
     if (a.upgrades?.garden && W.seasonOf(w.day, w.weather) !== 'winter') { a.inv.food += 0.15; if (Math.random() < 0.3) a.inv.herbs += 1; }
@@ -1518,7 +1498,7 @@ function nightPhase(w) {
     }
   }
   A.nightly(w, w.agents, PLACES, W.seasonOf(w.day, w.weather), yearDays(w), remember, event, (k) => isFound(w, k));   // fed, laid, aged, taken by wolves
-  storeNight(w);       // the store picks a project and posts wages when it can afford to
+  storeNight(w);       // the market cart, the tithe, the council's project and ballot
   measureNight(w);     // the instruments: is care outrunning harm, are wounds healing
   R.illnessNightly(w, alive(w), W.seasonOf(w.day, w.weather), w.weather.daysPerSeason, remember, event);
   {
@@ -1537,8 +1517,7 @@ function nightPhase(w) {
   event(w, `Night falls on day ${w.day}.`, 'night');
 }
 
-// ---------- the store as a builder ----------
-// With money in the till the store commissions the village's next project and pays wages for it.
+// ---------- the store, the market, and the council's night ----------
 function storeNight(w) {
   const st = w.store;
   // A market beyond the edge. Once the road is laid, a cart comes now and then: it buys the store's
@@ -1563,13 +1542,8 @@ function storeNight(w) {
       if (spent > 0) { st.coin -= spent; event(w, `The cart leaves ${got.join(', ')} on the store's shelf for ${spent} coin.`, 'trade'); }
     }
   }
-  const unbuilt = Object.keys(I.BUILDS).filter(k => !w.builds[k]?.done && (I.BUILDS[k].at !== 'creek' || isFound(w, 'creek')));
-  if (st.project && (w.builds[st.project]?.done || !unbuilt.includes(st.project))) { event(w, `The store's project, the ${st.project}, is done. It paid ${st.wagesPaid || 0} coin in wages.`, 'trade'); st.project = null; }
-  if (!st.project && st.coin >= 60 && unbuilt.length) {
-    st.project = unbuilt.includes('road') ? 'road' : unbuilt[0];
-    event(w, `The store puts up coin for a ${st.project}: a coin for every wood and stone brought to the work.`, 'trade');
-    for (const a of alive(w)) remember(w, a, `The store is paying coin for work on the ${st.project}.`, 0.5);
-  }
+  // The council: tithe, debt, the project, the ballot, and what the buildings do.
+  C.nightly(w, alive(w), (k) => isFound(w, k), event, remember, F.isChild);
 }
 
 // ---------- the instruments ----------
@@ -1668,7 +1642,8 @@ export function dilemmaFor(w, a) {
     const opts = [];
     if (W.fieldYield(w.day, w.weather) > 0.1) opts.push(opt('Work the field', { type: 'work', to: 'field' }, 'Honest and slow. The field gives little this season.'));
     if ((a.inv.coin || 0) >= I.buyPrice(w.store, 'food') && (w.store.shelf.food || 0) >= 1) opts.push(opt(`Buy food (${I.buyPrice(w.store, 'food')} coin)`, { type: 'buy', item: 'food', n: 2 }, 'You have the coin.'));
-    else if (!w.store.loans?.[a.id]?.defaulted && w.store.coin > 0) opts.push(opt('Borrow from the store', { type: 'borrow', n: 6 }, 'A debt that grows each season. The store remembers who pays.'));
+    else if ((w.bank.savings[a.id] || 0) >= 1 && w.bank.coin >= 1) opts.push(opt('Draw on your savings', { type: 'draw', n: 6 }, `You keep ${Math.floor(w.bank.savings[a.id])} coin in the bank.`));
+    else if (!w.bank.loans?.[a.id]?.defaulted && w.bank.coin > 0) opts.push(opt('Borrow from the bank', { type: 'borrow', n: 6 }, 'A debt that grows each season. The bank remembers who pays.'));
     if (friend) opts.push(opt(`Ask ${friend.name} for help`, { type: 'talk', target: friend.id, say: `I have nothing to eat. Can you spare anything?` }, `You trust them. They may or may not have food to give.`));
     if (rich && rich !== friend) opts.push(opt(`Take from ${rich.name}`, { type: 'take', target: rich.id, item: 'food' }, `${rich.name} has ${Math.floor(rich.inv.food)} food. They will know it was you.`));
     if (isFound(w, 'creek')) opts.push(opt('Fish the creek', { type: 'forage', to: 'creek' }, 'Cold work, but the creek feeds.'));
@@ -1680,7 +1655,7 @@ export function dilemmaFor(w, a) {
     if (w.hearth.wood > 0 || w.builds.hall?.done) opts.push(opt('Go to the fire', { type: 'go', to: 'hearth' }, 'Warmth, and whoever is there.'));
     if ((a.inv.coin || 0) >= I.buyPrice(w.store, 'blanket') && (w.store.shelf.blanket || 0) >= 1) opts.push(opt(`Buy a blanket (${I.buyPrice(w.store, 'blanket')} coin)`, { type: 'buy', item: 'blanket', n: 1 }, 'Halves what the cold takes, every day after.'));
     else if ((a.inv.fiber || 0) >= 3 && (a.inv.rope || 0) >= 1) opts.push(opt('Make a blanket', { type: 'craft', item: 'blanket' }, 'You have the fiber and rope.'));
-    else if (!w.store.loans?.[a.id]?.defaulted && w.store.coin >= 10) opts.push(opt('Borrow for a blanket', { type: 'borrow', n: 12 }, 'Then buy one. Debt, but warmth.'));
+    else if (!w.bank.loans?.[a.id]?.defaulted && w.bank.coin >= 10) opts.push(opt('Borrow for a blanket', { type: 'borrow', n: 12 }, 'Then buy one. Debt, but warmth.'));
     opts.push(opt('Cut wood for the hearth', { type: 'work', to: 'forest' }, 'Cold work that warms everyone later.'));
     opts.push(opt('Stay home under what you have', { type: 'withdraw' }, 'Shelter, but a roof alone is not enough in a killing cold.'));
     return { key: 'freezing', text: `${a.name} is dangerously cold.`, options: opts };
@@ -1786,8 +1761,11 @@ function narrate(w, a, act) {
     case 'buy': return s('at the store', `${a.name} is at the store, buying ${act.item}.`, 'work');
     case 'trade': return s(`trading with ${tn}`, `${a.name} offers ${tn} ${act.n || 1} ${act.give} for ${act.m || 1} ${act.want}.`, 'work');
     case 'sell': return s('at the store', `${a.name} is at the store, selling ${act.item}.`, 'work');
-    case 'borrow': return s('at the store', `${a.name} asks the store for a loan.`, 'work');
-    case 'repay': return s('at the store', `${a.name} pays the store back.`, 'work');
+    case 'borrow': return s('at the bank', `${a.name} asks the bank for a loan.`, 'work');
+    case 'repay': return s('at the bank', `${a.name} pays the bank back.`, 'work');
+    case 'deposit': return s('at the bank', `${a.name} puts coin in the bank.`, 'work');
+    case 'draw': return s('at the bank', `${a.name} takes coin out of the bank.`, 'work');
+    case 'vote': return s('voting', `${a.name} is at the meeting house, voting for the ${I.BUILDS[act.for]?.label || 'something'}.`, 'talk');
     case 'upgrade': return s(`building a ${act.what}`, `${a.name} works on a ${I.UPGRADES[act.what]?.label || act.what} at home.`, 'work');
     case 'build': return s(`building`, `${a.name} works on the ${act.what} at ${place(I.BUILDS[act.what]?.at || 'hearth')}.`, 'work');
     case 'talk': return s(`talking to ${tn}`, `${a.name} says to ${tn}: "${act.say || '...'}"`, 'talk');
@@ -1984,6 +1962,8 @@ function closeSeason(w) {
   const works = (w.works || []).filter(x => x.day >= since).length;
   const prayers = (w.prayers || []).filter(p => p.day >= since).length;
   const report = T.seasonReport(w, endedSeason, year, alive(w), w.seasonBorn || [], w.seasonDeaths || [], w.seasonHealed || 0, questions, w.seasonHolidays || 0, works, prayers);
+  if (w.seasonBuilt) { report.earned = Math.min(6, report.earned + 1); report.why.push(`1 for ${w.seasonBuilt === 1 ? 'a building' : w.seasonBuilt + ' buildings'} the village chose and raised`); }
+  const interest = C.interest(w, byId, remember); if (interest) event(w, `The bank pays ${interest} coin on what people keep there.`, 'trade');
   w.god.attention = Math.max(0, Math.min(w.god.max, w.god.attention + report.earned));
   event(w, `The ${endedSeason} is weighed: ${report.earned >= 0 ? '+' : ''}${report.earned} attention. ${report.why.join('; ')}.`, 'season');
   if ((w.despair || 0) >= 2 && !w.ended) {
@@ -1991,7 +1971,7 @@ function closeSeason(w) {
     w.paused = true;
     event(w, `Two seasons of loss, one after the other. The hearth goes cold and no one has the heart to light it. ${w.god.name} is left holding the book.`, 'death');
   }
-  w.seasonStartDay = w.day; w.seasonDeaths = []; w.seasonBorn = []; w.seasonHealed = 0; w.seasonHolidays = 0;
+  w.seasonStartDay = w.day; w.seasonDeaths = []; w.seasonBorn = []; w.seasonHealed = 0; w.seasonHolidays = 0; w.seasonBuilt = 0;
 }
 
 // ---------- god ----------
@@ -2112,7 +2092,8 @@ export function snapshotFor(a, w) {
     unexplored: +(1 - exploredFraction(w)).toFixed(3), exploring: !!a.explore,
     threat: w.threat && !w.threat.landed && (w.threat.known || a.sense?.kind === 'clairvoyant') ? { kind: w.threat.kind, name: w.threat.name, days: w.threat.lands - w.day } : null,
     builds: w.builds, found: w.found || {}, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
-    store: { shelf: w.store.shelf, coin: w.store.coin, prices: Object.fromEntries(Object.keys(I.STORE_PRICES).map(k => [k, { buy: I.buyPrice(w.store, k), sell: I.sellPrice(w.store, k) }])), loans: Object.values(w.store.loans || {}), project: w.store.project },
+    store: { shelf: w.store.shelf, coin: w.store.coin, prices: Object.fromEntries(Object.keys(I.STORE_PRICES).map(k => [k, { buy: I.buyPrice(w.store, k), sell: I.sellPrice(w.store, k) }])), project: w.council.project },
+    ...C.snapshot(w, a),
     location: a.location,
     near: near.map(o => ({ id: o.id, name: o.name, visible: (o.ill ? (o.ill.kind === 'fever' ? 'feverish, ' : 'coughing, ') : '') + B.visibleState(o.body), ill: !!o.ill, trust: trustOf(a, o), tightness: o.body.tightness, overwhelmed: o.body.overwhelmed > 0, hungry: o.body.food < 0.3, carries: o.inv, wants: o.wants, grieving: (o.grief || []).length > 0, isChild: F.isChild(w, o), partner: o.partner || null })),
     age: ageOf(w, a),
@@ -2147,6 +2128,7 @@ export function viewFor(a, w) {
     ...(w.pendingHoliday && w.pendingHoliday.by === a.id ? ['Last night you decided: this deserves a day, every year. Name it, and say how it is kept (holiday {name, decorate, song, dance, food}).'] : []),
     ...(w.threat && !w.threat.landed && (w.threat.known || a.sense?.kind === 'clairvoyant') ? [`${w.threat.known ? 'Everyone says' : 'No one else has seen it, but you have:'} ${w.threat.name} is coming in ${Math.max(1, w.threat.lands - w.day)} day${w.threat.lands - w.day === 1 ? '' : 's'}. What would help: ${w.threat.help}.`] : []),
     ...(w.threat?.landed && w.day - w.threat.landed <= 3 ? [w.threat.text] : []),
+    ...C.felt(w, a),
     ...(a.destiny && !a.destiny.fulfilled ? [`There is a pull in you toward something. If you had to say it: ${a.destiny.text.replace(/^(this one|they|he|she|this person)\s+will\s+/i, 'you will ')}`] : a.destiny?.fulfilled ? ['You did the thing you were made for. Whatever comes now is extra.'] : [])];
   const feelings = s.others.map(o => {
     const t = o.trust;
@@ -2163,7 +2145,7 @@ export function viewFor(a, w) {
     hearth: (fireOf(w, a) === 'camp' ? (s.hearthWood > 0 ? 'your camp fire has wood' : 'your camp fire is out, there is no wood') : (s.hearthWood > 0 ? 'the hearth has wood' : 'the hearth is cold, there is no wood')),
     belong: fireOf(w, a) === 'camp' ? `You belong to ${w.camp.name}, past the edge, out of sight of the village hearth. ${w.camp.leader === a.id ? 'You lead it.' : ''}` : (w.camp.founded ? `You belong to the village. ${w.camp.name} sits apart, past the edge.` : ''),
     carrying: I.describeInventory(a.inv),
-    coin: `You have ${Math.floor(a.inv.coin || 0)} coin.${w.store.loans?.[a.id] ? ` You owe the store ${w.store.loans[a.id].owed}.` : ''}${w.store.project ? ` The store pays a coin per material for work on the ${w.store.project}.` : ''}`,
+    coin: `You have ${Math.floor(a.inv.coin || 0)} coin.${w.bank.savings[a.id] ? ` You keep ${Math.floor(w.bank.savings[a.id])} in the bank.` : ''}${w.bank.loans[a.id] ? ` You owe the bank ${w.bank.loans[a.id].owed}.` : ''}${w.council.project ? ` The council pays a coin per material for work on the ${I.BUILDS[w.council.project]?.label || w.council.project}.` : ''}`,
     store: `The store (by the well) holds: ${I.describeStore(w.store)}. It has ${w.store.coin} coin to pay with.`,
     yours: Object.keys(a.upgrades || {}).length ? `At home you have built: ${Object.keys(a.upgrades).map(k => I.UPGRADES[k]?.label || k).join(', ')}.` : 'You could build at home: ' + Object.entries(I.UPGRADES).map(([k, u]) => `${k} (${Object.entries(u.cost).map(([m, n]) => `${n} ${m}`).join(', ')})`).join('; ') + '.',
     wants: a.inv[a.wants] > 0 ? `You have your ${I.ITEMS[a.wants].label}. It steadies you.` : `You long for a ${I.ITEMS[a.wants].label}. ${I.ITEMS[a.wants].use}.`,
@@ -2189,11 +2171,14 @@ export function viewFor(a, w) {
       'explore  (walk out into land no one has mapped. The map grows under your feet. Tiring, cold. Sometimes you find a place worth naming.)',
       'craft {item: rope|axe|hoe|blanket|salve|charm}  (needs the materials, see recipes)',
       'give {target: <person name>, item: <thing you carry>}',
-      'build {what: granary|hall|pool}  (go to the hearth, or the creek for the pool, and put in what you carry)',
+      `build {what: ${Object.keys(I.BUILDS).join('|')}}  (go to where it stands: the hearth, the well, or the creek for the pool, and put in what you carry; the council pays a coin a material for the project it was voted)`,
       'trade {target: <person name>, give: <thing you carry>, n: <how many>, want: <thing they carry>, m: <how many>}  (barter; they weigh whether it is fair and whether they trust you)',
       'buy {item: <thing>, n: <how many>}  (at the store, with coin)',
-      'borrow {n: <coin>}  (a loan from the store, up to 20 owed; a tenth more each season; it remembers who does not pay)',
-      'repay {n: <coin>}  (pay the store back)',
+      'borrow {n: <coin>}  (a loan from the bank, up to 20 owed; a tenth more each season; it remembers who does not pay)',
+      'repay {n: <coin>}  (pay the bank back)',
+      'deposit {n: <coin>}  (put coin in the bank, where no one can take it; it grows a little each season)',
+      'draw {n: <coin>}  (take your coin out of the bank)',
+      `vote {for: ${w.council.ballot ? w.council.ballot.options.join('|') : '<what is on the ballot>'}}  (at the meeting house, when a ballot is open: what the village builds next)`,
       'sell {item: <thing>, n: <how many>}  (at the store, for coin; it pays less for what it already has plenty of)',
       'upgrade {what: garden|bighouse|fence}  (at home, with coin and materials; yours for life and shared with your partner)',
       'take {target: <person name>, item: <thing they carry>}  (steal. they will know.)',
@@ -2238,7 +2223,8 @@ export function publicState(w) {
     year: Math.floor(w.day / yearDays(w)) + 1, yearDays: yearDays(w),
     weather: { ...w.weather, ...d },
     hearth: w.hearth, camp: w.camp,
-    store: { shelf: w.store.shelf, coin: w.store.coin, prices: Object.fromEntries(Object.keys(I.STORE_PRICES).map(k => [k, { buy: I.buyPrice(w.store, k), sell: I.sellPrice(w.store, k) }])), ledger: w.store.ledger.slice(-12), loans: Object.values(w.store.loans || {}), project: w.store.project, wagesPaid: w.store.wagesPaid || 0 },
+    store: { shelf: w.store.shelf, coin: w.store.coin, prices: Object.fromEntries(Object.keys(I.STORE_PRICES).map(k => [k, { buy: I.buyPrice(w.store, k), sell: I.sellPrice(w.store, k) }])), ledger: w.store.ledger.slice(-12), project: w.council.project, wagesPaid: w.council.wagesPaid || 0 },
+    ...C.publicState(w),
     upgradeSpecs: I.UPGRADES,
     god: { attention: w.god.attention, max: w.god.max, name: w.god.name, named: w.god.named, costs: GOD_COSTS, recentActs: w.god.acts.slice(-10), omens: OMENS, omen: w.omen || null },
     goals: Object.entries(GOALS).map(([k, label]) => ({ key: k, label, done: w.goals[k]?.done ?? null })),
@@ -2260,6 +2246,7 @@ export function publicState(w) {
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
       body: a.body, visible: (a.ill ? (a.ill.kind === 'fever' ? 'feverish, ' : 'coughing, ') : '') + B.visibleState(a.body), ill: a.ill ? { kind: a.ill.kind, severity: +a.ill.severity.toFixed(2), day: a.ill.day } : null, branch: branch(a),
       chart: { summary: a.chart.summary, sun: a.chart.sun, moon: a.chart.moon, rising: a.chart.rising, birth: a.chart.birth },
+      savings: Math.floor(w.bank.savings[a.id] || 0), owes: w.bank.loans[a.id]?.owed || 0, vote: w.council.ballot?.votes[a.id] || null,
       traits: a.traits, upbringing: a.upbringing, inv: a.inv, wants: a.wants, upgrades: a.upgrades || {}, skills: a.skills || {}, gift: a.gift ? { ...a.gift, label: G.GIFTS[a.gift.kind]?.label, what: G.GIFTS[a.gift.kind]?.what } : null, sense: a.sense ? { ...a.sense, label: G.SENSES[a.sense.kind]?.label, long: G.SENSES[a.sense.kind]?.long, what: G.SENSES[a.sense.kind]?.what } : null,
       age: Math.floor(ageOf(w, a)), stage: stageOf(ageOf(w, a)), ageAtDeath: a.ageAtDeath,
       family: F.familyPublic(w, a), settlement: fireOf(w, a) === 'camp' ? 'camp' : 'village', destiny: a.destiny || null, faith: +(a.faith || 0).toFixed(2), guidance: a.guidance || '',
@@ -2380,8 +2367,15 @@ export function normaliseAction(w, raw) {
     const known = (x) => I.STORE_PRICES[x] != null || I.ITEMS[x] || I.MATERIALS.includes(x);
     if (!act.target || !known(act.give) || !known(act.want)) return null;
     act.to = act.target;
-  } else if (type === 'borrow' || type === 'repay') {
+  } else if (type === 'borrow' || type === 'repay' || type === 'deposit' || type === 'draw' || type === 'save' || type === 'take_out' || type === 'takeout') {
+    if (type === 'save') act.type = 'deposit';
+    if (type === 'take_out' || type === 'takeout') act.type = 'draw';
     act.n = Number(raw.n || raw.amount || raw.coin || 0) || undefined;
+  } else if (type === 'vote') {
+    const want = String(raw.for || raw.what || raw.to || raw.option || '').toLowerCase();
+    const opts = w.council?.ballot?.options || [];
+    act.for = opts.find(k => k === want || I.BUILDS[k].label === want || want.includes(I.BUILDS[k].label) || want.includes(k)) || opts[0] || null;
+    if (!act.for) return null;
   } else if (type === 'buy' || type === 'sell') {
     const item = itemKey(raw.item || raw.what);
     if (I.STORE_PRICES[item] == null) return null;

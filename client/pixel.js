@@ -118,6 +118,12 @@ export const CLAY = sprite([
 export const STORE = sprite([
   '................', '..bbbbbbbbbbbb..', '.bBbBbBbBbBbBbB.', '.wwwwwwwwwwwwww.', '.w............w.', '.w.ooo.ee.ooo.w.', '.w.ooo.ee.ooo.w.', '.wwwwwwwwwwwwww.', '.w.aa..ff..yy.w.', '.w.aa..ff..yy.w.', '.wwwwwwwwwwwwww.', '.w............w.', 'DDDDDDDDDDDDDDDD', '................', '................', '................',
 ], 'store');
+export const BANK = sprite([
+  '................', '...RRRRRRRRRR...', '..RrRRrRRrRRrR..', '..RRRRRRRRRRRR..', '..R.RR.oo.RR.R..', '..R.RR.oo.RR.R..', '..RRRRRRRRRRRR..', '..R..R....R..R..', '..R..R.kk.R..R..', '..R..R.kk.R..R..', '..R..R.kk.R..R..', '..RRRRRRRRRRRR..', 'DDDDDDDDDDDDDDDD', '................', '................', '................',
+], 'bank');
+export const MEETING = sprite([
+  '......e.........', '......ee........', '......e.........', '.bbbbbbbbbbbbbb.', 'bBbBbBbBbBbBbBbB', '.wwwwwwwwwwwwww.', '.w.yy.w..w.yy.w.', '.w.yy.w..w.yy.w.', '.wwwwwwwwwwwwww.', '.w....w..w....w.', '.w.yy.wkkw.yy.w.', '.w.yy.wkkw.yy.w.', 'DDDDDDDDDDDDDDDD', '................', '................', '................',
+], 'meeting');
 export const GARDEN = sprite([
   '................', '................', '................', '................', 'DDDDDDDDDDDDDDDD', 'DpDpDpDpDpDpDpDD', 'DDDDDDDDDDDDDDDD', 'DpDeDpDpDeDpDpDD', 'DDDDDDDDDDDDDDDD', 'DpDpDpDoDpDpDpDD', 'DDDDDDDDDDDDDDDD', '................', '................', '................', '................', '................',
 ], 'garden');
