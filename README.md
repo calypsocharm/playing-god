@@ -490,3 +490,12 @@ On the box the server runs the installed `playing-god-update` script every five 
 still runs it hourly as a backstop). A push to main is live on clawkeep.io within about five
 minutes; the script only restarts the server when main actually moved, and never touches `data/`.
 Set `PLAYING_GOD_AUTOUPDATE=0` to turn the in-process check off.
+
+## Inside
+
+Click a house and you are in the room: the hearth lit if anyone is home, the shelf with
+everything the household owns drawn as pixel icons with counts, a bed for each resident with a
+blanket or quilt on it if they have one, bread or pie on the table, a toy on the floor, the
+garden through the window, and whoever is home standing there. Click the store and you see its
+shelves with stock and prices, the till with its coin, the wanted-sign for the project it is
+paying for, and whoever is in. The people in the scene are the same sprites as on the map.

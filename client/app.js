@@ -1,5 +1,6 @@
 import * as Brain from './brain.js';
 import * as PX from './pixel.js';
+import * as Interior from './interior.js';
 
 // ---------- state ----------
 let state = null;
@@ -764,12 +765,12 @@ function personRow(o, extra = '') {
 }
 function wireFaces() {
   for (const c of $('moNear').querySelectorAll('canvas[data-face]')) { const o = state.agents.find(x => x.id === c.dataset.face); if (o) drawFace(c.getContext('2d'), 38, 38, 33, o); }
-  for (const el of $('moNear').querySelectorAll('[data-look]')) el.onclick = () => { placeOpen = null; selected = el.dataset.look; const o = state.agents.find(x => x.id === selected); $('moFace').hidden = false; $('moDiary').hidden = false; setMoHeads('Doing', 'Just said', 'Feels', 'Here with them', 'Carrying'); renderMoment(o); renderInspector(); };
+  for (const el of $('moNear').querySelectorAll('[data-look]')) el.onclick = () => { placeOpen = null; selected = el.dataset.look; const o = state.agents.find(x => x.id === selected); $('moFace').hidden = false; $('moDiary').hidden = false; $('moScene').hidden = true; setMoHeads('Doing', 'Just said', 'Feels', 'Here with them', 'Carrying'); renderMoment(o); renderInspector(); };
 }
 function renderPlace(hit) {
   const s = state; if (!s) return;
   const fc = $('moFace'); const g = fc.getContext('2d'); g.clearRect(0, 0, fc.width, fc.height); g.imageSmoothingEnabled = false;
-  $('moDiary').hidden = true; fc.hidden = false;
+  $('moDiary').hidden = true; fc.hidden = false; $('moScene').hidden = true;
   const alive = s.agents.filter(a => a.alive);
   const evHere = (pred) => (s.events || []).filter(pred).slice(-6).map(e => `<div class="mem"><span class="muted">d${e.day}</span> ${esc(e.text)}</div>`).join('') || '<div class="muted">Nothing lately.</div>';
   const inv = (obj) => describeInv(obj) || 'nothing';
@@ -789,6 +790,9 @@ function renderPlace(hit) {
     $('moFelt').innerHTML = residents.map(r => `<div class="mem"><b>${esc(r.name)}</b> <span class="muted">${r.age} · ${r.stage}${r.family?.partner ? ' · with ' + esc(s.agents.find(x => x.id === r.family.partner)?.name || 'someone') : ''} · looks ${esc(r.visible)}</span></div>`).join('') || '<div class="muted">No one lives here any more.</div>';
     $('moNear').innerHTML = inside.length ? inside.map(o => personRow(o)).join('') : '<div class="muted">Empty. The fire is banked.</div>';
     $('moCarry').textContent = inv(sumInv(residents)) + (Object.keys(ups).length ? `. Built: ${Object.keys(ups).map(k => s.upgradeSpecs?.[k]?.label || k).join(', ')}.` : '');
+    const visitors = alive.filter(a => residents.some(r => a.location === `visit:${r.id}`));
+    $('moScene').hidden = false;
+    Interior.drawHouse($('moScene'), { residents, inside, visitors, ups, inv: sumInv(residents), lit: inside.length > 0 || s.tick >= 4, night: s.tick >= 4 });
   } else {
     const k = hit.key, pl = hit.pos, label = pl.label || k;
     const here = alive.filter(a => a.location === k);
@@ -805,6 +809,9 @@ function renderPlace(hit) {
       $('moSaid').innerHTML = (st.ledger || []).slice(-8).reverse().map(l => `<div class="mem"><span class="muted">d${l.day ?? ''}</span> ${esc(l.who || 'someone')} ${l.bought ? 'bought' : 'sold'} ${l.n} ${esc(l.bought || l.sold || '')} for ${l.coin} coin</div>`).join('') || '<div class="muted">No trade yet.</div>';
       $('moFelt').innerHTML = (st.loans || []).length ? st.loans.map(l => `<div class="mem">${esc(l.name || 'someone')} owes ${l.owed} coin <span class="muted">· since day ${l.since}</span></div>`).join('') : '<div class="muted">No one owes the store.</div>';
       $('moCarry').textContent = st.project ? `Commissioning the ${st.project}: a coin per material carried in.${buildsHere.length ? ' ' + buildsHere.join('; ') : ''}` : (buildsHere.join('; ') || 'No project right now.');
+      $('moScene').hidden = false;
+      const pb = st.project && s.builds?.[st.project]; const pspec = st.project && s.buildSpecs?.[st.project];
+      Interior.drawStore($('moScene'), { store: st, here, project: st.project, projectProgress: pb && pspec ? Object.entries(pspec.cost || {}).map(([m, n]) => `${m} ${pb.have?.[m] || 0}/${n}`).join(' · ') : null });
     } else if (k === 'hearth' || k === 'camp') {
       const fire = k === 'hearth' ? s.hearth : s.camp;
       $('moMeta').textContent = `${fire.wood > 0 ? 'the fire is lit' : 'the fire is OUT'} · ${fire.wood || 0} wood on the pile`;
@@ -829,7 +836,7 @@ function renderPlace(hit) {
 }
 
 function openMoment(id) {
-  placeOpen = null; $('moFace').hidden = false; $('moDiary').hidden = false; setMoHeads('Doing', 'Just said', 'Feels', 'Here with them', 'Carrying');
+  placeOpen = null; $('moFace').hidden = false; $('moDiary').hidden = false; $('moScene').hidden = true; setMoHeads('Doing', 'Just said', 'Feels', 'Here with them', 'Carrying');
   const a = state?.agents.find(x => x.id === id);
   if (!a || !a.alive) return;
   frozen = true; selected = id;
