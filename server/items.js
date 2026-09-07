@@ -39,6 +39,8 @@ export const ITEMS = {
   quilt:   { label: 'quilt',   recipe: { fiber: 4, rope: 1 },               value: 6, need: false, use: 'warmer than a blanket, and made by hand for someone', hobby: 'sewing' },
   tonic:   { label: 'tonic',   recipe: { herbs: 2, berries: 1 },            value: 4, need: false, use: 'a brewed tonic: settles the chest when drunk', hobby: 'brewing' },
   toy:     { label: 'toy',     recipe: { wood: 1 },                         value: 2, need: false, use: 'a carved toy. A child who is given one remembers it for life', hobby: 'carving' },
+  // Found, never made. See magic.js.
+  glasses: { label: 'rose-coloured glasses', recipe: null, value: 20, need: false, use: 'whoever wears them is cheerful and sure of tomorrow; the world looks kinder through them', magic: true },
 };
 
 // What a Venus sign longs for. Fire wants to be seen, earth wants tools, air wants to be tied to others, water wants warmth.

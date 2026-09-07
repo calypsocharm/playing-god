@@ -90,6 +90,15 @@ suit, name, rank), suit tint over the land while in effect (day drawn + next), t
 `Brain.callModel` (her Brain-tab model; Ollama local works) and replaces the line when it returns (seq-guarded, one call at
 a time). Nightly chronicle by the model is still the separate "tell" checkbox in the Weather tab.
 
+## Belief + magic items (her ask 2026-09-07): DONE
+`server/magic.js`: `a.belief` (-1..1; `beliefFor` from upbringing + Sun; `nightly` moves it on the day's memories with
+confirmation bias and a slow drift home); `luck(a)` multiplies forage/hunt/field rolls; `trustWeight` inside `bumpTrust`;
+rebuff halved when the reached-for believes in people; scripted: strong believers comfort, disbelievers withdraw. MAGIC
+registry + ORDER: `maybeFind` fires on an explore step in the pale (25%); first item = `glasses` (ITEMS entry with
+`recipe: null`, `magic: true`; every `.recipe` use is guarded). Villager page shows Believes + wears; whyLines mention
+the glasses and belief-driven lows. Smokes: scratchpad `smoke_magic.mjs`, `smoke_magic2.mjs` (forced scout finds them).
+Next magic items go in ORDER with a `wear`/felt line. NEXT big item still: a second Creator holding the rival fire.
+
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to
   customers (different project, same instinct). Villagers must be able to refuse her; that's the game working.

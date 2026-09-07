@@ -54,10 +54,12 @@ export function scriptedDecide(a, s) {
   if (b.hurt > 0.3 && inv.salve <= 0 && I.canCraft(inv, 'salve')) return { type: 'craft', item: 'salve', thought: 'Salve for this.' };
   if (s.hearthWood < 2 && s.weather.cold > 0.3 && isDay && Math.random() < 0.4) return { type: 'work', to: 'forest', thought: 'Wood before the cold.' };
 
+  const believes = a.belief ?? 0;
   // Someone near is in a bad way.
   const suffering = s.near.find(n => n.overwhelmed || n.tightness > 0.5);
   if (suffering) {
-    if (br === 'healed' || (br === 'open' && b.openness > 0.45)) return { type: 'comfort', target: suffering.id, thought: 'I know that look.' };
+    if (br === 'healed' || (br === 'open' && b.openness > 0.45) || (believes > 0.4 && br !== 'outward' && Math.random() < 0.5)) return { type: 'comfort', target: suffering.id, thought: believes > 0.4 ? 'It will come right. Sit with them.' : 'I know that look.' };
+    if (believes < -0.4 && Math.random() < 0.5) return { type: 'withdraw', thought: 'Not my trouble. It never ends well.' };
     if (br === 'outward' && b.tightness > 0.4 && suffering.trust < 0.3) return { type: 'strike', target: suffering.id, thought: 'Weak. Get it away from me.' };
     if (br === 'inward') return { type: 'withdraw', thought: 'Too much.' };
   }
@@ -282,7 +284,7 @@ export function scriptedDecide(a, s) {
 
 // First material missing for an item, following sub-recipes one level.
 function missing(inv, item) {
-  for (const [m, n] of Object.entries(I.ITEMS[item].recipe)) {
+  for (const [m, n] of Object.entries(I.ITEMS[item]?.recipe || {})) {
     if ((inv[m] || 0) >= n) continue;
     if (I.ITEMS[m]) { const sub = missing(inv, m); return sub || null; }
     return m;

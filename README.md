@@ -590,6 +590,24 @@ hear, what they think, what they do, what they say, and at night what they write
 in the second person and updates every tick. You cannot speak there and they do not know you are
 watching. It works for anyone, yours or not, and it never shows the rules their body wrote.
 
+## Belief, and the first magic thing
+
+Every villager believes something about the world, from "the world is good and will stay so" to
+"the world is bad and no one can be trusted." It starts from how they were raised and a little
+from their Sun, and it is the lens, not the mood. It tilts the small rolls a day is made of: what
+the forest gives, whether the deer is there, what the field yields, whether a hand reached for is
+taken. It tilts how they read people: a believer in a good world takes kindness in full and
+forgives fast; a believer in a bad world discounts kindness and keeps every hurt, holds back from
+the suffering, and finds the threat they expected. Each night the day's evidence moves the
+belief, and what matched it counts more, so every person collapses the day toward what they
+expect of it. The villager page shows what they believe; the nightly story says when someone is
+low because they believe the world is against them.
+
+Out past the pale, things with a little magic in them are found, one at a time, by whoever walks
+where no one has. The first is a pair of **rose-coloured glasses**: whoever wears them is
+cheerful and sure of tomorrow, their belief held high, the world kinder through the glass. They
+can be given, and taken.
+
 ## The narrator, and the card in the space
 
 A narrator speaks over the map: the one thing that matters most this moment, with its reason

@@ -18,6 +18,7 @@ import * as T from './threats.js';
 import * as C from './civic.js';
 import * as Tarot from './tarot.js';
 import * as Rv from './rival.js';
+import * as Mg from './magic.js';
 
 export const TICKS_PER_DAY = 6;
 export const TICK_NAMES = ['dawn', 'morning', 'midday', 'afternoon', 'evening', 'night'];
@@ -125,6 +126,7 @@ export function createWorld(saved) {
     saved.seasonDeaths = saved.seasonDeaths || []; saved.seasonBorn = saved.seasonBorn || [];
     saved.chronicle = saved.chronicle || [];
     for (const a of saved.agents) if (a.faith == null) a.faith = 0;
+    for (const a of saved.agents) if (a.belief == null) a.belief = Mg.beliefFor(a);
     for (const a of saved.agents) { for (const m of I.MATERIALS) if (a.inv && a.inv[m] == null) a.inv[m] = 0; for (const k of Object.keys(I.ITEMS)) if (a.inv && a.inv[k] == null) a.inv[k] = 0; }
     saved.found = saved.found || {};
     restoreFound(saved);
@@ -363,7 +365,8 @@ export function whyLines(w) {
   if (cold.length) out.push(`${cold.map(a => a.name).join(', ')} ${cold.length === 1 ? 'is' : 'are'} cold.`);
   const hurt = living.filter(a => a.body.hurt > 0.35); if (hurt.length) out.push(`${hurt.map(a => a.name).join(', ')} ${hurt.length === 1 ? 'is' : 'are'} hurt.`);
   const low = living.filter(a => (a.body.joy ?? 0.5) < 0.3 && !F.isChild(w, a) && !grieving.some(x => x.a === a) && !sick.includes(a) && !hungry.includes(a));
-  if (low.length) out.push(`${low.map(a => a.name).join(', ')} ${low.length === 1 ? 'is' : 'are'} low, and no one can quite say why.`);
+  if (low.length) out.push(`${low.map(a => `${a.name}${(a.belief ?? 0) < -0.3 ? ' (who believes the world is against them)' : ''}`).join(', ')} ${low.length === 1 ? 'is' : 'are'} low${low.every(a => (a.belief ?? 0) < -0.3) ? '' : ', and no one can quite say why'}.`);
+  const rosy = living.filter(a => (a.inv.glasses || 0) > 0); if (rosy.length) out.push(`${rosy.map(a => a.name).join(', ')} ${rosy.length === 1 ? 'wears' : 'wear'} the rose-coloured glasses and ${rosy.length === 1 ? 'is' : 'are'} sure tomorrow will be good.`);
   const struck = w.log.filter(e => e.day === w.day && e.kind === 'strike' && /strikes/.test(e.text)); for (const e of struck.slice(0, 2)) { const a = byId(w, e.who?.[0]), v = byId(w, e.who?.[1]); if (a && v) out.push(`${a.name} struck ${v.name}; ${a.name} is ${branch(a)} and was ${a.body.tightness > 0.6 ? 'wound tight' : 'on edge'}.`); }
   if (w.threat && !w.threat.landed && w.threat.known) out.push(`Everyone says ${w.threat.name} comes in ${w.threat.lands - w.day} day${w.threat.lands - w.day === 1 ? '' : 's'}; the village is ${T.readinessWord(w.threat.readiness || 0)}.`);
   if (w.threat?.landed && w.day - w.threat.landed <= 3) out.push(`${w.threat.name[0].toUpperCase() + w.threat.name.slice(1)} landed ${w.day - w.threat.landed === 0 ? 'today' : w.day - w.threat.landed === 1 ? 'yesterday' : `${w.day - w.threat.landed} days ago`}.`);
@@ -559,6 +562,7 @@ export function newAgent(w, opts = {}) {
     birthMs,
     chart: makeChart(birthMs),
     upbringing,
+    belief: 0,
     home,
     pos: { ...home },
     location: 'home',
@@ -596,6 +600,7 @@ export function newAgent(w, opts = {}) {
   a.transits = transitsFor(a.chart, simDate(w));
   a.selfSummary = scriptedSummary(a);
   w.agents.push(a);
+  a.belief = Mg.beliefFor(a);
   remember(w, a, `You arrived in the village. You were raised ${upbringing === 'warm' ? 'in a warm house' : upbringing === 'cold' ? 'in a cold house' : 'in a house that changed with the weather'}.`, 0.8);
   return a;
 }
@@ -635,6 +640,7 @@ export function trustOf(a, other) {
   return a.trust[other.id] ?? (a.baseTrust || 0);
 }
 export function bumpTrust(a, other, d) {
+  d = Mg.trustWeight(a, d);
   const t = trustOf(a, other);
   // Trust is easy to build from nothing and hard to complete. Distrust comes fast at any level.
   const eased = d > 0 ? d * (1 - Math.max(0, t)) : d;
@@ -768,6 +774,7 @@ function dayPhase(w, remoteActions) {
           if (a.inv.hoe > 0) { y *= 1.5; if (I.wear(a, 'hoe')) { event(w, `${a.name}'s hoe breaks.`, 'info', [a.id]); remember(w, a, 'Your hoe broke.', 0.4); } }
           if (w.builds.granary?.done) y *= 1.25;
           if ((w.blessedField || 0) >= w.day) y *= 1.5;
+          y *= 0.85 + 0.15 * Mg.luck(a);
           a.inv.food += y; a.body.energy = B.clamp(a.body.energy - 0.08);
           if (y < 0.1) remember(w, a, 'You worked the field and it gave almost nothing.', 0.5);
         } else if (a.location === 'forest') {
@@ -803,6 +810,7 @@ function dayPhase(w, remoteActions) {
           a.explore = null;
           if (!w.goals.frontier) { w.goals.frontier = { done: w.day }; event(w, `A question answered: ${GOALS.frontier}.`, 'healed'); }
         } else if (dist - stepLen <= 1) {
+          Mg.maybeFind(w, a, event, remember);
           remember(w, a, `You walked out where no one had been. ${pick(['Grass, wind, and the same sky.', 'Stones and a dead tree. Nothing to eat.', 'You could see the village smoke from there, small.', 'A hollow full of birds that did not know to be afraid of you.'])} You know a little more of the land.`, 0.4);
           a.explore = null;
         }
@@ -816,7 +824,7 @@ function dayPhase(w, remoteActions) {
           const mult = season === 'winter' ? 0.35 : season === 'spring' ? 0.8 : 1;
           const got = [];
           for (const [m, n] of Object.entries(table)) {
-            let amt = n * mult;
+            let amt = n * mult * Mg.luck(a);
             if (m === 'wood' && a.inv.axe > 0) { amt *= 2; if (I.wear(a, 'axe')) event(w, `${a.name}'s axe breaks.`, 'info', [a.id]); }
             if (m === 'berries' && season === 'winter') amt = 0;
             amt = Math.round(amt);
@@ -1048,7 +1056,7 @@ function dayPhase(w, remoteActions) {
       }
       case 'comfort': {
         if (tgt) {
-          if (rebuffs(tgt, a)) {
+          if (rebuffs(tgt, a) && !((tgt.belief ?? 0) > 0.3 && Math.random() < 0.5)) {
             event(w, `${a.name} reaches for ${tgt.name}. ${tgt.name} pulls away.`, 'rebuff', [a.id, tgt.id]);
             emotionalEvent(w, a, 'rebuffed', tgt, 0.3);
             tgt.exposures.closeness = true;   // they were approached; the day will tell if pain followed
@@ -1209,7 +1217,7 @@ function dayPhase(w, remoteActions) {
       case 'hunt': {
         if (!['meadow', 'forest'].includes(a.location)) break;
         a.body.energy = B.clamp(a.body.energy - 0.12);
-        if ((w.deer || 0) > 0 && Math.random() < (a.inv.axe > 0 ? 0.45 : 0.33)) {
+        if ((w.deer || 0) > 0 && Math.random() < (a.inv.axe > 0 ? 0.45 : 0.33) * Mg.luck(a)) {
           w.deer -= 1; const shown = A.alive(w).find(x => x.kind === 'deer'); if (shown) shown.alive = false; Rv.deerTaken(w);
           a.inv.food += 2.5; a.skills = a.skills || {}; a.skills.hunting = (a.skills.hunting || 0) + 1;
           event(w, `${a.name} brings down a deer at ${PLACES[a.location].label}.`, 'work', [a.id]);
@@ -1546,6 +1554,7 @@ function nightPhase(w) {
   for (const a of alive(w)) {
     a.location = 'home'; a.pos = { ...a.home };
   }
+  for (const a of alive(w)) Mg.nightly(w, a);   // what today did to what they believe of the world
   griefNightly(w);   // may move mourners to the hearth for a wake
   wakeSenses(w);     // the ones who listened, sang or sat still enough start to know things
   nightOwls(w);      // the young, the restless and the grieving sit up late at the fire
@@ -2291,6 +2300,7 @@ export function viewFor(a, w) {
     ...(w.threat?.landed && w.day - w.threat.landed <= 3 ? [w.threat.text] : []),
     ...C.felt(w, a),
     ...Rv.felt(w, a),
+    ...Mg.felt(w, a),
     ...(a.destiny && !a.destiny.fulfilled ? [`There is a pull in you toward something. If you had to say it: ${a.destiny.text.replace(/^(this one|they|he|she|this person)\s+will\s+/i, 'you will ')}`] : a.destiny?.fulfilled ? ['You did the thing you were made for. Whatever comes now is extra.'] : [])];
   const feelings = s.others.map(o => {
     const t = o.trust;
@@ -2312,7 +2322,7 @@ export function viewFor(a, w) {
     yours: Object.keys(a.upgrades || {}).length ? `At home you have built: ${Object.keys(a.upgrades).map(k => I.UPGRADES[k]?.label || k).join(', ')}.` : 'You could build at home: ' + Object.entries(I.UPGRADES).map(([k, u]) => `${k} (${Object.entries(u.cost).map(([m, n]) => `${n} ${m}`).join(', ')})`).join('; ') + '.',
     wants: a.inv[a.wants] > 0 ? `You have your ${I.ITEMS[a.wants].label}. It steadies you.` : `You long for a ${I.ITEMS[a.wants].label}. ${I.ITEMS[a.wants].use}.`,
     canMake: I.craftable(a.inv).map(k => `${k} (${I.ITEMS[k].use})`),
-    recipes: Object.entries(I.ITEMS).map(([k, it]) => `${k}: ${Object.entries(it.recipe).map(([m, n]) => `${n} ${m}`).join(' + ')}`),
+    recipes: Object.entries(I.ITEMS).filter(([, it]) => it.recipe).map(([k, it]) => `${k}: ${Object.entries(it.recipe).map(([m, n]) => `${n} ${m}`).join(' + ')}`),
     village: I.describeBuilds(w.builds),
     remembers: (w.lessons || []).map(l => l.text),
     grieving: s.near.filter(n => (byId(w, n.id).grief || []).length).map(n => `${n.name} is grieving too.`),
@@ -2413,6 +2423,7 @@ export function publicState(w) {
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
       body: a.body, visible: (a.ill ? (a.ill.kind === 'fever' ? 'feverish, ' : 'coughing, ') : '') + B.visibleState(a.body), ill: a.ill ? { kind: a.ill.kind, severity: +a.ill.severity.toFixed(2), day: a.ill.day } : null, branch: branch(a),
       chart: { summary: a.chart.summary, sun: a.chart.sun, moon: a.chart.moon, rising: a.chart.rising, birth: a.chart.birth },
+      belief: +(a.belief ?? 0).toFixed(2), beliefWord: Mg.word(a.belief ?? 0), wears: Object.keys(Mg.MAGIC).filter(k => (a.inv[k] || 0) > 0),
       savings: Math.floor(w.bank.savings[a.id] || 0), owes: w.bank.loans[a.id]?.owed || 0, vote: w.council.ballot?.votes[a.id] || null,
       traits: a.traits, upbringing: a.upbringing, inv: a.inv, wants: a.wants, upgrades: a.upgrades || {}, skills: a.skills || {}, gift: a.gift ? { ...a.gift, label: G.GIFTS[a.gift.kind]?.label, what: G.GIFTS[a.gift.kind]?.what } : null, sense: a.sense ? { ...a.sense, label: G.SENSES[a.sense.kind]?.label, long: G.SENSES[a.sense.kind]?.long, what: G.SENSES[a.sense.kind]?.what } : null,
       age: Math.floor(ageOf(w, a)), stage: stageOf(ageOf(w, a)), ageAtDeath: a.ageAtDeath,
