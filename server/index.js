@@ -85,6 +85,7 @@ function describeGodAct(world, m, r) {
     case 'nudge': return 'Two people will find themselves at the same place this moment.';
     case 'weather': return `The dials are set: winter ${world.weather.winterHarshness.toFixed(2)}, harvest ${world.weather.harvest.toFixed(2)}, ${world.weather.daysPerSeason} days a season, ${Math.round(world.weather.tickMs / 1000)}s a tick. They take hold from the next tick.`;
     case 'omen': return 'Everyone saw it. What it means is theirs to decide.';
+    case 'draw': return r.text || 'The card turned.';
     case 'warn': return 'The omen is shown and named. They know what is coming and what would help. Whether they do it is theirs.';
     case 'destiny': return 'A destiny is spoken. They feel the pull; others sense the mark.';
     case 'gift': return `Something woke in ${r.name}: ${r.kind}. Watch who is glad of it and who is afraid.`;

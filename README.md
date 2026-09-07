@@ -590,6 +590,24 @@ hear, what they think, what they do, what they say, and at night what they write
 in the second person and updates every tick. You cannot speak there and they do not know you are
 watching. It works for anyone, yours or not, and it never shows the rules their body wrote.
 
+## The sky turns a card
+
+The weather is a tarot deck. Seventy-eight cards, one deck, shuffled and drawn down; the Creator
+can turn one for an attention, and the sky turns one of its own at every season's turn, so the
+village changes even when no one is watching. Every card lands as something that really happens,
+through the same machinery as everything else. Pentacles move the field and the coin: the Ten is
+an immense harvest, the Five bares the shelf and chills the houses, the Six pays off someone's
+debt by a hand no one saw. Swords cut through people: the Queen finds out the last thief and
+everyone knows, the Three puts a blade in someone's heart, the King calls the vote and collects
+every unpaid debt. Wands build: the Four finishes whatever is being raised in a day, the Ace
+wakes a gift, the Knight brings a stranger up the road. Cups move the heart: the Two bonds the
+two people who trust each other most, the Five brings grief back fresh, the Queen sits with the
+grieving all night. The majors are the big turns: the Tower lands what was coming now and burns
+half the hearth pile, the Star loosens every wound, Death takes the oldest, the Sun makes a
+holiday on the spot, the Hanged Man stops time, the World gives the sky two attention back. The
+card lies by the hearth for a day, the Weather tab keeps the last dozen, and every villager
+remembers what the sky turned.
+
 ## Something is always coming
 
 Each season a threat gathers past the pale and lands late in the season: a killing cold or a

@@ -44,6 +44,15 @@ Client: BANK/MEETING sprites, bank + meeting-house scenes (`drawBank`, `drawCoun
 villager page savings/debt/vote. Migration `C.ensure` splits the till in half and moves loans/project off the store.
 Smoke: scratchpad `smoke_civic.mjs`. Next (her earlier picks): a rival fire past the pale, then a second Creator.
 
+## The sky turns a card (her ask 2026-09-07): DONE
+`server/tarot.js`: 78 cards (MINOR by suit/rank + MAJOR list), each an effect over a `cardContext(w)` built in world.js
+(alive/remember/event/bumpTrust/die/emotionalEvent/awaken/openSense/newTraveler/propose/leave/tryConceive/foundHoliday/
+findNext/closeBallot/landThreat). `Tarot.draw(w, ctx, by)` pops `w.deck` (shuffled keys; reshuffled when spent), records
+`w.cards`/`w.lastCard`, events + everyone remembers. God op `draw` costs 1; the sky draws one free at each season turn (after
+`rollThreat` in newDay). Client: Weather tab "The card" box + Turn a card button, Village tab line, pixel CARD sprite by
+the hearth for a day. Smoke: scratchpad `smoke_tarot.mjs` (turns all 78, checks effect errors = 0). Tuning knobs are the
+one-line effects in tarot.js. Next (her earlier picks): a rival fire past the pale, then a second Creator.
+
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to
   customers (different project, same instinct). Villagers must be able to refuse her; that's the game working.

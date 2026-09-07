@@ -16,6 +16,7 @@ import * as R from './rites.js';
 import * as Art from './arts.js';
 import * as T from './threats.js';
 import * as C from './civic.js';
+import * as Tarot from './tarot.js';
 
 export const TICKS_PER_DAY = 6;
 export const TICK_NAMES = ['dawn', 'morning', 'midday', 'afternoon', 'evening', 'night'];
@@ -147,7 +148,7 @@ export function createWorld(saved) {
     saved.mod = saved.mod || { bannedIps: {}, bannedTokens: {}, muted: {} };
     saved.store.loans = saved.store.loans || {}; saved.store.project = saved.store.project ?? null; saved.store.wagesPaid = saved.store.wagesPaid || 0;
     if (saved.store.coin < 120 && !saved.store.funded) { saved.store.coin += 200; saved.store.funded = true; }
-    C.ensure(saved);
+    C.ensure(saved); Tarot.ensure(saved);
     for (const a of saved.agents) { if (a.inv && a.inv.coin == null) a.inv.coin = 3; a.upgrades = a.upgrades || {}; }
     if (!saved.threat && !saved.ended) rollThreat(saved);
     return saved;
@@ -176,6 +177,7 @@ export function createWorld(saved) {
     log: [],             // everything, for the record
   };
   seedVillage(w);
+  Tarot.ensure(w);
   rollThreat(w);
   return w;
 }
@@ -185,7 +187,7 @@ export const simDate = (w, day = w.day) => w.startMs + day * DAY_MS;
 // ---------- the weather's attention ----------
 // A god who can do anything every tick has nothing to decide. Attention is scarce and refills
 // with the seasons. Where you spend it is what becomes real.
-export const GOD_COSTS = { weather: 2, traveler: 3, nudge: 1, wood: 1, destiny: 2, fulfil: 0, omen: 1, gift: 3, sense: 3, warn: 1, pause: 0, resume: 0 };
+export const GOD_COSTS = { weather: 2, traveler: 3, nudge: 1, wood: 1, destiny: 2, fulfil: 0, omen: 1, gift: 3, sense: 3, warn: 1, draw: 1, pause: 0, resume: 0 };
 
 // A gift wakes. `how` is a phrase: 'in the quiet at the creek', 'when the sky touched you'.
 // A sense opens. Always on from then; the body pays for it every day.
@@ -1930,7 +1932,7 @@ function newDay(w) {
     // The sky is weighed, and attention is earned, not given.
     closeSeason(w);
     event(w, `${d.season[0].toUpperCase() + d.season.slice(1)} begins. ${d.sky}.`, 'season');
-    if (!w.ended) rollThreat(w);
+    if (!w.ended) { rollThreat(w); drawCard(w, 'sky'); }
   }
   // Something is always coming. Each day the Creator can see how ready they are; the day it is due, it lands.
   if (w.threat && !w.threat.landed) {
@@ -1938,6 +1940,26 @@ function newDay(w) {
     if (w.day >= w.threat.lands) landThreat(w);
   }
 }
+
+// ---------- the cards ----------
+// Everything a card may do, it does through the village's own machinery.
+function cardContext(w) {
+  return {
+    w, PLACES, alive: () => alive(w), byId: (id) => byId(w, id), remember: (a, t, k) => remember(w, a, t, k), event: (t, k) => event(w, t, k),
+    bumpTrust, trustOf, ageOf: (a) => ageOf(w, a), isChild: (a) => F.isChild(w, a), isFound: (k) => isFound(w, k),
+    die: (a, cause) => die(w, a, cause), emotionalEvent: (v, kind, by, sev) => emotionalEvent(w, v, kind, by, sev),
+    awaken: (a, kindOrHow, how) => { if (how && G.GIFTS[kindOrHow]) { if (a.gift) return a.gift; a.gift = { kind: kindOrHow, day: w.day, uses: 0 }; a.skills = a.skills || {}; a.skills.gift = 0; remember(w, a, `Something woke in you ${how}. ${G.GIFTS[kindOrHow].felt}`, 1); event(w, `Something woke in ${a.name} ${how}.`, 'wonder', [a.id]); return a.gift; } return awaken(w, a, kindOrHow); },
+    openSense: (a, kind, how) => openSense(w, a, kind, how),
+    newTraveler: () => { const a = newAgent(w, {}); a.location = 'road'; a.pos = { ...PLACES.road }; event(w, `A traveler named ${a.name} arrives on the road.`, 'god', [a.id]); return a; },
+    canBond: (a, o) => F.canBond(w, a, o), propose: (a, o) => F.propose(w, a, o), leave: (a) => F.leave(w, a, 'walked away'),
+    tryConceive: () => { w.due = w.due || []; const pair = alive(w).find(a => a.partner && !F.isChild(w, a) && !w.due.some(d => d.parents.includes(a.id))); if (!pair) return null; w.due.push({ parents: [pair.id, pair.partner], day: w.day + w.weather.daysPerSeason }); return pair.name; },
+    foundHoliday: (a, reason) => { if (!a) return null; w.pendingHoliday = { by: a.id, reason }; return R.foundHoliday(w, R.scriptedSpec(w, reason, w.god?.named ? w.god.name : null), remember, event, byId); },
+    findNext: (a) => { const next = I.FRONTIER.find(f => !isFound(w, f.key)); if (!next) return null; w.found = w.found || {}; w.found[next.key] = { day: w.day, by: a.id }; PLACES[next.key] = PLACES[next.key] || { x: next.x, y: next.y, label: next.label, sheltered: false }; reveal(w, next.x, next.y, 5); a.location = 'edge'; a.pos = { ...PLACES.edge }; remember(w, a, `You found ${next.label}: ${next.found}.`, 1); return next.label; },
+    closeBallot: () => C.closeBallot(w, event, remember, alive(w)),
+    landThreat: () => { if (w.threat && !w.threat.landed) landThreat(w); },
+  };
+}
+function drawCard(w, by) { return Tarot.draw(w, cardContext(w), by); }
 
 // ---------- threats and the season's weighing ----------
 
@@ -2069,6 +2091,7 @@ export function godAct(w, msg) {
       if (r.error) { w.god.attention = Math.min(w.god.max, w.god.attention + cost); w.god.acts.pop(); }
       return r;
     }
+    case 'draw': { const rec = drawCard(w, 'creator'); return { ok: true, text: `${rec.name}: ${rec.meaning}. ${rec.text}` }; }
     case 'pause': w.paused = true; return { ok: true };
     case 'resume': w.paused = false; return { ok: true };
     default: return { error: 'unknown op' };
@@ -2241,6 +2264,7 @@ export function publicState(w) {
     works: Art.publicWorks(w), arts: w.arts || [],
     threat: w.threat ? { ...w.threat, word: T.readinessWord(w.threat.readiness || 0), daysLeft: w.threat.landed ? 0 : w.threat.lands - w.day } : null,
     reports: (w.reports || []).slice(-4), threatLog: (w.threatLog || []).slice(-8), ended: w.ended || null,
+    card: w.lastCard || null, cards: (w.cards || []).slice(-12), deckLeft: (w.deck || []).length,
     holidays: w.holidays || [], holidayToday: w.holidayToday || null, pendingHoliday: w.pendingHoliday ? { by: w.pendingHoliday.by, reason: w.pendingHoliday.reason } : null, sick: alive(w).filter(a => a.ill).length,
     agents: w.agents.map(a => ({
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,

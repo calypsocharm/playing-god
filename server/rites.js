@@ -86,7 +86,10 @@ function scriptedName(w, reason, skyName) {
   if (reason === 'found') opts.push(`${found.length ? 'the Day of ' + found[found.length - 1].replace(/^./, c => c.toUpperCase()) : 'Far Walk Day'}`);
   if (reason === 'healed') opts.push('the Loosening', 'Open Door Day');
   if (dead.length && Math.random() < 0.3) opts.push(`${pick(dead)}'s Night`);
-  if (skyName && Math.random() < 0.3) opts.push(`the ${skyName} Sky Fair`);
+  if (/card/.test(reason)) opts.push('the Turning', 'the Day the Card Fell', 'Card Night');
+  if (/sun/.test(reason)) opts.push('Sun Day', 'the Bright Day');
+  if (/old/.test(reason)) opts.push("the Elders' Day", 'the Telling');
+  if (skyName && Math.random() < 0.3) opts.push(`the ${skyName.replace(/^the /i, '')} Sky Fair`);
   return pick(opts.length ? opts : ['Fire Day']);
 }
 export function proposeHoliday(w, living, reason, proposer, remember, event, yearDays) {

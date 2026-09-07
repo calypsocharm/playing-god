@@ -378,6 +378,7 @@ function draw() {
     else if (k === 'edge') { ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.setLineDash([S * 0.3, S * 0.3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(c.x + S * 0.6, c.y - S * 11); ctx.lineTo(c.x + S * 0.6, c.y + S * 11); ctx.stroke(); ctx.setLineDash([]); }
     // Buildings rise beside the hearth as they are raised.
     if (k === 'hearth') {
+      if (state.card && state.day - state.card.day <= 1 && PX.CARD[state.card.suit]) { tile(PX.CARD[state.card.suit], p.x - 1.4, p.y + 1.2, 1.1); if (S > 14) { ctx.fillStyle = 'rgba(255,241,168,.85)'; ctx.font = `${Math.max(8, S * 0.32)}px system-ui`; ctx.textAlign = 'center'; const cc = toScreen(p.x - 1.4, p.y + 1.2); ctx.fillText(state.card.name, cc.x + S * 0.55, cc.y + S * 1.35); } }
       const g = state.builds?.granary, h = state.builds?.hall;
       const prog = (b, spec) => b ? Math.min(1, Object.entries(spec.cost).reduce((acc, [m, n]) => acc + Math.min(1, (b.have?.[m] || 0) / n), 0) / Object.keys(spec.cost).length) : 0;
       const pg = prog(g, state.buildSpecs.granary), ph = prog(h, state.buildSpecs.hall);
@@ -751,7 +752,7 @@ function soundTick() {
     else if (/is born to/.test(e.text)) { tone(523, 0.6); tone(659, 0.8); tone(784, 1.2); }
     else if (e.kind === 'healed') { tone(440, 0.8); tone(660, 1.2, 'sine', 0.15); }
     else if (e.kind === 'strike') { tone(70, 0.25, 'square', 0.2); }
-    else if (e.kind === 'god' && /omen|red|bird|frost|ring|wind stopped|star|smoke/i.test(e.text)) { tone(880, 2.5, 'sine', 0.08); tone(1320, 2.5, 'sine', 0.05); }
+    else if (e.kind === 'god' && /omen|red|bird|frost|ring|wind stopped|star|smoke|turns a card/i.test(e.text)) { tone(880, 2.5, 'sine', 0.08); tone(1320, 2.5, 'sine', 0.05); }
   }
 }
 setInterval(soundTick, 500);
@@ -1003,7 +1004,8 @@ function renderPanels() {
   const fam = `<br>${couples} couple${couples === 1 ? '' : 's'} · ${kids} child${kids === 1 ? '' : 'ren'}${expecting ? ` · ${expecting} expecting` : ''}${s.camp?.founded ? `<br><b style="color:var(--warm)">${esc(s.camp.name)}</b>, past the edge: ${campers} people, fire wood ${s.camp.wood}` : ''}`;
   const ended = s.ended ? `<div class="mem" style="border:1px solid var(--bad);padding:8px;margin-bottom:8px"><b style="color:var(--bad)">The book is closed.</b> Day ${s.ended.day}: ${esc(s.ended.why)}. ${s.ended.alive} were left, and none had the heart to go on. <a href="story.html" style="color:var(--warm)">Read it as a book →</a>${godOk ? ` <button class="act warn" id="btnAgain" style="margin-left:6px">Begin again</button>` : ''}</div>` : '';
   const coming = s.threat && !s.threat.landed && s.threat.known ? `<br><b style="color:var(--warm)">Everyone says ${esc(s.threat.name)} is coming</b> in ${s.threat.daysLeft} day${s.threat.daysLeft === 1 ? '' : 's'}.` : s.threat?.landed && s.day - s.threat.landed <= 3 ? `<br><b style="color:var(--bad)">${esc(s.threat.name[0].toUpperCase() + s.threat.name.slice(1))} has landed.</b> ${esc(s.threat.text || '')}` : '';
-  $('villageSummary').innerHTML = ended + `${alive.length} alive · ${s.weather.sky} · hearth wood ${s.hearth.wood}${coming}<br>` +
+  const cardLine = s.card && s.day - s.card.day <= 1 ? `<br><b style="color:var(--warm)">The sky turned ${esc(s.card.name)}.</b> ${esc(s.card.text)}` : '';
+  $('villageSummary').innerHTML = ended + `${alive.length} alive · ${s.weather.sky} · hearth wood ${s.hearth.wood}${coming}${cardLine}<br>` +
     Object.entries(branches).map(([k, v]) => `${v} ${k}`).join(' · ') + fam + frontier + `<br>${builds}${lessons}`;
   const again = $('btnAgain'); if (again) again.onclick = () => $('btnReset').click();
   $('events').innerHTML = [...s.events].reverse().map(e => `<div class="ev ${e.kind}"><span class="t">d${e.day} ${['dawn', 'morn', 'mid', 'aft', 'eve', 'night'][e.tick]}</span>${esc(e.text)}</div>`).join('');
@@ -1206,6 +1208,13 @@ function renderWeather() {
   if ($('destList').innerHTML !== destHtml) { $('destList').innerHTML = destHtml; for (const b of $('destList').querySelectorAll('[data-fulfil]')) b.onclick = () => send({ type: 'god', op: 'fulfil', a: b.dataset.fulfil }); }
   $('btnDestiny').disabled = !can('destiny');
   $('btnOmen').disabled = !can('omen');
+  // The card the sky turned.
+  const cd = state.card;
+  const suitCol = (s) => s === 'pentacles' ? '#e8d36a' : s === 'swords' ? '#8fb8e6' : s === 'wands' ? '#ff6a1a' : s === 'cups' ? '#3f6fa8' : '#fff1a8';
+  const cardHtml = !cd ? 'No card has been turned.' : `<div class="mem" style="border-left:3px solid ${suitCol(cd.suit)};padding-left:8px"><b style="color:${suitCol(cd.suit)}">${esc(cd.name)}</b> <span class="muted">· ${esc(cd.meaning)} · day ${cd.day} · turned by ${cd.by === 'sky' ? 'the sky itself' : 'you'}</span><br>${esc(cd.text)}</div>`
+    + ((state.cards || []).length > 1 ? `<div class="muted" style="margin-top:4px">Before that: ${state.cards.slice(0, -1).reverse().slice(0, 6).map(c => `<span style="color:${suitCol(c.suit)}">${esc(c.name)}</span> <span class="muted">d${c.day}</span>`).join(' · ')}</div>` : '');
+  if ($('cardBox').innerHTML !== cardHtml) $('cardBox').innerHTML = cardHtml;
+  $('btnDraw').disabled = !can('draw'); $('deckLeft').textContent = `· ${state.deckLeft ?? 78} left in the deck`;
   // What is coming, how ready they are, and whether to tell them.
   const t = state.threat;
   const threatHtml = !t ? 'Nothing on the horizon.' : t.landed
@@ -1243,6 +1252,7 @@ $('btnGift').onclick = () => { send({ type: 'god', op: 'gift', a: $('giftWho').v
 $('btnSense').onclick = () => { send({ type: 'god', op: 'sense', a: $('senseWho').value, kind: $('senseKind').value }); };
 $('btnDestiny').onclick = () => { const text = $('destText').value.trim(); if (!text) return; send({ type: 'god', op: 'destiny', a: $('destWho').value, text }); $('destText').value = ''; };
 $('btnOmen').onclick = () => send({ type: 'god', op: 'omen', kind: $('omenKind').value });
+$('btnDraw').onclick = () => send({ type: 'god', op: 'draw' });
 $('lendToggle').checked = localStorage.getItem('playinggod.lend') === '1';
 $('lendName').value = localStorage.getItem('playinggod.lendName') || '';
 $('lendName').onchange = () => { localStorage.setItem('playinggod.lendName', $('lendName').value.trim()); if ($('lendToggle').checked) send({ type: 'lend', on: true, name: $('lendName').value.trim() }); };

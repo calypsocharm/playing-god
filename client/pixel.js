@@ -124,6 +124,9 @@ export const BANK = sprite([
 export const MEETING = sprite([
   '......e.........', '......ee........', '......e.........', '.bbbbbbbbbbbbbb.', 'bBbBbBbBbBbBbBbB', '.wwwwwwwwwwwwww.', '.w.yy.w..w.yy.w.', '.w.yy.w..w.yy.w.', '.wwwwwwwwwwwwww.', '.w....w..w....w.', '.w.yy.wkkw.yy.w.', '.w.yy.wkkw.yy.w.', 'DDDDDDDDDDDDDDDD', '................', '................', '................',
 ], 'meeting');
+// A turned card, one per suit and one for the major arcana.
+const CARD_ROWS = (m) => ['..........', '.ssssssss.', '.s......s.', '.s.' + m + m + m + m + '.s.', '.s.' + m + m + m + m + '.s.', '.s.' + m + m + m + m + '.s.', '.s.' + m + m + m + m + '.s.', '.s......s.', '.ssssssss.', '..........', '..........', '..........'];
+export const CARD = { pentacles: sprite(CARD_ROWS('o'), 'card-p'), swords: sprite(CARD_ROWS('l'), 'card-s'), wands: sprite(CARD_ROWS('F'), 'card-w'), cups: sprite(CARD_ROWS('a'), 'card-c'), major: sprite(CARD_ROWS('y'), 'card-m') };
 export const GARDEN = sprite([
   '................', '................', '................', '................', 'DDDDDDDDDDDDDDDD', 'DpDpDpDpDpDpDpDD', 'DDDDDDDDDDDDDDDD', 'DpDeDpDpDeDpDpDD', 'DDDDDDDDDDDDDDDD', 'DpDpDpDoDpDpDpDD', 'DDDDDDDDDDDDDDDD', '................', '................', '................', '................', '................',
 ], 'garden');
