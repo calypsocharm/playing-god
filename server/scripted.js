@@ -25,6 +25,12 @@ export function preferBuild(a, s) {
   return pick(opts);
 }
 
+// How likely someone is to walk out into the pale on a given moment. The restless go more often,
+// and anyone who has just heard a legend told at the fire goes far more often than that: wonder
+// runs 0 to 1 and multiplies the chance by up to four. It wears off in a few days if nobody
+// tells it again, so a story has to keep being told to keep sending people out.
+export const scoutChance = (a) => (a.traits?.need < 0.5 ? 0.08 : 0.04) * (1 + (a.wonder || 0) * 3);
+
 export function scriptedDecide(a, s) {
   const b = a.body;
   const br = branch(a);
@@ -263,7 +269,7 @@ export function scriptedDecide(a, s) {
   if (inv.bread >= 1 && (br === 'open' || br === 'healed')) { const friend = s.near.find(n => n.trust > 0.3 && n.hungry); if (friend) return { type: 'share', target: friend.id, thought: 'Break bread.' }; }
   // The young and the restless walk out past the edge when the village can spare them.
   if (s.exploring && isDay && b.energy > 0.3 && b.warmth > 0.3) return { type: 'scout', thought: 'Keep walking. The land is not done.' };
-  if (((s.frontierLeft || 0) > 0 || (s.unexplored || 0) > 0.05) && isDay && age < 45 && b.energy > 0.6 && inv.food >= 1.5 && s.weather.season !== 'winter' && (br === 'open' || br === 'healed') && Math.random() < (a.traits?.need < 0.5 ? 0.08 : 0.04) * (1 + (a.wonder || 0) * 3)) return { type: 'scout', thought: (a.wonder || 0) > 0.3 ? 'They told it at the fire. I want to see it myself.' : 'What is out there?' };
+  if (((s.frontierLeft || 0) > 0 || (s.unexplored || 0) > 0.05) && isDay && age < 45 && b.energy > 0.6 && inv.food >= 1.5 && s.weather.season !== 'winter' && (br === 'open' || br === 'healed') && Math.random() < scoutChance(a)) return { type: 'scout', thought: (a.wonder || 0) > 0.3 ? 'They told it at the fire. I want to see it myself.' : 'What is out there?' };
   // Fish, if there is a creek and the field is thin.
   if (s.found?.creek && isDay && inv.food < 1.5 && Math.random() < 0.4) return { type: 'forage', to: 'creek', thought: 'The creek.' };
   // Build when carrying a surplus.

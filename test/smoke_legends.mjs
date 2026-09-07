@@ -66,20 +66,26 @@ const was = hearer.wonder;
 for (let i = 0; i < World.TICKS_PER_DAY * 3; i++) World.step(w2, acts);
 ok('wonder fades if nobody tells it again', hearer.wonder < was, `${was} -> ${hearer.wonder}`);
 
-// ---- and a village that has heard one walks out more ----
-// Two villages, thirty days each, one of them kept in mind of the story. Scouting is a rare roll,
-// so this is measured over a long window rather than a lucky afternoon.
-function scoutSteps(keepWonder) {
-  const v = World.createWorld(null); v.weather.daysPerSeason = 6;
-  for (let i = 0; i < 30 * World.TICKS_PER_DAY; i++) {
-    if (keepWonder && i % World.TICKS_PER_DAY === 0) for (const a of World.alive(v)) a.wonder = 1;
-    World.step(v, acts);
-  }
-  return World.alive(v).reduce((n, a) => n + (a.scouted || 0), 0);
-}
-const cold = scoutSteps(false) + scoutSteps(false) + scoutSteps(false);
-const told = scoutSteps(true) + scoutSteps(true) + scoutSteps(true);
-ok('wonder sends people out into the pale', told > cold * 1.5, `${cold} steps across three villages that never heard it, ${told} across three that did`);
+// ---- and having heard one makes you likelier to walk out ----
+// Counting steps is hopeless - one villager on a long trek swamps the sample - so the rule itself
+// is named in scripted.js and checked here.
+import { scoutChance } from '../server/scripted.js';
+const restless = { traits: { need: 0.4 } };
+ok('having heard it told makes you likelier to go', scoutChance({ ...restless, wonder: 1 }) > scoutChance({ ...restless, wonder: 0 }),
+  `${scoutChance({ ...restless, wonder: 0 })} cold, ${scoutChance({ ...restless, wonder: 1 })} once they have heard it`);
+ok('four times likelier at the height of it', Math.abs(scoutChance({ ...restless, wonder: 1 }) / scoutChance({ ...restless, wonder: 0 }) - 4) < 0.001);
+ok('a half-remembered story still counts for something', scoutChance({ ...restless, wonder: 0.35 }) > scoutChance({ ...restless, wonder: 0 }) * 1.5);
+ok('and the restless go more often than the settled', scoutChance({ traits: { need: 0.4 }, wonder: 0 }) > scoutChance({ traits: { need: 0.9 }, wonder: 0 }));
+ok('nobody with no wonder is punished for it', scoutChance({ ...restless }) === scoutChance({ ...restless, wonder: 0 }));
+
+// ---- and she can actually see them ----
+const ps = World.publicState(w);
+ok('legends reach the page', Array.isArray(ps.legends) && ps.legends.length === (w.legends || []).length, `${(ps.legends || []).length} in publicState`);
+ok('with how often each has been told', (ps.legends || []).every(l => typeof l.told === 'number' && typeof l.day === 'number' && typeof l.text === 'string'));
+const w4 = World.createWorld(null);
+const [t4, h4] = World.alive(w4);
+World.hearLegend(w4, h4, World.legend(w4, 'Someone walked out and came back changed.', 'pale'), t4);
+ok('and who is itching to go and look', (World.publicState(w4).wondering || []).includes(h4.name), JSON.stringify(World.publicState(w4).wondering));
 
 // ---- a world saved before legends existed picks them up ----
 const saved = JSON.parse(readFileSync(new URL('../data/world.json', import.meta.url), 'utf8'));

@@ -2486,6 +2486,9 @@ export function publicState(w) {
     explored: ensureExplored(w), cell: CELL, mapped: +exploredFraction(w).toFixed(3),
     animals: A.publicList(w), deer: w.deer || 0,
     works: Art.publicWorks(w), arts: w.arts || [],
+    // What the village tells about itself. Shown so she can watch a story get taken up or forgotten.
+    legends: (w.legends || []).map(l => ({ day: l.day, text: l.text, about: l.about, told: l.told || 0 })),
+    wondering: alive(w).filter(a => (a.wonder || 0) > 0.15).map(a => a.name),
     threat: w.threat ? { ...w.threat, word: T.readinessWord(w.threat.readiness || 0), daysLeft: w.threat.landed ? 0 : w.threat.lands - w.day } : null,
     reports: (w.reports || []).slice(-4), threatLog: (w.threatLog || []).slice(-8), ended: w.ended || null,
     card: w.lastCard || null, cards: (w.cards || []).slice(-12), deckLeft: (w.deck || []).length,
