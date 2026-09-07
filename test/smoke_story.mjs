@@ -1,0 +1,13 @@
+import { readFileSync } from 'node:fs';
+import * as World from '../server/world.js';
+const w = World.createWorld(null); w.weather.daysPerSeason = 8; const acts = new Map();
+for (let i = 0; i < 3 * World.TICKS_PER_DAY; i++) World.step(w, acts);
+const p = World.alive(w).filter(a => a.partner)[0] || World.alive(w)[0]; p.body.food = 0; p.body.warmth = 0;
+for (let i = 0; i < 3 * World.TICKS_PER_DAY; i++) World.step(w, acts);
+for (const c of w.chronicle.slice(-3)) console.log(`d${c.day}: ${c.text}\n`);
+console.log('WHY:', World.whyLines(w));
+console.log('STANDING:', JSON.stringify(World.standingNow(w)).slice(0, 500));
+const saved = JSON.parse(readFileSync(new URL('../data/world.json', import.meta.url), 'utf8')); const s = World.createWorld(saved);
+for (let i = 0; i < 2 * World.TICKS_PER_DAY; i++) World.step(s, acts);
+console.log('SAVED chronicle:', s.chronicle.at(-1).text); console.log('SAVED history keys:', Object.entries(World.condensedHistory(s)).map(([k, v]) => `${k}:${Array.isArray(v) ? v.length : !!v}`).join(' '));
+console.log('SMOKE DONE');

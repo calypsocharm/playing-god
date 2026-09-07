@@ -1,134 +1,91 @@
 # HANDOFF — Playing God (read this first in a new session)
 
-Updated 2026-09-07, midday. Owner: Calypso (ultimatefaux@gmail.com). Repo: github.com/calypsocharm/playing-god (PUBLIC:
+Updated 2026-09-07, evening. Owner: Calypso (ultimatefaux@gmail.com). Repo: github.com/calypsocharm/playing-god (PUBLIC:
 never commit `data/`, `.env`, or a real Creator password). Live at https://clawkeep.io on box 2. **Pushing to main is
-deploying**: the server on the box runs `playing-god-update` every 5 minutes (cron hourly as backstop). Nobody has SSH from
-Claude sessions; the local server (`npm start`, :3333, launch config `playing-god` in Downloads/.claude/launch.json) is only a
-test bench and loads the old "laptop village" data in `data/`. Before seeding test data into `data/world.json`, back it up to
-the scratchpad and restore after.
+deploying**: the box runs `playing-god-update` every 5 minutes (cron hourly as backstop); client files go live on the pull,
+server files only on the restart it triggers. Nobody has SSH from Claude sessions. The local server (`npm start`, :3333,
+launch config `playing-god` in Downloads/.claude/launch.json) is only a test bench and loads the old "laptop village" in
+`data/`. **Back `data/world.json` up to the scratchpad before any preview_start and restore it after** — the test bench
+writes to it. Check the live world with `curl -s https://clawkeep.io/api/state`.
 
 ## What exists (all live)
-Bodies/wounds/charts/families/grief/economy/store/loans/barter/builds; joy + hobbies (sit/walk/sing/hobby, pie/quilt/tonic/toy);
-Higher Self: talk bar at page top, conversation box on villager page + Higher Self tab, follow-up buttons, standing intention,
-claim/release, Creator can reclaim anyone, others after a season away; carry a villager between worlds (create.html →
-"Bring someone from another world" with `/api/agent/<id>.json`); place scenes with drawn interiors (house, store) in
-`client/interior.js`; map 72x36 with fog ("the pale"), explore task, lake/hills/ruin; camp as a separate town past the edge
-(tents); gifts by Moon element (kindling/seeing/greenhand/farsight, `cast`), clairs (empath/clairaudient/clairvoyant/
-claircognizant, always on); animals (strays choose people, hens/goats from store, dogs guard, deer to hunt, wolves in winter);
-babies cannot be left (sitter/`mind`, carrying, crying alone costs); sickness (`treat` with herbs/salve/tonic); holidays the
-villagers invent (`invent`→`invented` ws flow through the founder's model, scripted fallback, bunting on the map,
-`celebrate`); the arts (`make`/`show`/`art`, works kept, told at the fire, grief given a shape); "Through their eyes"
-(`client/eyes.html?who=`, ws `watch`, observer only); clock sliders free, only cold/harvest cost attention; winter hunger fix
-(buy/hunt/fish when hungry; eat scraps); goal statement in README/CONCEPT/Village tab.
+Bodies/wounds/charts/families/grief/economy/barter/builds; joy + hobbies; Higher Self (talk bar, conversation box, standing
+intention, claim/release, carry a villager between worlds via `/api/agent/<id>.json`); drawn interiors in
+`client/interior.js` (house, store, bank, meeting house); map 72x36 with fog ("the pale"), explore, lake/hills/ruin; the
+camp past the edge; gifts by Moon element + the four clairs; animals; babies; sickness; invented holidays; the arts;
+diaries and the chronicle. Plus everything below.
 
-## Threats + season score (strategy layer): DONE and live
-`server/threats.js` is wired: each season `rollThreat` picks a seasonal threat that lands late in the season; `T.readiness`
-is recomputed daily; the god op `warn` (1 attention) names the omen and every villager remembers what would help; scripted
-villagers prepare (`s.threat` in snapshotFor -> block in scripted.js); `landThreat` scales damage by readiness; effects:
-`w.coldSnap`/`w.drought`/`w.flood`/`w.frost` read in dayPhase (cold + field yield + flooded creek). At each season turn
-`closeSeason` builds `T.seasonReport` from `w.seasonDeaths/seasonBorn/seasonHealed/seasonHolidays` + goals/works/prayers since
-`w.seasonStartDay`, attention += `report.earned` (the flat +3 is gone), and `w.despair >= 2` sets `w.ended` + pauses.
-Client: Weather tab "What is coming" (readiness bar, Warn them) + "The last season, weighed"; Village tab shows the
-"book is closed" card with Begin again (= reset); story.html frontispiece says so. publicState ships `threat`, `reports`,
-`threatLog`, `ended`. Smoke script: scratchpad `smoke_threats.mjs` (fresh 3 seasons w/ warn, forced despair, migration of
-data/world.json read-only). Live village will get its first threat rolled on load (migration rolls one if none).
+## Shipped 2026-09-07 (all live, all verified)
+Anchors are the things to grep for. Every feature has a smoke script in the session scratchpad (`smoke_*.mjs`, run with
+`node <path>`; they import `file:///C:/Users/Calyp/Downloads/PlayingGod/server/world.js`).
 
-## Departments (her ask 2026-09-07): DONE
-`server/civic.js`: bank (savings/draw/borrow/repay, interest at season turn, inheritance, lends to the council with a 30 float)
-and council (ballot every time there is no project and debt <= 60 or a season passed; scripted `preferBuild` votes by need;
-`closeBallot` -> `commission` borrows and seeds the coin cost; `payWage` from council coin in the build action; `nightly`
-= tithe 2% of till, debt paydown, project-finished announcement + joy, civic building effects). New PLACES `bank` (23,19)
-and `council` (17,13); civic BUILDS in items.js (`civic: true`): commons, bathhouse, school, wellhouse; civic builds can
-only be raised as the council's project. Bank action for taking coin out is `draw` (NOT `withdraw`, which means go home).
-Client: BANK/MEETING sprites, bank + meeting-house scenes (`drawBank`, `drawCouncil`), Village tab department lines,
-villager page savings/debt/vote. Migration `C.ensure` splits the till in half and moves loans/project off the store.
-Smoke: scratchpad `smoke_civic.mjs`. Next (her earlier picks): a rival fire past the pale, then a second Creator.
+- **Threats + season score** (`server/threats.js`): a seasonal threat gathers and lands late in the season; `rollThreat` /
+  `landThreat` / `T.readiness` daily; god op `warn` (1) names the omen; effects `w.coldSnap` / `drought` / `flood` / `frost`
+  read in dayPhase. `closeSeason` builds `T.seasonReport` and **attention is earned, not given** (the flat +3 is gone);
+  `w.despair >= 2` sets `w.ended` and pauses. Client: Weather tab "What is coming" + "The last season, weighed"; Village tab
+  "book is closed" card with Begin again.
+- **Departments** (`server/civic.js`): store = shelf only; **bank** = savings/`draw`/borrow/repay, interest at season turn,
+  inheritance, lends to the council with a 30 float; **council** = ballot at the meeting house (`vote {for}`) → `commission`
+  borrows → `payWage` per material → civic build. Civic builds (`civic: true` in items.js: commons, bathhouse, school,
+  wellhouse) can ONLY be raised as the council's project. New PLACES `bank` (23,19), `council` (17,13). `C.ensure` migrates
+  old worlds (splits the till, moves loans off the store). **The bank action for taking coin out is `draw`** — `withdraw`
+  already means go home.
+- **The tarot sky** (`server/tarot.js`): 78 cards, `w.deck` shuffled and drawn down, `Tarot.draw(w, cardContext(w), by)`.
+  Each card is a one-line effect over `cardContext` (alive/remember/event/bumpTrust/die/emotionalEvent/awaken/openSense/
+  newTraveler/propose/leave/tryConceive/foundHoliday/findNext/closeBallot/landThreat). God op `draw` (1); the sky draws one
+  free at each season turn. **Rule: no card may ever pause the world** — the Hanged Man deadlocked the live village doing
+  that; it now sets `w.stillUntil = day+1` (everyone rests) and createWorld unpauses a world saved on `major:12`.
+  Client: card face + suit tint + "IN EFFECT" text drawn on the map by `drawCardOverlay()`.
+- **The other fire** (`server/rival.js`): `w.rival`, abstract people at PLACES.rival (66,27), seen by a scout within 12
+  tiles or ~year 1.5; nightly they eat, hunt the same deer, trade (warm) or raid (cold + hungry; defence = dogs + axes at
+  the hearth ×1.5 + hall + fences). Villager action `send {n}` at the edge; god op `parley` (2).
+- **The stones**: `w.funerals` queue filled in `die()`; `funeralIfDue` runs in `step()` at tick 3, one funeral an afternoon,
+  skipped the day a threat lands. It back-fills anyone dead+unburied still grieved or dead within the year (oldest death
+  first; the rest get `a.longBuried`). Grief halves and is shared, believers find them somewhere better, trust bumps.
+  **Fading** in `closeSeason`: negative trust +0.025/season (grudges gone in ~5 years), wounds older than 2 years lose
+  0.03/season → scar, memories older than a year blur.
+- **Belief + magic** (`server/magic.js`): `a.belief` (-1..1) from upbringing + Sun; `luck(a)` tilts forage/hunt/field rolls,
+  `trustWeight` inside `bumpTrust`, rebuff halved for believers, scripted comfort/withdraw split. `nightly` moves belief on
+  the day's memories with confirmation bias + slow drift home. `MAGIC`/`ORDER` items found on an explore step (25%):
+  `glasses` (rose-coloured, belief ≥0.7), `plenty` (necklace, +1 coin +0.5 food nightly, belief ≥0.3). New items: add to
+  ORDER + an ITEMS entry (`recipe: null, magic: true`) + a whyLines mention. **Every `.recipe` use must stay guarded.**
+- **Ghost mode** (`client/ghost.js`): `drawScene` paints the place from beside them (sky by tick/season, `dressPlace` per
+  place key, others with name/doing/speech bubble, `drawOverlay` = them from behind + thought + running lines). Indoors it
+  renders `Interior.draw*` into a 600×340 offscreen canvas, fit under the top bar, then `drawOverlay`. Both use
+  `setTransform(dpr)` and CSS-pixel coords. app.js: `ghostOn`, `startGhost`/`stopGhost`, `drawGhost()` at the top of
+  `draw()`. Buttons `[data-ghost]`, `#ghostExit`, Esc. **Every way out of zoom** (whole village / beyond the pale / Esc /
+  drag / wheel) ends observing and ghost.
+- **Observe mode**: `observing`, ws `watch`/`unwatch` → `eyes` → `onEyes` → `#eyesPanel` at the top of the Villager tab;
+  camera locks at scale 2.6.
+- **Narrator**: `narrateTick` every 1.5s picks the top-ranked unseen event (NARR_RANK) + its why line, dawn opener, night
+  chronicle → `#narrator` over the map; `speak()` (Web Speech) behind the Narrator button; `#narrMode` select switches
+  between the facts and `retell(fact)` through her Brain-tab model (her local Ollama works).
+- **Story with reasons**: `whyLines(w)` (deaths with who they were + who is left, grief grouped by the dead with relation
+  and days, sick/hungry/cold/hurt/low, strikes with state, threat), `standingNow(w)`, `condensedHistory(w)`, all in
+  publicState and `/api/story`. `chronicleNight` leads with deaths and why; "Tam made things" filler is gone. Village tab =
+  Where things stand → Recent nights → Long ago. `client/story.html` is **The History Book** (no season TOC, no ordinary
+  chapters; years counted from days because chapter indices are unreliable in the old world).
 
-## The sky turns a card (her ask 2026-09-07): DONE
-`server/tarot.js`: 78 cards (MINOR by suit/rank + MAJOR list), each an effect over a `cardContext(w)` built in world.js
-(alive/remember/event/bumpTrust/die/emotionalEvent/awaken/openSense/newTraveler/propose/leave/tryConceive/foundHoliday/
-findNext/closeBallot/landThreat). `Tarot.draw(w, ctx, by)` pops `w.deck` (shuffled keys; reshuffled when spent), records
-`w.cards`/`w.lastCard`, events + everyone remembers. God op `draw` costs 1; the sky draws one free at each season turn (after
-`rollThreat` in newDay). Client: Weather tab "The card" box + Turn a card button, Village tab line, pixel CARD sprite by
-the hearth for a day. Smoke: scratchpad `smoke_tarot.mjs` (turns all 78, checks effect errors = 0). Tuning knobs are the
-one-line effects in tarot.js. Next (her earlier picks): a rival fire past the pale, then a second Creator.
-
-## The other fire (rival) + funerals and fading: DONE (2026-09-07, later)
-`server/rival.js`: `w.rival` (abstract people, not agents) at PLACES.rival (66,27); seen by a scout within 12 tiles or
-~year 1.5; nightly: eats, hunts the same deer (`w.deer`), mood drifts; trader to the store when warm (`trade`), raid when
-cold+hungry (`raid`, defence = dogs + axes at hearth*1.5 + hall + fences); villager action `send {n}` at the edge; god op
-`parley` cost 2 (star over both fires, trader next morning); `Rv.deerTaken` in the hunt case. Client: tents+fire+smoke
-at the spot once seen, scene branch `k === 'rival'`, Village line, Weather button `btnParley`.
-Funerals: `w.funerals` queue filled in `die()` (and `funeralIfDue` back-fills anyone dead+unburied who is still grieved or died within a year; older dead get `longBuried`); `funeralIfDue` runs in `step` at tick 3 the day after: everyone to
-PLACES.graves (7,23), speaker = heaviest griever, words from FUNERAL_WORDS, grief halves + `buried`, faith>0.1 ->
-"somewhere better", openness/trust bumps, `w.graves` log; client STONE sprites + scene. Fading in `closeSeason`: negative
-trust +0.025/season, wounds older than 2y lose 0.03/season -> scar, memories older than 1y blur (weight*0.9).
-Smokes: scratchpad `smoke_rival.mjs`, `smoke_funeral.mjs`. NEXT: a second Creator holding the rival fire.
-
-## Observe mode (her ask: "click into someone and be their observer"): DONE
-In app.js: `observing`, `startObserving(id)` / `stopObserving()`, ws `watch`/`unwatch` -> `eyes` messages -> `onEyes` ->
-`eyesHtml()` rendered into `#eyesPanel` at the top of the Villager tab; the camera locks on them at scale 2.6 in `draw()`;
-clicking another villager while observing moves the eye; `caption` shows their thought on the canvas. The Observe button
-replaced the eyes.html link (still available as "open this as its own page"). Note: the `?select=` param already existed.
-
-## The story with reasons (her ask: "someone died and I can't figure out who"): DONE
-world.js `whyLines(w)` (deaths with who they were + who is left; grief grouped by the dead with relation + days + buried;
-sick/hungry/cold/hurt/low; strikes with state; threat), `standingNow(w)` and `condensedHistory(w)` shipped in publicState
-as `standing` / `history`; `chronicleNight` leads with deaths+why, funerals, civic/trade/season lines, and ends with the mood
-lines; "made things"/"work went on" filler removed; `dayDigest.why` feeds the model teller prompt. Village tab: "Where
-things stand" (with day-of-year), "Recent nights", and a "Long ago" details block. Chapters years are unreliable in the old
-laptop world (clock changed mid-life) so the condensed list shows titles only.
-
-## Narrator + the card in the space (her ask "maybe we need a narrator and where are the tarot cards?"): DONE
-app.js: `narrateTick` every 1.5s picks the highest-ranked unseen event of today (NARR_RANK), adds the why line for deaths/
-strikes, dawn opener and the night chronicle; shows in `#narrator` over the map; `speak()` uses Web Speech when the
-Narrator button is on (localStorage `playinggod.narrate`). `drawCardOverlay()` in draw(): card face (procedural sigil per
-suit, name, rank), suit tint over the land while in effect (day drawn + next), text block "IN EFFECT / LAST CARD" beside it.
-
-## Narrator mode switch: DONE
-`#narrMode` select (facts | model) beside the Narrator button; `retell(fact)` in app.js hands each notable moment to
-`Brain.callModel` (her Brain-tab model; Ollama local works) and replaces the line when it returns (seq-guarded, one call at
-a time). Nightly chronicle by the model is still the separate "tell" checkbox in the Weather tab.
-
-## Belief + magic items (her ask 2026-09-07): DONE
-`server/magic.js`: `a.belief` (-1..1; `beliefFor` from upbringing + Sun; `nightly` moves it on the day's memories with
-confirmation bias and a slow drift home); `luck(a)` multiplies forage/hunt/field rolls; `trustWeight` inside `bumpTrust`;
-rebuff halved when the reached-for believes in people; scripted: strong believers comfort, disbelievers withdraw. MAGIC
-registry + ORDER: `maybeFind` fires on an explore step in the pale (25%); first item = `glasses` (ITEMS entry with
-`recipe: null`, `magic: true`; every `.recipe` use is guarded). Villager page shows Believes + wears; whyLines mention
-the glasses and belief-driven lows. Smokes: scratchpad `smoke_magic.mjs`, `smoke_magic2.mjs` (forced scout finds them).
-Second item `plenty` (necklace of plenty: +1 coin, +0.5 food, tightness down, belief >= 0.3 nightly) added; ORDER = ['glasses','plenty']. Next magic items go in ORDER with a `wear`/felt line + an ITEMS entry (`recipe: null, magic: true`) + a whyLines mention. NEXT big item still: a second Creator holding the rival fire.
-
-## Ghost mode (her ask: "first person view, sitting on the shoulder"): DONE
-`client/ghost.js`: `drawScene(canvas, s)` paints sky by tick/season, ground, `dressPlace` per place key (forest/field/
-meadow/quarry/hills/creek/lake/grove/claypit/ruin/well/hearth/camp/edge/road/graves/rival/wild/store/bank/council),
-the others here with name/doing/speech bubble (`o.saidNow`), then `drawOverlay` (me from behind bottom-left + thought
-bubble, top bar, bottom lines from the latest eyes beat). Both use setTransform(dpr) and CSS-pixel coords. app.js:
-`ghostOn`, `startGhost`/`stopGhost`, `drawGhost()` called at the top of draw() (indoors: Interior.draw* into a 600x340
-offscreen canvas, fit "contain" under the top bar, then drawOverlay). Buttons: `[data-ghost]` in the inspector (primary,
-above Observe), `#ghostExit` on the stage, Esc. Ticker hidden while ghostOn; stage clicks ignored.
-
-## Hanged Man deadlock (live bug 2026-09-07): FIXED
-The card used to set `w.paused = true`; a paused world never reaches a season turn, so attention never returns and no
-card can be drawn -> stuck forever. Now it sets `w.stillUntil = day+1` (everyone rests a day, decisions overridden in
-dayPhase) and createWorld unpauses a saved world whose lastCard is `major:12`. Rule for future cards: never pause the
-world; use `stillUntil` or a timed effect. Also: every way out of zoom (whole village / beyond / Esc / drag / wheel)
-now ends observing + ghost.
-
-## story.html is now "The History Book": DONE
-No season TOC, no "An ordinary X" chapters. Sections: frontispiece (year = day/yearDays, not chapter index/4), Where
-things stand (`standing`), The important things (`history`), Seasons worth a name (chapters whose title is not
-ordinary/"Season N"/"the sky moved", last 40, up to 2 non-quiet nights each), The last days (last 14 nights, quotes),
-Gone by year. `/api/story` now returns `history` + `standing`. Chapter year numbers come from night days, so they are
-right even where the clock was changed mid-life.
+## NEXT (her list, in order)
+1. **A second Creator holding the rival fire** — the last of the picks she made this morning. Another person unlocks
+   `w.rival` with their own password, spends their own attention on their own people, and the two Creators meet through
+   trade, raids and parleys. Hooks are all in `server/rival.js` + the `god` op path in `server/index.js`.
+2. More magic items when she names them (see the recipe above).
 
 ## Standing preferences / lessons
-- She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to
-  customers (different project, same instinct). Villagers must be able to refuse her; that's the game working.
-- Live speed: 20 s ticks = a day per 2 min, a year per 80 min. Live world is around day 760, ~12 alive, Calypso's camp
-  past the edge with Ilse and Fen; Calypso is claircognizant + kindling, her openness runs low.
-- Long inline heredocs/`node -e` with `$&` or nested quotes break on this box: write a `.cjs` patch file to the scratchpad
-  and run it; escape `${` in template literals inside patch files.
+- She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". Villagers must be able to refuse
+  her; that's the game working. Features that live on a separate page are invisible to her — put them in the main panel.
+- She gives direction as short mid-turn messages; "ok" means build it. She thinks in belief/quantum-collapse metaphors:
+  map them onto tilted rolls, not new UI.
+- Live speed: 20 s ticks, and her world runs **3 days to a season**, so a season turns every ~6 minutes. Live world is
+  past day 1100; Calypso is claircognizant + kindling.
+- Long inline heredocs / `node -e` with `$&` or nested quotes break on this box: write a `.py` or `.cjs` patch file to the
+  scratchpad and run it; escape `${` in template literals inside patch files.
 - Narrow-screen grid (≤900px) needs explicit row pins for header/talkbar/stage/aside.
-- After touching nightPhase/newDay, always run a multi-day headless smoke test before pushing.
+- After touching nightPhase/newDay/step, always run the headless smokes before pushing.
 - Memory notes live in `C:\Users\Calyp\.claude\projects\C--\memory\playing-god-sim.md`.
+
+## Smoke tests
+`test/smoke_*.mjs`, run with `node test/smoke_threats.mjs` etc. from the repo root. They build fresh worlds in memory and
+read `data/world.json` read-only for the migration checks; none of them write to disk. `smoke_tarot.mjs` turns all 78
+cards and reports effect errors (must be 0).

@@ -1,0 +1,11 @@
+import * as World from '../server/world.js';
+import * as Mg from '../server/magic.js';
+const w = World.createWorld(null); w.weather.daysPerSeason = 8; const acts = new Map();
+const a = World.alive(w)[1]; const ev = (w2, t, k) => console.log('EVENT', t); const rm = (w2, x, t) => console.log('MEM', x.name, t.slice(0, 80));
+let n = 0; while ((!a.inv.glasses || !a.inv.plenty) && n++ < 200) Mg.maybeFind(w, a, ev, rm);
+const coin0 = a.inv.coin, food0 = a.inv.food, tight0 = a.body.tightness; a.belief = -0.5;
+for (let i = 0; i < 4 * World.TICKS_PER_DAY; i++) World.step(w, acts);
+console.log('after 4 nights: coin', coin0, '->', a.inv.coin, 'food', food0.toFixed(1), '->', a.inv.food.toFixed(1), 'belief', a.belief, 'alive', a.alive);
+console.log('felt', World.viewFor(a, w).felt.filter(x => /necklace|rose|believe/.test(x)));
+console.log('why', World.whyLines(w).filter(l => /necklace|glasses/.test(l)));
+console.log('public wears', World.publicState(w).agents.find(x => x.id === a.id).wears, 'SMOKE DONE');
