@@ -71,6 +71,14 @@ In app.js: `observing`, `startObserving(id)` / `stopObserving()`, ws `watch`/`un
 clicking another villager while observing moves the eye; `caption` shows their thought on the canvas. The Observe button
 replaced the eyes.html link (still available as "open this as its own page"). Note: the `?select=` param already existed.
 
+## The story with reasons (her ask: "someone died and I can't figure out who"): DONE
+world.js `whyLines(w)` (deaths with who they were + who is left; grief grouped by the dead with relation + days + buried;
+sick/hungry/cold/hurt/low; strikes with state; threat), `standingNow(w)` and `condensedHistory(w)` shipped in publicState
+as `standing` / `history`; `chronicleNight` leads with deaths+why, funerals, civic/trade/season lines, and ends with the mood
+lines; "made things"/"work went on" filler removed; `dayDigest.why` feeds the model teller prompt. Village tab: "Where
+things stand" (with day-of-year), "Recent nights", and a "Long ago" details block. Chapters years are unreliable in the old
+laptop world (clock changed mid-life) so the condensed list shows titles only.
+
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to
   customers (different project, same instinct). Villagers must be able to refuse her; that's the game working.

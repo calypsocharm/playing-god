@@ -160,6 +160,7 @@ ${d.prev.length ? '\nThe last entries, for continuity:\n' + d.prev.map(p => '- '
 
 What happened today:
 ${facts}
+${(d.why || []).length ? '\nWhy people are as they are tonight (use this; a face always has a reason):\n' + d.why.map(t => '- ' + t).join('\n') : ''}
 ${d.talk.length ? '\nThings people said:\n' + d.talk.map(t => '- ' + t).join('\n') : ''}
 ${d.diaries.length ? '\nFrom the diaries tonight:\n' + d.diaries.map(t => '- ' + t).join('\n') : ''}
 
@@ -1098,6 +1099,35 @@ function renderPanels() {
   $('now').innerHTML = now.length ? now.map(n => `<div class="now-line ${n.kind}" data-look2="${n.id}" style="cursor:pointer">${esc(n.text)}</div>`).join('') : (s.tickName === 'night' ? 'Everyone is asleep.' : '');
   for (const el of $('now').querySelectorAll('[data-look2]')) el.onclick = () => { selected = el.dataset.look2; showTab('agent'); renderInspector(); };
   tickerLines = now.filter(n => n.kind !== 'quiet').map(n => n.text);
+  // Where things stand today: faces with reasons.
+  const st0 = s.standing;
+  if (st0) {
+    $('standingWhen').textContent = `· day ${st0.dayOfYear} of year ${st0.year}, ${st0.season}`;
+    const lines = [];
+    for (const r of (st0.recentDead || [])) lines.push(`<div><b style="color:var(--bad)">${esc(r.name)}</b> died on day ${r.day}, aged ${r.age ?? '?'}, of ${esc(r.cause || '')}${r.buried ? ' · buried at the stones' : (st0.funeralsDue || []).includes(r.name) ? ' · the funeral is tomorrow afternoon' : ''}.</div>`);
+    for (const l of (st0.why || [])) if (!/was \d+.*died of/.test(l)) lines.push(`<div>${esc(l)}</div>`);
+    if (st0.council) lines.push(`<div>The council: ${esc(st0.council)}.</div>`);
+    if (st0.card) lines.push(`<div>The sky turned ${esc(st0.card)}</div>`);
+    if (st0.rival) lines.push(`<div>${esc(st0.rival[0].toUpperCase() + st0.rival.slice(1))} toward the village.</div>`);
+    const standHtml = lines.length ? lines.join('') : 'Everyone is fed, warm and whole tonight. Nothing hangs over the village.';
+    if ($('standing').innerHTML !== standHtml) $('standing').innerHTML = standHtml;
+  }
+  // The long history, condensed: why the village keeps what it keeps.
+  const hs = s.history;
+  if (hs) {
+    const H = [];
+    if (hs.holidays.length) H.push(`<div><b>Days the village keeps</b>: ${hs.holidays.map(x => `${esc(x.name)} <span class="muted">(${esc(x.by)}, year ${x.year}, for ${esc(x.why || 'a reason no one wrote down')}; kept ${x.kept}×)</span>`).join(' · ')}</div>`);
+    if (hs.raised.length || hs.builds.length) H.push(`<div><b>Raised</b>: ${hs.builds.map(x => `${esc(x.what)}${x.day != null ? ` <span class="muted">day ${x.day}</span>` : ''}`).join(' · ')}${hs.raised.length ? ` · <span class="muted">by vote: ${hs.raised.map(x => esc(x.what)).join(', ')}</span>` : ''}</div>`);
+    if (hs.answered.length) H.push(`<div><b>Questions answered</b>: ${hs.answered.map(x => `${esc(x.what)} <span class="muted">(year ${x.year})</span>`).join(' · ')}</div>`);
+    if (hs.destinies.length) H.push(`<div><b>Destinies come to pass</b>: ${hs.destinies.map(x => `${esc(x.name)}: "${esc(x.text)}" <span class="muted">day ${x.day}</span>`).join(' · ')}</div>`);
+    if (hs.arts.length) H.push(`<div><b>Arts of the village's own</b>: ${hs.arts.map(x => `${esc(x.name)} <span class="muted">(${esc(x.by)})</span>`).join(' · ')}</div>`);
+    if (hs.threats.length) H.push(`<div><b>What came out of the pale</b>: ${hs.threats.map(x => `${esc(x.name)} <span class="muted">(year ${x.year}, met ${x.ready ? 'ready' : 'unready'})</span>`).join(' · ')}</div>`);
+    if (hs.founded) H.push(`<div><b>${esc(hs.founded.name)}</b> was founded past the edge on day ${hs.founded.day}.</div>`);
+    if (hs.deadByYear.length) H.push(`<div><b>Gone</b>: ${hs.deadByYear.map(y => `year ${y.year}: ${y.names.map(esc).join(', ')}`).join(' · ')}</div>`);
+    if (hs.chapters.length) H.push(`<div><b>Chapters</b>: ${hs.chapters.slice(-12).map(c => esc(c.title)).join(' · ')}</div>`);
+    const histHtml = H.join('') || 'Nothing yet worth the keeping.';
+    if ($('history').innerHTML !== histHtml) $('history').innerHTML = histHtml;
+  }
   // The chronicle: the last few nights in the village's voice.
   const ch = (s.chronicle || []).slice(-4).reverse();
   $('chronicle').innerHTML = ch.length ? ch.map(c => `<div class="mem" style="font-style:italic;color:var(--ink)"><span class="muted">Day ${c.day} · ${c.alive} alive</span><br>${esc(c.text)}</div>`).join('') : 'Nothing written yet. The village writes at night.';

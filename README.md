@@ -590,6 +590,19 @@ hear, what they think, what they do, what they say, and at night what they write
 in the second person and updates every tick. You cannot speak there and they do not know you are
 watching. It works for anyone, yours or not, and it never shows the rules their body wrote.
 
+## The story: today, with reasons
+
+The nightly chronicle leads with what happened and why. A death says who they were (age, whose
+partner or parent or child, what took them) and who is left. Grief is never a face without a
+reason: "Wren (their partner) is grieving Hale, who died 3 days ago of the cold, not yet buried."
+The sick, the hungry, the cold, the hurt and the low are named, and a strike says who was wound
+tight. Filler like "Tam made things" is gone; the ballot, the council's project, the trader, the
+raid, the card and the season's weighing are in. The Village tab opens with **Where things
+stand**, today's picture with the same reasons, then the recent nights, and folds the long
+history into one condensed block: the days the village keeps and why, what was raised and by
+vote, questions answered, destinies come to pass, what came out of the pale, and who is gone,
+by year. The model teller, if one is on, gets the reasons too.
+
 ## Observing someone
 
 Click a villager and press **Observe**. The camera stays on them, close, wherever they go, and

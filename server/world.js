@@ -331,6 +331,76 @@ function checkGoals(w) {
 }
 
 // ---------- the chronicle ----------
+// Who someone is to someone: partner, parent, child, or how much they were trusted.
+function relation(w, a, other) {
+  if (!other) return 'someone';
+  if (a.partner === other.id) return `${other.name}'s partner`;
+  if ((a.parents || []).includes(other.id)) return `${other.name}'s child`;
+  if ((a.children || []).includes(other.id)) return `${other.name}'s parent`;
+  const t = trustOf(a, other);
+  return t > 0.5 ? 'a close friend' : t > 0.15 ? 'a friend' : 'someone from the village';
+}
+// Why people feel as they do tonight: the causes behind the faces. This is what a story is for.
+export function whyLines(w) {
+  const living = alive(w), out = [];
+  const dead = (id) => w.agents.find(x => x.id === id);
+  for (const a of w.agents.filter(x => !x.alive && x.diedDay === w.day)) {
+    const kin = [a.partner, ...(a.children || []), ...(a.parents || [])].map(id => byId(w, id)).filter(o => o && o.alive);
+    const who = a.partner && byId(w, a.partner)?.alive ? `${byId(w, a.partner).name}'s partner` : (a.children || []).length ? `parent of ${(a.children || []).map(id => byId(w, id)?.name).filter(Boolean).join(' and ')}` : (a.parents || []).length ? `child of ${(a.parents || []).map(id => byId(w, id)?.name).filter(Boolean).join(' and ')}` : null;
+    out.push(`${a.name} was ${a.ageAtDeath}${who ? `, ${who}` : ''}, and died of ${a.causeOfDeath || 'it'}.${kin.length ? ` ${kin.map(o => o.name).join(', ')} ${kin.length === 1 ? 'is' : 'are'} left.` : ''}`);
+  }
+  const grieving = living.filter(a => (a.grief || []).some(g => g.intensity > 0.25)).map(a => { const g = [...a.grief].sort((x, y) => y.intensity - x.intensity)[0]; const d = dead(g.for); return { a, g, d }; });
+  const byDead = new Map();
+  for (const { a, g, d } of grieving) { const k = g.for; if (!byDead.has(k)) byDead.set(k, { name: g.name, d, who: [] }); byDead.get(k).who.push({ a, g }); }
+  for (const [, x] of [...byDead.entries()].slice(0, 3)) {
+    const days = w.day - (x.d?.diedDay ?? x.who[0].g.day);
+    const parts = x.who.slice(0, 3).map(({ a }) => `${a.name} (${relation(w, a, x.d)})`);
+    out.push(`${parts.join(', ')}${x.who.length > 3 ? ` and ${x.who.length - 3} more` : ''} ${x.who.length === 1 ? 'is' : 'are'} grieving ${x.name}, who died ${days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`}${x.d?.causeOfDeath ? ` of ${x.d.causeOfDeath}` : ''}${x.who.some(({ g }) => g.buried) ? '' : ', not yet buried'}.`);
+  }
+  const sick = living.filter(a => a.ill); if (sick.length) out.push(`${sick.map(a => `${a.name} (${a.ill.kind}, ${w.day - a.ill.day} day${w.day - a.ill.day === 1 ? '' : 's'})`).join(', ')} ${sick.length === 1 ? 'is' : 'are'} sick.`);
+  const hungry = living.filter(a => a.body.food < 0.3), cold = living.filter(a => a.body.warmth < 0.3 && !hungry.includes(a));
+  if (hungry.length) out.push(`${hungry.map(a => a.name).join(', ')} ${hungry.length === 1 ? 'is' : 'are'} hungry${hungry.some(a => a.inv.food < 0.3) ? ' with nothing in the house' : ''}.`);
+  if (cold.length) out.push(`${cold.map(a => a.name).join(', ')} ${cold.length === 1 ? 'is' : 'are'} cold.`);
+  const hurt = living.filter(a => a.body.hurt > 0.35); if (hurt.length) out.push(`${hurt.map(a => a.name).join(', ')} ${hurt.length === 1 ? 'is' : 'are'} hurt.`);
+  const low = living.filter(a => (a.body.joy ?? 0.5) < 0.3 && !F.isChild(w, a) && !grieving.some(x => x.a === a) && !sick.includes(a) && !hungry.includes(a));
+  if (low.length) out.push(`${low.map(a => a.name).join(', ')} ${low.length === 1 ? 'is' : 'are'} low, and no one can quite say why.`);
+  const struck = w.log.filter(e => e.day === w.day && e.kind === 'strike' && /strikes/.test(e.text)); for (const e of struck.slice(0, 2)) { const a = byId(w, e.who?.[0]), v = byId(w, e.who?.[1]); if (a && v) out.push(`${a.name} struck ${v.name}; ${a.name} is ${branch(a)} and was ${a.body.tightness > 0.6 ? 'wound tight' : 'on edge'}.`); }
+  if (w.threat && !w.threat.landed && w.threat.known) out.push(`Everyone says ${w.threat.name} comes in ${w.threat.lands - w.day} day${w.threat.lands - w.day === 1 ? '' : 's'}; the village is ${T.readinessWord(w.threat.readiness || 0)}.`);
+  if (w.threat?.landed && w.day - w.threat.landed <= 3) out.push(`${w.threat.name[0].toUpperCase() + w.threat.name.slice(1)} landed ${w.day - w.threat.landed === 0 ? 'today' : w.day - w.threat.landed === 1 ? 'yesterday' : `${w.day - w.threat.landed} days ago`}.`);
+  return out;
+}
+// Where things stand right now, for the panel: today's picture, not the archive.
+export function standingNow(w) {
+  const living = alive(w);
+  return {
+    day: w.day, year: Math.floor(w.day / yearDays(w)) + 1, season: W.seasonOf(w.day, w.weather), dayOfYear: w.day % yearDays(w) + 1,
+    why: whyLines(w),
+    council: w.council.ballot ? `a vote is open until day ${w.council.ballot.closes}` : w.council.project ? `raising the ${I.BUILDS[w.council.project]?.label}` : null,
+    card: w.lastCard && w.day - w.lastCard.day <= 2 ? `${w.lastCard.name}: ${w.lastCard.text}` : null,
+    rival: w.rival?.seen ? `${w.rival.name} are ${Rv.moodWord(w.rival.mood)}` : null,
+    funeralsDue: (w.funerals || []).map(f => f.name),
+    recentDead: w.agents.filter(a => !a.alive && w.day - a.diedDay <= yearDays(w) / 4).map(a => ({ name: a.name, day: a.diedDay, age: a.ageAtDeath, cause: a.causeOfDeath, buried: (w.graves || []).some(g => g.for === a.id) })),
+  };
+}
+// The long history, condensed: what is worth keeping from all those seasons.
+export function condensedHistory(w) {
+  const yd = yearDays(w);
+  const byYear = {};
+  for (const a of w.agents.filter(x => !x.alive)) { const y = Math.floor((a.diedDay || 0) / yd) + 1; (byYear[y] = byYear[y] || []).push(`${a.name} (${a.ageAtDeath ?? '?'}, ${a.causeOfDeath || ''})`); }
+  return {
+    holidays: (w.holidays || []).map(h => ({ name: h.name, why: h.reason, by: h.byName, year: h.year, kept: h.kept })),
+    answered: Object.entries(w.goals || {}).filter(([, g]) => g?.done != null).map(([k, g]) => ({ what: GOALS[k], day: g.done, year: Math.floor(g.done / yd) + 1 })),
+    destinies: w.agents.filter(a => a.destiny?.fulfilled).map(a => ({ name: a.name, text: a.destiny.text, day: a.destiny.fulfilled })),
+    raised: (w.council?.built || []).map(b => ({ what: I.BUILDS[b.key]?.label || b.key, day: b.day, year: Math.floor(b.day / yd) + 1 })),
+    builds: Object.entries(w.builds || {}).filter(([, b]) => b.done).map(([k, b]) => ({ what: I.BUILDS[k]?.label || k, day: b.day ?? null })),
+    arts: (w.arts || []).map(x => ({ name: x.name, by: x.byName })),
+    deadByYear: Object.entries(byYear).map(([year, names]) => ({ year: +year, names })),
+    chapters: (w.chapters || []).map(c => ({ index: c.index, title: c.title, year: Math.floor(c.index / 4) + 1, season: c.season })),
+    threats: (w.threatLog || []).slice(-8).map(t => ({ name: t.name, day: t.day, year: Math.floor(t.day / yd) + 1, ready: t.readiness >= 0.5 })),
+    founded: w.camp?.founded ? { name: w.camp.name, day: w.camp.day } : null,
+  };
+}
+
 // Everything that mattered today, as plain facts, for whoever tells the story (scripted or a model).
 export function dayDigest(w, day = w.day) {
   const today = w.log.filter(e => e.day === day && e.kind !== 'night' && e.kind !== 'talk');
@@ -341,6 +411,7 @@ export function dayDigest(w, day = w.day) {
   return {
     day, year: Math.floor(day / yearDays(w)) + 1, season: d.season, sky: d.sky, alive: living.length,
     facts: today.map(e => e.text),
+    why: whyLines(w),
     talk,
     diaries: diaries.slice(0, 3),
     skyName: w.god.name,
@@ -356,7 +427,10 @@ function chronicleNight(w) {
   const d = W.describe(w.day, w.weather);
   const first = (t) => t.replace(/\.\s.*$/, '.');
   const parts = [];
+  const why = whyLines(w);
   const deaths = pick1('death'); for (const e of deaths) parts.push(e.text);
+  for (const line of why.filter(l => /was \d+.*died of/.test(l))) parts.push(line);
+  const funerals = today.filter(e => /buries/.test(e.text)); for (const e of funerals) parts.push(e.text);
   const wakes = today.filter(e => /keep the wake/.test(e.text)); if (wakes.length) parts.push(wakes[0].text.replace(' keep the wake for ', ' sat the night through for '));
   const births = today.filter(e => /is born to/.test(e.text)); for (const e of births) parts.push(e.text);
   const expecting = today.filter(e => /are expecting/.test(e.text)); for (const e of expecting) parts.push(e.text);
@@ -374,8 +448,13 @@ function chronicleNight(w) {
   const prayers = pick1('pray'); if (prayers.length) parts.push(prayers.length === 1 ? prayers[0].text : `${prayers.length} people spoke to the sky, asking for ${/cold/.test(prayers.map(p => p.text).join()) ? 'warmth' : 'food'} mostly.`);
   const godActs = pick1('god').filter(e => !/call the sky/.test(e.text)); for (const e of godActs) parts.push(e.text);
   const named = pick1('god').filter(e => /call the sky/.test(e.text)); for (const e of named) parts.push(e.text);
-  const builds = pick1('build').length; if (builds >= 3 && !healed.some(e => /finished/.test(e.text))) parts.push('Work went on at the hearth.');
-  const crafts = pick1('craft'); if (crafts.length >= 2) parts.push(`${[...new Set(crafts.map(e => e.text.split(' ')[0]))].slice(0, 3).join(', ')} made things.`);
+  const civic = pick1('build').filter(e => /ballot|takes on the|is finished/.test(e.text)); for (const e of civic) parts.push(first(e.text));
+  const trade = pick1('trade').filter(e => /trader from|cart from|Raiders|weighed/.test(e.text)); for (const e of trade) parts.push(first(e.text));
+  const seasonWeighed = pick1('season').filter(e => /weighed/.test(e.text)); for (const e of seasonWeighed) parts.push(first(e.text));
+  const firsts = pick1('craft').filter(e => /first|has taken up/.test(e.text)); for (const e of firsts.slice(0, 1)) parts.push(e.text);
+  // How people are tonight, and why. Never a face without a reason.
+  const mood = why.filter(l => !/was \d+.*died of/.test(l));
+  if (mood.length) parts.push(mood.slice(0, 4).join(' '));
   const seasonStart = pick1('season').find(e => /begins/.test(e.text));
   const frame = seasonStart ? `${d.season[0].toUpperCase() + d.season.slice(1)} came in ${d.sky.replace(/^a /, '')}.` : `${d.season[0].toUpperCase() + d.season.slice(1)}, ${d.sky}.`;
   const text = parts.length ? `${frame} ${parts.join(' ')}` : `${frame} A quiet day. People worked and ate and went home.`;
@@ -2328,6 +2407,7 @@ export function publicState(w) {
     card: w.lastCard || null, cards: (w.cards || []).slice(-12), deckLeft: (w.deck || []).length,
     rival: Rv.publicState(w),
     graves: (w.graves || []).slice(-40), funeralsDue: (w.funerals || []).length,
+    standing: standingNow(w), history: condensedHistory(w),
     holidays: w.holidays || [], holidayToday: w.holidayToday || null, pendingHoliday: w.pendingHoliday ? { by: w.pendingHoliday.by, reason: w.pendingHoliday.reason } : null, sick: alive(w).filter(a => a.ill).length,
     agents: w.agents.map(a => ({
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
