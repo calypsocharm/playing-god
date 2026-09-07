@@ -596,6 +596,9 @@ A narrator speaks over the map: the one thing that matters most this moment, wit
 when the village knows one (a death says who they were; a strike says the striker was wound
 tight), the day's opening at dawn, and the night's chronicle at night. Turn on the Narrator
 button and it is read aloud in the browser's voice. It never invents; it reads from the facts.
+Next to the button, a switch: **the facts**, or **my model's words**, which hands each notable moment to your
+Brain-tab model to retell in its own voice, a few seconds behind the event and one small call per moment. With the
+Weather tab's "let my model tell the story each night" also on, the model is the one narrator, day and night.
 
 The card the sky turned sits in the top corner of the map as a drawn card, sigil and name, with
 what it is doing to the space written beside it and a faint wash of its suit's colour over the

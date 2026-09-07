@@ -753,9 +753,29 @@ function narrateTick() {
     const why = (state.standing?.why || []).slice(0, 2).join(' ');
     line = `Day ${state.standing?.dayOfYear ?? state.day} of year ${state.year}, ${state.weather.season}, ${state.weather.sky}. ${why || 'Everyone is fed and warm. The day begins.'}`; narrDay = state.day;
   }
-  if (line) { narrLine = line; narrUntil = performance.now() + Math.max(12000, Math.min(45000, line.length * 90)); $('narrator').innerHTML = `<span><span class="k">narrator</span>${esc(line)}</span>`; speak(line); }
+  if (line) { narrLine = line; narrUntil = performance.now() + Math.max(12000, Math.min(45000, line.length * 90)); $('narrator').innerHTML = `<span><span class="k">narrator</span>${esc(line)}</span>`; if (narrMode === 'model') retell(line); else speak(line); }
   else if (narrLine && performance.now() > narrUntil) { narrLine = null; $('narrator').innerHTML = ''; }
 }
+// The model as narrator: each notable moment retold in its own words, a few seconds behind the fact.
+let narrMode = localStorage.getItem('playinggod.narrmode') || 'facts';
+let retelling = false, retellSeq = 0;
+async function retell(fact) {
+  const seq = ++retellSeq;
+  if (retelling) return;
+  if (!brainCfg.model && !Brain.PROVIDERS[brainCfg.provider]) { speak(fact); return; }
+  retelling = true;
+  try {
+    const why = (state.standing?.why || []).slice(0, 3).join(' ');
+    const text = await Brain.callModel(brainCfg, 'You are the narrator of a small village, watching from above. Retell the moment you are given in one or two plain sentences, present tense, warm but unsentimental. Name people. Use only the facts given; invent nothing. No headings, no quotes around it.', `Day ${state.day}, ${state.weather.season}, ${state.weather.sky}. The moment: ${fact}${why ? `
+What is behind it: ${why}` : ''}`, { maxTokens: 120 });
+    const clean = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim().replace(/^["“]|["”]$/g, '');
+    if (clean && seq === retellSeq) { narrLine = clean; narrUntil = performance.now() + Math.max(12000, Math.min(45000, clean.length * 90)); $('narrator').innerHTML = `<span><span class="k">narrator · ${esc((Brain.PROVIDERS[brainCfg.provider]?.label || 'model').split(' (')[0])}</span>${esc(clean)}</span>`; speak(clean); }
+    else if (seq === retellSeq) speak(fact);
+  } catch { speak(fact); }
+  retelling = false;
+}
+$('narrMode').value = narrMode;
+$('narrMode').onchange = () => { narrMode = $('narrMode').value; localStorage.setItem('playinggod.narrmode', narrMode); if (narrMode === 'model' && !brainCfg.model && !Brain.PROVIDERS[brainCfg.provider]) toast('Connect a model in the Higher Self tab first; until then the narrator reads the facts.', 'bad'); };
 function speak(text) {
   if (!narrateVoice || !('speechSynthesis' in window)) return;
   try { const u = new SpeechSynthesisUtterance(text); u.rate = 0.95; u.pitch = 0.9; const vs = speechSynthesis.getVoices(); const v = vs.find(x => /en/i.test(x.lang) && /Natural|Neural|Google|Samantha|Daniel|Aria|Jenny/i.test(x.name)) || vs.find(x => /en/i.test(x.lang)); if (v) u.voice = v; speechSynthesis.speak(u); } catch {}

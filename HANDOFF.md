@@ -85,6 +85,11 @@ strikes, dawn opener and the night chronicle; shows in `#narrator` over the map;
 Narrator button is on (localStorage `playinggod.narrate`). `drawCardOverlay()` in draw(): card face (procedural sigil per
 suit, name, rank), suit tint over the land while in effect (day drawn + next), text block "IN EFFECT / LAST CARD" beside it.
 
+## Narrator mode switch: DONE
+`#narrMode` select (facts | model) beside the Narrator button; `retell(fact)` in app.js hands each notable moment to
+`Brain.callModel` (her Brain-tab model; Ollama local works) and replaces the line when it returns (seq-guarded, one call at
+a time). Nightly chronicle by the model is still the separate "tell" checkbox in the Weather tab.
+
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to
   customers (different project, same instinct). Villagers must be able to refuse her; that's the game working.
