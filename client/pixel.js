@@ -71,6 +71,11 @@ export const TENT = sprite([
 export const TENT_DARK = sprite([
   '................', '.......R........', '......RRR.......', '.....RRRRR......', '....RRRRRRR.....', '...RRRRRRRRR....', '..RRRRRRRRRRR...', '.RRRRRRRRRRRRR..', 'RRRRRRkkkRRRRRR.', 'RRRRRkkkkkRRRRR.', 'RRRRkkkkkkkRRRR.', 'RRRkkkkkkkkkRRR.', 'RRkkkkkkkkkkkRR.', 'RkkkkkkkkkkkkkR.', 'DDDDDDDDDDDDDDDD', '................',
 ], 'tent-dark');
+export const CAT = sprite(['............', '..k.....k...', '..kkkkkkk...', '..kkvkvkk...', '..kkkkkkk...', '...kkkk.....', '.kkkkkkkk...', '.kkkkkkkkk..', '.kkkkkkkkkk.', '.k.kk..kk.k.', '............', '............'], 'cat');
+export const DOG = sprite(['............', '.dd.........', '.ddddd......', '.dvdddd.....', '.dddddd.....', '..ddddddddd.', '..ddddddddd.', '..ddddddddd.', '..ddddddddd.', '..dd.dd.dd..', '..dd.dd.dd..', '............'], 'dog');
+export const HEN = sprite(['............', '....e.......', '...sss......', '...svs..e...', '...ssssss...', '..ssssssss..', '..ssssssss..', '...ssssss...', '....ssss....', '.....oo.....', '....o..o....', '............'], 'hen');
+export const GOAT = sprite(['............', '.U.U........', '.UUUU.......', '.UvUUU......', '.UUUU.......', '..UUUUUUUUU.', '..UUUUUUUUU.', '..UUUUUUUUU.', '..UUUUUUUUU.', '..UU.UU.UU..', '..UU.UU.UU..', '............'], 'goat');
+export const DEER = sprite(['..t.t.......', '..ttt.......', '.tdddt......', '.tvddd......', '..ddd.......', '...dddddddd.', '...dddddddd.', '...dddddddd.', '...dddddddd.', '...dd.dd.dd.', '...dd.dd.dd.', '............'], 'deer');
 export const HOUSE_DARK = sprite([
   '......RR........', '.....RRRR.......', '....RRRRRR......', '...RRRRRRRR.....', '..RRRRRRRRRR....', '.RRRRRRRRRRRR...', 'RkkkkkkkkkkkkkkR', '.WWWWWWWWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', '.WWWWWkkWWWWWWW.', 'DDDDDDDDDDDDDDDD',
 ], 'house-dark');

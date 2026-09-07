@@ -60,7 +60,7 @@ function shelfRow(g, items, x, y, w, max = 8, sub = null) {
 }
 
 // A house. residents: those who live here; inside: those home now; visitors: at the door.
-export function drawHouse(canvas, { residents, inside, visitors, ups, inv, lit, night }) {
+export function drawHouse(canvas, { residents, inside, visitors, ups, inv, lit, night, pets = [] }) {
   const g = canvas.getContext('2d'); const W = canvas.width, H = canvas.height;
   g.imageSmoothingEnabled = false; g.clearRect(0, 0, W, H);
   const big = !!ups.bighouse;
@@ -97,6 +97,13 @@ export function drawHouse(canvas, { residents, inside, visitors, ups, inv, lit, 
   inside.forEach((a, i) => person(g, a, spots[i % spots.length][0], spots[i % spots.length][1]));
   visitors.forEach((a, i) => { person(g, a, W - 26, H - 12 - i * 2, 40); });
   if (!inside.length) label(g, 'nobody home', W / 2, 236, '#a9a290', 12);
+  // the animals of the house: cat by the fire, dog on the floor, hens and goat in the yard strip
+  let yard = 20;
+  for (const an of pets) {
+    if (an.kind === 'cat') { PX.blit(g, PX.CAT, 96, 98, 28); label(g, an.name, 110, 138, '#a9a290', 9); }
+    else if (an.kind === 'dog') { PX.blit(g, PX.DOG, W / 2 - 150, 262, 32); label(g, an.name, W / 2 - 134, 306, '#a9a290', 9); }
+    else { g.fillStyle = '#4f8a3c'; g.fillRect(0, H - 22, W - 60, 16); PX.blit(g, an.kind === 'hen' ? PX.HEN : PX.GOAT, yard, H - 34, an.kind === 'hen' ? 22 : 28); label(g, an.name, yard + 12, H - 2, '#a9a290', 8); yard += 44; }
+  }
 }
 
 // The store: shelves of stock with prices, a counter, the till, and whoever is in.

@@ -499,3 +499,17 @@ blanket or quilt on it if they have one, bread or pie on the table, a toy on the
 garden through the window, and whoever is home standing there. Click the store and you see its
 shelves with stock and prices, the till with its coin, the wanted-sign for the project it is
 paying for, and whoever is in. The people in the scene are the same sprites as on the map.
+
+## Animals
+
+Strays come in from the pale: a kitten or a pup turns up at the hearth or the grove, thin and
+watching, and chooses whoever lingers and is open, usually the one whose joy is lowest. A person
+can also take one in and name it. The store sells hens and goats. Every animal eats from its
+owner's food each night; a hen lays most mornings and a goat gives milk, both outside winter. A
+dog goes everywhere with its person and settles their chest; a cat waits by the fire and lifts
+whoever comes home. Animals age and die, which is a small grief with no ceremony, and a hungry
+animal leaves. Wolves take a hen or a goat in the winter nights unless the house has a dog, which
+barks until dawn. Deer graze the meadow and the forest and can be hunted for meat, and come back
+in spring. Animals show on the map beside their people, inside the house scene, and on a
+villager's page under "Keeps". Brained villagers get `adopt`, `pet` (with a `call` to rename),
+`hunt`, and `buy {item: hen|goat}`.

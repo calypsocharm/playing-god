@@ -355,6 +355,15 @@ function draw() {
     if (k !== 'camp') ctx.fillText(p.label, c.x, c.y + S * (k === 'field' ? 2.7 : k === 'forest' ? 2.6 : 1.9));
   }
 
+  // animals: pets beside their people or at home, deer in the grass
+  for (const an of state.animals || []) {
+    const img = an.kind === 'cat' ? PX.CAT : an.kind === 'dog' ? PX.DOG : an.kind === 'hen' ? PX.HEN : an.kind === 'goat' ? PX.GOAT : an.kind === 'deer' ? PX.DEER : null;
+    if (!img) continue;
+    const c = toScreen(an.pos.x, an.pos.y);
+    const bob = an.kind === 'deer' ? 0 : Math.sin(t * 3 + an.pos.x) * S * 0.03;
+    PX.blit(ctx, img, c.x - S * 0.3, c.y - S * 0.2 + bob, S * (an.young ? 0.45 : an.kind === 'goat' || an.kind === 'deer' ? 0.7 : 0.6));
+    if (an.name && S > 18) { ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = `${Math.max(8, S * 0.3)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText(an.name, c.x, c.y + S * 0.75); }
+  }
   // homes: houses, lit when someone is inside, dark for the dead
   const homeKey = (h) => `${h.x},${h.y}`;
   const seenHomes = new Set();
@@ -792,7 +801,8 @@ function renderPlace(hit) {
     $('moCarry').textContent = inv(sumInv(residents)) + (Object.keys(ups).length ? `. Built: ${Object.keys(ups).map(k => s.upgradeSpecs?.[k]?.label || k).join(', ')}.` : '');
     const visitors = alive.filter(a => residents.some(r => a.location === `visit:${r.id}`));
     $('moScene').hidden = false;
-    Interior.drawHouse($('moScene'), { residents, inside, visitors, ups, inv: sumInv(residents), lit: inside.length > 0 || s.tick >= 4, night: s.tick >= 4 });
+    const pets = (s.animals || []).filter(x => residents.some(r => r.id === x.owner));
+    Interior.drawHouse($('moScene'), { residents, inside, visitors, ups, inv: sumInv(residents), lit: inside.length > 0 || s.tick >= 4, night: s.tick >= 4, pets });
   } else {
     const k = hit.key, pl = hit.pos, label = pl.label || k;
     const here = alive.filter(a => a.location === k);
@@ -1064,6 +1074,7 @@ function renderInspector() {
     ${dial('tightness', b.tightness, b.tightness > 0.6 ? 'bad' : '')}${dial('breath', b.breath, b.breath < 0.5 ? 'bad' : '')}${dial('openness', b.openness)}${dial('hurt', b.hurt, 'bad')}${dial('joy', b.joy ?? 0.5, (b.joy ?? 0.5) < 0.25 ? 'cold' : '')}
     ${Object.keys(a.skills || {}).length ? `<div class="muted">Takes up: ${Object.entries(a.skills).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${esc(k)} (${n})`).join(', ')}</div>` : ''}
     <div class="muted">Looks ${esc(a.visible)}${b.overwhelmed ? ' · OVERWHELMED' : ''}</div>
+    ${(state.animals || []).some(x => x.owner === a.id) ? `<div class="muted" style="margin-top:4px">Keeps: ${(state.animals || []).filter(x => x.owner === a.id).map(x => `<b>${esc(x.name)}</b> the ${x.young ? (x.kind === 'cat' ? 'kitten' : x.kind === 'dog' ? 'pup' : x.kind) : x.kind}${x.hungry >= 2 ? ' (thin)' : ''}`).join(', ')}</div>` : ''}
     <h3>Carries</h3>
     <div class="muted">${esc(describeInv(a.inv))}</div>
     ${Object.keys(a.upgrades || {}).length ? `<div class="muted" style="margin-top:4px">Built at home: ${Object.keys(a.upgrades).map(k => esc(state.upgradeSpecs?.[k]?.label || k)).join(', ')}</div>` : ''}

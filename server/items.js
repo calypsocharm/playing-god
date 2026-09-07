@@ -55,7 +55,7 @@ export const BUILDS = {
 // ---------- coin and the store ----------
 // Coin is how surplus becomes something you can keep and spend. The store is the village's
 // shared shelf: it buys what you bring and sells what it holds, and prices move with the shelf.
-export const STORE_PRICES = { food: 2, bread: 4, wood: 1, stone: 1, fiber: 1, herbs: 2, berries: 1, fish: 2, clay: 1, rope: 3, axe: 8, hoe: 8, blanket: 10, salve: 5, charm: 12, pot: 7, pie: 6, quilt: 14, tonic: 6, toy: 3 };
+export const STORE_PRICES = { hen: 6, goat: 14, food: 2, bread: 4, wood: 1, stone: 1, fiber: 1, herbs: 2, berries: 1, fish: 2, clay: 1, rope: 3, axe: 8, hoe: 8, blanket: 10, salve: 5, charm: 12, pot: 7, pie: 6, quilt: 14, tonic: 6, toy: 3 };
 // Hobbies: what the hands learn. Each has a craft and a felt line as skill grows.
 export const HOBBIES = {
   baking:  { verb: 'bakes', item: 'pie',   line: 'Your hands know dough now. The kitchen is where your mind goes quiet.' },
@@ -64,7 +64,7 @@ export const HOBBIES = {
   carving: { verb: 'carves', item: 'toy',  line: 'Wood answers your knife. Children watch you work.' },
 };
 export function newStore() {
-  return { shelf: { food: 6, bread: 2, wood: 8, stone: 4, fiber: 4, rope: 2, blanket: 1, salve: 1 }, coin: 200, day: 0, ledger: [], loans: {}, project: null, wagesPaid: 0 };
+  return { shelf: { food: 6, bread: 2, wood: 8, stone: 4, fiber: 4, rope: 2, blanket: 1, salve: 1, hen: 3, goat: 1 }, coin: 200, day: 0, ledger: [], loans: {}, project: null, wagesPaid: 0 };
 }
 // Buying costs more when the shelf is bare; selling pays less when it is full.
 export function buyPrice(store, item) {

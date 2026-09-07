@@ -11,6 +11,7 @@ import { ELEMENT } from './chart.js';
 import * as I from './items.js';
 import * as F from './family.js';
 import * as G from './gifts.js';
+import * as A from './animals.js';
 
 export const TICKS_PER_DAY = 6;
 export const TICK_NAMES = ['dawn', 'morning', 'midday', 'afternoon', 'evening', 'night'];
@@ -114,7 +115,8 @@ export function createWorld(saved) {
     for (const a of saved.agents) { for (const m of I.MATERIALS) if (a.inv && a.inv[m] == null) a.inv[m] = 0; for (const k of Object.keys(I.ITEMS)) if (a.inv && a.inv[k] == null) a.inv[k] = 0; }
     saved.found = saved.found || {};
     restoreFound(saved);
-    ensureExplored(saved);
+    ensureExplored(saved); A.ensure(saved);
+    if (saved.store?.shelf && saved.store.shelf.hen == null) { saved.store.shelf.hen = 3; saved.store.shelf.goat = 1; }
     if (saved.camp?.founded) reveal(saved, PLACES.camp.x, PLACES.camp.y, 8);
     for (const k of Object.keys(saved.found)) if (PLACES[k]) reveal(saved, PLACES[k].x, PLACES[k].y, 5);
     // Camps used to sit inside the village's own land. Move an old camp out past the edge.
@@ -603,6 +605,8 @@ function dayPhase(w, remoteActions) {
     if (act.type === 'walk') dest = act.to && PLACES[act.to] ? act.to : (isFound(w, 'creek') ? 'creek' : 'meadow');
     if (act.type === 'sing') dest = 'hearth';
     if (act.type === 'hobby') dest = 'home';
+    if (act.type === 'hunt') dest = act.to === 'meadow' ? 'meadow' : 'forest';
+    if (act.type === 'adopt' || act.type === 'pet') dest = null;
     // People who are going to a place move first; people going to a person follow afterwards,
     // so you end up where they went, not where they were.
     if (dest && !byId(w, dest)) moveTo(w, a, dest);
@@ -612,6 +616,7 @@ function dayPhase(w, remoteActions) {
 
   // 2b. what anyone walks, everyone knows. The map grows under their feet.
   for (const a of living) reveal(w, a.pos.x, a.pos.y, a.location.startsWith('wild:') ? 3.5 : 2);
+  A.tick(w, w.agents, PLACES, sameSpot, remember, event);
 
   // 3. interactions
   for (const a of living) {
@@ -748,6 +753,18 @@ function dayPhase(w, remoteActions) {
       }
       case 'buy': {
         const item = act.item, n = Math.max(1, Math.min(5, Math.floor(act.n || 1)));
+        if (A.PRICES[item] && a.location === 'store') {
+          const p = I.buyPrice(w.store, item);
+          if ((w.store.shelf[item] || 0) >= 1 && (a.inv.coin || 0) >= p) {
+            a.inv.coin -= p; w.store.coin += p; w.store.shelf[item] -= 1;
+            const an = A.newAnimal(w, item, { owner: a.id, location: 'home', pos: { ...a.home }, name: typeof act.call === 'string' ? act.call.slice(0, 16) : undefined });
+            w.store.ledger.push({ day: w.day, who: a.name, bought: item, n: 1, coin: p }); if (w.store.ledger.length > 200) w.store.ledger.shift();
+            event(w, `${a.name} buys a ${item} for ${p} coin and walks it home. They call it ${an.name}.`, 'trade', [a.id]);
+            remember(w, a, `You bought a ${item} and called it ${an.name}. It is yours to feed now.`, 0.7);
+            B.gladden(a.body, 0.12);
+          } else remember(w, a, (w.store.shelf[item] || 0) < 1 ? `The store had no ${item} today.` : `You could not afford a ${item} (${p} coin).`, 0.3);
+          break;
+        }
         const price = I.buyPrice(w.store, item);
         if (price == null || a.location !== 'store') break;
         const can = Math.min(n, Math.floor(w.store.shelf[item] || 0), Math.floor((a.inv.coin || 0) / price));
@@ -1043,6 +1060,33 @@ function dayPhase(w, remoteActions) {
           if (afraid) { bumpTrust(o, a, -0.06); o.faith = B.clamp((o.faith || 0) - 0.05, -1, 1); remember(w, o, `${a.name} did something that should not be possible. Your skin crawled.`, 0.8); }
           else { bumpTrust(o, a, 0.07); o.faith = B.clamp((o.faith || 0) + 0.08, -1, 1); remember(w, o, `You saw ${a.name} do something no one can explain. You will not forget it.`, 0.9); }
         }
+        break;
+      }
+      case 'adopt': {
+        const an = (act.animal && A.byName(w, a, act.animal)) || A.straysAt(w, a.location)[0];
+        if (!an || an.owner) { remember(w, a, 'There was no stray here to take in.', 0.2); break; }
+        if (typeof act.call === 'string' && act.call.trim()) an.name = act.call.trim().slice(0, 16);
+        A.claim(w, an, a, remember, event, 'took');
+        break;
+      }
+      case 'pet': {
+        const an = (act.animal && A.byName(w, a, act.animal)) || A.petsOf(w, a)[0];
+        if (!an) { remember(w, a, 'You reached for an animal that was not there.', 0.2); break; }
+        if (typeof act.call === 'string' && act.call.trim() && an.owner === a.id) { const old = an.name; an.name = act.call.trim().slice(0, 16); if (old !== an.name) event(w, `${a.name} now calls their ${an.kind} ${an.name}.`, 'info', [a.id]); }
+        B.gladden(a.body, 0.08); a.body.tightness = B.clamp(a.body.tightness - 0.06); an.bond = Math.min(10, an.bond + 0.3);
+        remember(w, a, `You sat with ${an.name} a while, your hand on ${an.kind === 'hen' ? 'her' : 'them'}. ${an.kind === 'cat' ? 'The purr went into your chest.' : an.kind === 'dog' ? 'The tail did not stop.' : 'It leaned into you.'}`, 0.5);
+        for (const o of near) if (o.body.openness > 0.5) B.gladden(o.body, 0.02);
+        break;
+      }
+      case 'hunt': {
+        if (!['meadow', 'forest'].includes(a.location)) break;
+        a.body.energy = B.clamp(a.body.energy - 0.12);
+        if ((w.deer || 0) > 0 && Math.random() < (a.inv.axe > 0 ? 0.45 : 0.33)) {
+          w.deer -= 1; const shown = A.alive(w).find(x => x.kind === 'deer'); if (shown) shown.alive = false;
+          a.inv.food += 2.5; a.skills = a.skills || {}; a.skills.hunting = (a.skills.hunting || 0) + 1;
+          event(w, `${a.name} brings down a deer at ${PLACES[a.location].label}.`, 'work', [a.id]);
+          remember(w, a, 'You took a deer. Its eye was open the whole time. There is meat for days.', 0.7);
+        } else remember(w, a, (w.deer || 0) > 0 ? 'You crouched in the grass an hour and the deer knew before you moved.' : 'There are no deer left to take this season. The meadow is quiet.', 0.3);
         break;
       }
       case 'sit': {
@@ -1377,6 +1421,7 @@ function nightPhase(w) {
       writeDiary(w, a, scriptedDiary(w, a, w.day), 'scripted');
     }
   }
+  A.nightly(w, w.agents, PLACES, W.seasonOf(w.day, w.weather), yearDays(w), remember, event, (k) => isFound(w, k));   // fed, laid, aged, taken by wolves
   storeNight(w);       // the store picks a project and posts wages when it can afford to
   measureNight(w);     // the instruments: is care outrunning harm, are wounds healing
   faithNightly(w);     // the day becomes an opinion of the sky
@@ -1650,6 +1695,9 @@ function narrate(w, a, act) {
     case 'split': return s('leaving the village', `${a.name} walks out of the village.`, 'hurt');
     case 'pray': return s('praying', `${a.name} speaks to the sky: "${act.say || ''}"`, 'talk');
     case 'cast': return T ? s(`gift on ${tn}`, `${a.name} turns their gift on ${tn}.`, 'care') : s('casting', `${a.name} reaches for their gift ${where}.`, 'care');
+    case 'adopt': return s('taking in a stray', `${a.name} crouches and holds out a hand to a stray.`, 'care');
+    case 'pet': return s('with their animal', `${a.name} sits with their animal, a hand on its back.`, 'care');
+    case 'hunt': return s('hunting', `${a.name} goes still in the grass at ${place(act.to || a.location)}, watching for deer.`, 'work');
     case 'sit': return s('sitting still', `${a.name} sits still ${where}, breathing.`, 'care');
     case 'walk': return T ? s(`walking with ${tn}`, `${a.name} and ${tn} walk a long way together.`, 'care') : s('walking', `${a.name} walks alone to ${place(act.to || a.location)}.`, 'quiet');
     case 'sing': return s('singing', `${a.name} sings at the hearth${act.say ? `: "${act.say}"` : '.'}`, 'care');
@@ -1893,6 +1941,7 @@ export function snapshotFor(a, w) {
     weather: W.describe(w.day, w.weather),
     yieldToday: W.fieldYield(w.day, w.weather),
     hearthWood: fireStore(w, a).wood,
+    pets: A.petsOf(w, a).map(x => ({ id: x.id, kind: x.kind, name: x.name, hungry: x.hungry })), strays: A.straysAt(w, a.location).map(x => ({ id: x.id, kind: x.kind, name: x.name })), deer: w.deer || 0,
     unexplored: +(1 - exploredFraction(w)).toFixed(3), exploring: !!a.explore,
     builds: w.builds, found: w.found || {}, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
     store: { shelf: w.store.shelf, coin: w.store.coin, prices: Object.fromEntries(Object.keys(I.STORE_PRICES).map(k => [k, { buy: I.buyPrice(w.store, k), sell: I.sellPrice(w.store, k) }])), loans: Object.values(w.store.loans || {}), project: w.store.project },
@@ -1922,7 +1971,7 @@ export function viewFor(a, w) {
   if (a.sense?.kind === 'clairvoyant') { const t = W.describe(w.day + 1, w.weather); senses.push(`Tomorrow: ${t.season}, ${t.sky}.`); }
   if (a.sense?.kind === 'claircognizant') for (const n of s.near) { const o = byId(w, n.id); if (!o) continue; const t = trustOf(o, a); const r = o.wounds.slice().sort((x, y) => y.strength - x.strength)[0]; senses.push(`${n.name} ${t > 0.5 ? 'would take a blow for you' : t > 0.15 ? 'means you well' : t < -0.3 ? 'wishes you harm' : t < -0.1 ? 'does not trust you' : 'has not decided about you'}${r ? `, and is run by an old rule: ${r.belief}` : ', and nothing old runs them'}.`); }
   else if ((a.skills?.stillness || 0) >= 4) hobbyLines.push('When you sit still, something at the edge of you stirs. It is not finished yet.');
-  const felt = [...ageFelt(age), ...B.feltSense(a.body), ...woundFeltSense(a, nearNames), ...griefFelt(a), ...F.familyFelt(w, a), ...hobbyLines,
+  const felt = [...ageFelt(age), ...B.feltSense(a.body), ...woundFeltSense(a, nearNames), ...griefFelt(a), ...F.familyFelt(w, a), ...hobbyLines, ...A.felt(w, a),
     ...(a.destiny && !a.destiny.fulfilled ? [`There is a pull in you toward something. If you had to say it: ${a.destiny.text.replace(/^(this one|they|he|she|this person)\s+will\s+/i, 'you will ')}`] : a.destiny?.fulfilled ? ['You did the thing you were made for. Whatever comes now is extra.'] : [])];
   const feelings = s.others.map(o => {
     const t = o.trust;
@@ -1987,6 +2036,10 @@ export function viewFor(a, w) {
       'tend {target: <child name>}  (feed and hold a child in front of you)',
       'strike {target: <person name>}',
       'withdraw  (go home, be alone)',
+      'hunt {to: meadow|forest}  (deer, if there are any: food if you are quick, tiring either way)',
+      ...(A.petsOf(w, a).length ? [`pet {animal: "${A.petsOf(w, a)[0].name}", call: "<a new name, if you like>"}  (a hand on your animal; you both settle)`] : []),
+      ...(A.straysAt(w, a.location).length ? ['adopt {call: "<what you will call it>"}  (take in the stray that is watching you; it eats from your food)'] : []),
+      ...(a.location === 'store' && ((w.store.shelf.hen || 0) > 0 || (w.store.shelf.goat || 0) > 0) ? ['buy {item: hen|goat, call: "<its name>"}  (a hen lays most mornings; a goat gives milk; both eat from your food)'] : []),
       ...(a.gift && G.GIFTS[a.gift.kind] ? [`cast {target: <person name>}  (your gift, ${G.GIFTS[a.gift.kind].label}. ${G.GIFTS[a.gift.kind].what} ${G.COST})`] : []),
       'rest',
     ],
@@ -2016,6 +2069,7 @@ export function publicState(w) {
     builds: w.builds, buildSpecs: I.BUILDS, itemSpecs: I.ITEMS, lessons: w.lessons || [], due: w.due || [],
     map: MAP, places: visiblePlaces(w), found: w.found || {}, forage: I.FORAGE, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
     explored: ensureExplored(w), cell: CELL, mapped: +exploredFraction(w).toFixed(3),
+    animals: A.publicList(w), deer: w.deer || 0,
     agents: w.agents.map(a => ({
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
       body: a.body, visible: B.visibleState(a.body), branch: branch(a),
@@ -2071,6 +2125,12 @@ export function normaliseAction(w, raw) {
     if (!act.to) return null;
   } else if (type === 'work') {
     act.to = place === 'forest' ? 'forest' : 'field';
+  } else if (type === 'adopt' || type === 'take_in' || type === 'keep') {
+    act.type = 'adopt'; act.animal = typeof raw.animal === 'string' ? raw.animal : (typeof raw.target === 'string' ? raw.target : null); act.call = raw.call || raw.name || null;
+  } else if (type === 'pet' || type === 'stroke' || type === 'play' || type === 'feed') {
+    act.type = 'pet'; act.animal = typeof raw.animal === 'string' ? raw.animal : (typeof raw.target === 'string' ? raw.target : null); act.call = raw.call || raw.rename || null;
+  } else if (type === 'hunt') {
+    act.type = 'hunt'; act.to = place === 'meadow' ? 'meadow' : 'forest';
   } else if (type === 'cast' || type === 'magic' || type === 'gift' || type === 'use_gift' || type === 'heal' || type === 'bless') {
     act.type = 'cast'; act.target = resolveTarget(w, raw.target) || resolveTarget(w, raw.to) || null;
     act.to = act.target || (PLACES[place] ? place : null);
