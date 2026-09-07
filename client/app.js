@@ -38,14 +38,14 @@ function onMessage(m) {
   switch (m.type) {
     case 'state':
       if (frozen) { heldState = m.state; break; }
-      state = m.state; if (wantSelect && selected === wantSelect && state.agents.some(a => a.id === wantSelect)) showTab('agent'); renderPanels(); break;
+      state = m.state; if (wantSelect && selected === wantSelect && state.agents.some(a => a.id === wantSelect)) showTab('agent'); renderPanels(); renderTalkBar(); break;
     case 'god': godOk = m.ok; $('pillGod').textContent = godOk ? 'you are the Creator' : 'watching'; $('pillGod').classList.toggle('on', godOk); $('godPanel').hidden = !godOk;
       $('godMsg').textContent = godOk ? 'Unlocked. You are the Creator. The village will only ever know you as the weather. Set the wind and cold with the sliders below.' : 'That is not the password. This box does not take weather; the sliders below do, once unlocked. On your own machine the password is the word: weather';
       if (godOk) $('godGate').style.opacity = 0.55;
 
       $('godMsg').style.color = godOk ? 'var(--good)' : 'var(--bad)';
       if (!godOk && localStorage.getItem('playinggod.god')) log('god token refused'); break;
-    case 'adopted': token = m.token; localStorage.setItem('playinggod.token', token); owned.add(m.agentId); updateBrainPill(); renderBrainTab(); break;
+    case 'adopted': token = m.token; localStorage.setItem('playinggod.token', token); owned.add(m.agentId); updateBrainPill(); renderBrainTab(); renderTalkBar(); break;
     case 'decide': onDecide(m); break;
     case 'consolidate': onConsolidate(m); break;
     case 'tell': onTell(m.digest); break;
@@ -55,7 +55,7 @@ function onMessage(m) {
     case 'result': toast(m.text, 'good'); addSkyAct(m.text); break;
     case 'dilemma': showDilemma(m); break;
     case 'communeView': onCommuneView(m); break;
-    case 'communeLog': communeThreads.set(m.agentId, m.thread || []); if (selected === m.agentId) renderInspector(); renderBrainTab(); break;
+    case 'communeLog': communeThreads.set(m.agentId, m.thread || []); if (selected === m.agentId) renderInspector(); renderBrainTab(); renderTalkBar(); break;
   }
 }
 
@@ -152,6 +152,28 @@ function log(s) {
   const el = $('brainLog');
   el.textContent = (new Date().toLocaleTimeString() + '  ' + s + '\n' + el.textContent).slice(0, 12000);
 }
+// ---------- the talk bar: always at the top, on every tab ----------
+function renderTalkBar() {
+  if (!state) return;
+  const mine = state.agents.filter(a => owned.has(a.id) && a.alive);
+  const sel = $('talkWho');
+  const opts = mine.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+  if (sel.innerHTML !== opts) { const keep = sel.value; sel.innerHTML = opts; if (mine.some(a => a.id === keep)) sel.value = keep; }
+  const have = mine.length > 0;
+  $('talkText').disabled = !have; $('talkSend').disabled = !have; $('talkOpen').disabled = !have;
+  $('talkText').placeholder = have ? `say anything to ${mine.find(a => a.id === sel.value)?.name || 'them'}; they answer as themselves` : 'claim a villager first, in the Higher Self tab';
+  const id = sel.value;
+  if (!have) { $('talkReply').innerHTML = '<span class="muted">Nobody is yours in this browser yet. Open the Higher Self tab and claim someone, or claim back one of yours from their page.</span>'; return; }
+  const th = (communeThreads.get(id) || []).slice(-2);
+  const a = mine.find(x => x.id === id);
+  if (communeBusy.has(id)) $('talkReply').innerHTML = `<span class="muted">…${esc(a.name)} is thinking</span>`;
+  else if (!th.length) $('talkReply').innerHTML = `<span class="muted">${esc(a.name)} has not heard from you yet. They do not know what you are.</span>`;
+  else $('talkReply').innerHTML = th.map(t => `<div><span class="muted">${t.from === 'self' ? 'you' : esc(a.name)}:</span> ${esc(t.text)}</div>`).join('');
+}
+$('talkSend').onclick = () => { const id = $('talkWho').value, text = $('talkText').value.trim(); if (!id || !text) return; send({ type: 'commune', agentId: id, text }); $('talkText').value = ''; };
+$('talkText').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('talkSend').click(); } });
+$('talkWho').onchange = renderTalkBar;
+$('talkOpen').onclick = () => { const id = $('talkWho').value; if (!id) return; selected = id; showTab('agent'); renderInspector(); };
 function updateBrainPill() {
   const n = owned.size;
   try { localStorage.setItem('playinggod.owned', JSON.stringify([...owned])); } catch {}
@@ -498,7 +520,7 @@ async function onCommuneView(m) {
   if (communeBusy.has(m.agentId)) return;
   communeBusy.add(m.agentId);
   communeThreads.set(m.agentId, m.thread || []);
-  renderInspector(); renderBrainTab();
+  renderInspector(); renderBrainTab(); renderTalkBar();
   try {
     const v = m.view;
     const recent = (m.thread || []).slice(-8).map(t => `${t.from === 'self' ? 'The voice' : v.you.name}: "${t.text}"`).join('\n');
@@ -525,7 +547,7 @@ Answer the voice in your own words, and answer what it actually said or asked. I
     if (text) send({ type: 'communed', agentId: m.agentId, text });
     else log(`${v.you.name} had no answer for the voice.`);
   } catch (e) { log(`commune failed: ${e.message}`); toast(`${m.view?.you?.name || 'They'} could not answer: ${e.message}`, 'bad'); }
-  finally { communeBusy.delete(m.agentId); renderBrainTab(); }
+  finally { communeBusy.delete(m.agentId); renderBrainTab(); renderTalkBar(); }
 }
 function renderCommune(a, compact = false) {
   if (!a.alive) return a.guidance ? `<div class="muted">Guided: "${esc(a.guidance)}"</div>` : '';
