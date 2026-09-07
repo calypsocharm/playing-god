@@ -134,6 +134,14 @@ found the lake, hills and ruin on their own - but **nothing had ever been found 
   heard it, 93 across three that did.
 - `test/smoke_legends.mjs`. The find is measured on a **grown** village (data/world.json with the magic cleared),
   because a fresh nine-person village of half children does not reliably turn anything up and should not have to.
+- **THE GOVERNING RULE, stated by her 2026-09-07: religions and community affiliations must happen naturally.**
+  Nothing people believe or belong to may be installed by us - no appointed prophet, chosen one, teller class,
+  seeded church, faction, sect or guild. Give villagers the means to gather, name, keep and pass things on, then
+  leave them to it. The parts that already work this way are the model: villagers invent and name their own
+  holidays; legends are told round-robin by whoever has a story in them or faith over 0.3; the camp is a splinter
+  settlement founded by villagers who walked out; civic buildings exist only if the council votes them; belief and
+  faith both move on lived evidence, never by decree. Before adding any special-role villager or named group,
+  assume no and ask.
 - **A prophet was considered and refused (2026-09-07, her call).** She floated a "Jesus type" to carry the good
   news, then decided against it: *"no if they find faith and create legends without it its fine."* The point is
   that faith and legends arise on their own. **Do not build an appointed prophet, a chosen one, or a teller class**
