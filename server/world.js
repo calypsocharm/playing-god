@@ -2064,6 +2064,7 @@ function funeralIfDue(w) {
       else a.longBuried = true;
     }
     if (!q.length) return;
+    q.sort((x, y) => x.day - y.day);   // the longest waiting go to the stones first
   }
   const f = q[0];
   if (w.day < f.day + 1) return;                                       // the afternoon after
