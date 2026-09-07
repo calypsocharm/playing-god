@@ -73,6 +73,10 @@
   .di-opt { display:block; width:100%; text-align:left; background:#222a38; color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:6px 0; cursor:pointer; font:inherit; }
   .di-opt:hover { border-color:var(--warm); }
   .di-opt small { display:block; color:var(--dim); margin-top:2px; }
+  #narrator { position:absolute; left:0; right:0; top:8px; text-align:center; pointer-events:none; padding:0 20px; z-index:1; }
+  #narrator span { display:inline-block; max-width:82%; background:rgba(8,10,16,.72); color:#f3ecd9; font:15px/1.4 Georgia, 'Times New Roman', serif; font-style:italic; padding:6px 14px; border-radius:8px; border-left:3px solid var(--warm); text-align:left; text-shadow:0 1px 2px rgba(0,0,0,.8); animation: narr .5s ease; }
+  #narrator .k { font:10px system-ui; letter-spacing:.12em; text-transform:uppercase; color:var(--warm); font-style:normal; margin-right:8px; }
+  @keyframes narr { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
   #ticker { position:absolute; left:0; right:0; bottom:30px; text-align:center; pointer-events:none; font-size:14px; color:#f3ecd9; text-shadow:0 1px 3px rgba(0,0,0,.9); padding:0 20px; }
   #ticker span { background:rgba(8,10,16,.55); padding:3px 10px; border-radius:6px; display:inline-block; max-width:90%; }
   .now-line { padding:3px 0; border-bottom:1px dashed var(--line); font-size:13px; color:var(--ink); }
@@ -111,6 +115,7 @@
   <span class="pill" id="pillGod">watching</span>
   <span class="pill" id="pillBrain">no one is yours yet</span>
   <button class="act" id="btnSound" title="wind, fire, birds, crickets, work, and the odd low note">🔇 Sound</button>
+  <button class="act" id="btnNarrate" title="a voice that tells you what is happening and why, as it happens">🗣 Narrator: off</button>
   <input type="range" id="volume" min="0" max="100" step="1" value="60" title="volume" style="width:90px;padding:0;background:none;border:0;vertical-align:middle">
   <button class="act" id="btnFollow" title="let the camera drift to whatever is happening">Follow: off</button>
   <a class="act" href="story.html" style="text-decoration:none" title="the village's story, in chapters">Story</a>
@@ -130,6 +135,7 @@
 <div id="stage">
   <canvas id="c"></canvas>
   <div id="hint">click a villager, a house, the store or any place to look closer · double-click a villager to stop time · drag to look around · turn on Sound to hear the village</div>
+  <div id="narrator"></div>
   <div id="ticker"></div>
   <div id="toasts"></div>
   <div id="dilemma" hidden>

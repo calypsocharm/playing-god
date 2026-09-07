@@ -491,6 +491,8 @@ function draw() {
   // weather
   if (cold > 0.3) { ctx.fillStyle = 'rgba(255,255,255,.85)'; for (const f of snow) { f.y += 0.0009 * f.s * (1 + cold); f.x += 0.0004 * cold; if (f.y > 1) f.y = 0; if (f.x > 1) f.x = 0; ctx.fillRect(f.x * W, f.y * H, 2 * f.s * devicePixelRatio, 2 * f.s * devicePixelRatio); } }
   if (dark) { ctx.fillStyle = `rgba(6,10,26,${dark})`; ctx.fillRect(0, 0, W, H); }
+  // The card in effect: its face in the corner, a tint over the land, and what it is doing.
+  drawCardOverlay();
   // a caption for whatever the camera followed to
   if (caption && performance.now() < caption.until) {
     const fs = 15 * devicePixelRatio; ctx.font = `${fs}px system-ui`; ctx.textAlign = 'center';
@@ -688,6 +690,80 @@ window.__pg = { showDilemma, toast, openPlace, placeAt };
 
 // ---------- the ticker ----------
 // The bottom of the map reads out what is happening, one line every few seconds.
+// ---------- the card in the space ----------
+const SUIT = { pentacles: { col: '#e8d36a', tint: 'rgba(232,211,106,0.07)', word: 'the field and the coin' }, swords: { col: '#8fb8e6', tint: 'rgba(143,184,230,0.08)', word: 'what is said and what is true' }, wands: { col: '#ff8a3a', tint: 'rgba(255,138,58,0.07)', word: 'what is built and what burns' }, cups: { col: '#5b8fd9', tint: 'rgba(91,143,217,0.08)', word: 'the heart' }, major: { col: '#fff1a8', tint: 'rgba(255,241,168,0.06)', word: 'a great turn' } };
+function sigil(g, suit, x, y, s, col) {
+  g.save(); g.translate(x, y); g.fillStyle = col; g.strokeStyle = col; g.lineWidth = Math.max(2, s * 0.08); g.lineJoin = 'round';
+  if (suit === 'pentacles') { g.beginPath(); g.arc(0, 0, s * 0.42, 0, 7); g.stroke(); g.beginPath(); for (let i = 0; i < 5; i++) { const ang = -Math.PI / 2 + i * 4 * Math.PI / 5; g.lineTo(Math.cos(ang) * s * 0.34, Math.sin(ang) * s * 0.34); } g.closePath(); g.stroke(); }
+  else if (suit === 'swords') { g.fillRect(-s * 0.06, -s * 0.48, s * 0.12, s * 0.7); g.beginPath(); g.moveTo(-s * 0.06, -s * 0.48); g.lineTo(0, -s * 0.6); g.lineTo(s * 0.06, -s * 0.48); g.fill(); g.fillRect(-s * 0.26, s * 0.2, s * 0.52, s * 0.08); g.fillRect(-s * 0.05, s * 0.28, s * 0.1, s * 0.22); }
+  else if (suit === 'wands') { g.rotate(-0.5); g.fillRect(-s * 0.06, -s * 0.5, s * 0.12, s * 1); g.beginPath(); g.ellipse(s * 0.1, -s * 0.42, s * 0.16, s * 0.08, 0.6, 0, 7); g.fill(); g.beginPath(); g.ellipse(-s * 0.12, -s * 0.28, s * 0.14, s * 0.07, -0.6, 0, 7); g.fill(); }
+  else if (suit === 'cups') { g.beginPath(); g.moveTo(-s * 0.36, -s * 0.3); g.lineTo(s * 0.36, -s * 0.3); g.lineTo(s * 0.22, s * 0.12); g.lineTo(-s * 0.22, s * 0.12); g.closePath(); g.fill(); g.fillRect(-s * 0.05, s * 0.12, s * 0.1, s * 0.2); g.fillRect(-s * 0.24, s * 0.3, s * 0.48, s * 0.07); }
+  else { g.beginPath(); for (let i = 0; i < 16; i++) { const r = i % 2 ? s * 0.18 : s * 0.46; const ang = i * Math.PI / 8; g.lineTo(Math.cos(ang) * r, Math.sin(ang) * r); } g.closePath(); g.fill(); }
+  g.restore();
+}
+function wrapText(g, text, maxW) { const words = text.split(' '), lines = []; let cur = ''; for (const wd of words) { const tst = cur ? cur + ' ' + wd : wd; if (g.measureText(tst).width > maxW && cur) { lines.push(cur); cur = wd; } else cur = tst; } if (cur) lines.push(cur); return lines; }
+function drawCardOverlay() {
+  const cd = state.card; if (!cd) return;
+  const inEffect = state.day - cd.day <= 1;
+  const su = SUIT[cd.suit] || SUIT.major;
+  if (inEffect) { ctx.fillStyle = su.tint; ctx.fillRect(0, 0, W, H); }
+  const dpr = devicePixelRatio, cw = 72 * dpr, chh = 112 * dpr, x = 14 * dpr, y = (narrLine ? 96 : 52) * dpr;
+  ctx.save(); ctx.globalAlpha = inEffect ? 1 : 0.45;
+  // the card face
+  ctx.fillStyle = 'rgba(8,10,16,.6)'; ctx.fillRect(x - 6 * dpr, y - 6 * dpr, cw + 12 * dpr, chh + 12 * dpr);
+  ctx.fillStyle = '#f1e7cf'; ctx.fillRect(x, y, cw, chh);
+  ctx.strokeStyle = su.col; ctx.lineWidth = 3 * dpr; ctx.strokeRect(x + 4 * dpr, y + 4 * dpr, cw - 8 * dpr, chh - 8 * dpr);
+  sigil(ctx, cd.suit === 'major' ? 'major' : cd.suit, x + cw / 2, y + chh * 0.42, cw * 0.8, cd.suit === 'major' ? '#b8860b' : (cd.suit === 'pentacles' ? '#b8860b' : cd.suit === 'swords' ? '#3a5f8a' : cd.suit === 'wands' ? '#b8501a' : '#2e5f9a'));
+  ctx.fillStyle = '#2b2b2b'; ctx.font = `${9 * dpr}px Georgia, serif`; ctx.textAlign = 'center';
+  const nm = wrapText(ctx, cd.name, cw - 10 * dpr); nm.slice(0, 2).forEach((l, i) => ctx.fillText(l, x + cw / 2, y + chh - (14 - i * 11) * dpr - (nm.length > 1 ? 4 * dpr : 0)));
+  if (cd.suit !== 'major') { ctx.font = `${8 * dpr}px system-ui`; ctx.fillText(String(cd.rank), x + 8 * dpr, y + 12 * dpr); ctx.fillText(String(cd.rank), x + cw - 8 * dpr, y + chh - 6 * dpr); }
+  // what it is doing to the space
+  const tx = x + cw + 14 * dpr, maxW = Math.min(W * 0.42, 330 * dpr);
+  ctx.textAlign = 'left'; ctx.font = `${10 * dpr}px system-ui`;
+  const head = inEffect ? `IN EFFECT · ${cd.by === 'sky' ? 'the sky turned it' : 'the Creator turned it'} · day ${cd.day}` : `LAST CARD · day ${cd.day} · no card in effect`;
+  const lines = [[head, su.col, `${10 * dpr}px system-ui`], [cd.name, '#f3ecd9', `bold ${15 * dpr}px Georgia, serif`], [cd.meaning, '#c9c2b0', `italic ${11 * dpr}px Georgia, serif`], ...wrapText(Object.assign(ctx, { font: `${12 * dpr}px Georgia, serif` }) && ctx, cd.text || '', maxW).slice(0, 4).map(l => [l, '#f3ecd9', `${12 * dpr}px Georgia, serif`])];
+  const lh = 15 * dpr, bh = lines.length * lh + 12 * dpr;
+  let bw = 0; for (const [l, , f] of lines) { ctx.font = f; bw = Math.max(bw, ctx.measureText(l).width); }
+  ctx.fillStyle = 'rgba(8,10,16,.72)'; ctx.fillRect(tx - 8 * dpr, y - 6 * dpr, Math.min(maxW, bw) + 16 * dpr, bh);
+  lines.forEach(([l, c, f], i) => { ctx.font = f; ctx.fillStyle = c; ctx.fillText(l, tx, y + 8 * dpr + i * lh); });
+  ctx.restore();
+}
+
+// ---------- the narrator ----------
+// A voice over the village: the one thing that matters most this moment, and why, as it happens.
+// Shown over the map; spoken aloud if you turn it on. It never invents; it reads from the facts.
+let narrateVoice = localStorage.getItem('playinggod.narrate') === '1';
+const narrSeen = new Set(); let narrLine = null, narrUntil = 0, narrDay = -1;
+const NARR_RANK = (e) => e.kind === 'death' ? 100 : /turns a card/.test(e.text) ? 95 : /buries/.test(e.text) ? 90 : /Raiders|lands\./.test(e.text) ? 88 : /is born to/.test(e.text) ? 85 : /are together now|leaves/.test(e.text) ? 70 : e.kind === 'strike' ? 65 : /ballot closes|is finished|takes on the/.test(e.text) ? 60 : e.kind === 'god' ? 58 : /Today is|names it/.test(e.text) ? 55 : e.kind === 'wound' || e.kind === 'healed' ? 50 : e.kind === 'season' ? 45 : /trader from|cart from/.test(e.text) ? 40 : e.kind === 'overwhelmed' ? 35 : 0;
+function narrateTick() {
+  if (!state || frozen) return;
+  const fresh = (state.events || []).filter(e => { const k = `${e.day}-${e.tick}-${e.text}`; if (narrSeen.has(k)) return false; narrSeen.add(k); return e.day === state.day; });
+  if (narrSeen.size > 800) narrSeen.clear();
+  const best = fresh.map(e => ({ e, r: NARR_RANK(e) })).filter(x => x.r > 0).sort((x, y) => y.r - x.r)[0];
+  let line = null;
+  if (best) {
+    line = best.e.text;
+    // the reason behind it, when the panel knows one
+    const why = (state.standing?.why || []);
+    if (best.e.kind === 'death') { const w2 = why.find(l => /died of/.test(l) && l.startsWith(best.e.text.split(' ')[0])); if (w2) line += ' ' + w2; }
+    else if (best.e.kind === 'strike') { const w2 = why.find(l => l.startsWith(best.e.text.split(' ')[0] + ' struck')); if (w2) line = w2; }
+  } else if (state.tick === 5 && narrDay !== state.day && state.chronicle?.length && state.chronicle[state.chronicle.length - 1].day === state.day) {
+    line = state.chronicle[state.chronicle.length - 1].text; narrDay = state.day;
+  } else if (state.tick === 0 && narrDay !== state.day) {
+    const why = (state.standing?.why || []).slice(0, 2).join(' ');
+    line = `Day ${state.standing?.dayOfYear ?? state.day} of year ${state.year}, ${state.weather.season}, ${state.weather.sky}. ${why || 'Everyone is fed and warm. The day begins.'}`; narrDay = state.day;
+  }
+  if (line) { narrLine = line; narrUntil = performance.now() + Math.max(12000, Math.min(45000, line.length * 90)); $('narrator').innerHTML = `<span><span class="k">narrator</span>${esc(line)}</span>`; speak(line); }
+  else if (narrLine && performance.now() > narrUntil) { narrLine = null; $('narrator').innerHTML = ''; }
+}
+function speak(text) {
+  if (!narrateVoice || !('speechSynthesis' in window)) return;
+  try { const u = new SpeechSynthesisUtterance(text); u.rate = 0.95; u.pitch = 0.9; const vs = speechSynthesis.getVoices(); const v = vs.find(x => /en/i.test(x.lang) && /Natural|Neural|Google|Samantha|Daniel|Aria|Jenny/i.test(x.name)) || vs.find(x => /en/i.test(x.lang)); if (v) u.voice = v; speechSynthesis.speak(u); } catch {}
+}
+$('btnNarrate').textContent = `🗣 Narrator: ${narrateVoice ? 'on' : 'off'}`;
+$('btnNarrate').onclick = () => { narrateVoice = !narrateVoice; localStorage.setItem('playinggod.narrate', narrateVoice ? '1' : '0'); $('btnNarrate').textContent = `🗣 Narrator: ${narrateVoice ? 'on' : 'off'}`; if (narrateVoice) speak(narrLine || 'I will tell you what happens, and why.'); else if ('speechSynthesis' in window) speechSynthesis.cancel(); };
+setInterval(narrateTick, 1500);
+
 let tickerLines = [], tickerI = 0;
 setInterval(() => {
   const el = $('ticker');

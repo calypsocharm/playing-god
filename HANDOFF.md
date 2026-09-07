@@ -79,6 +79,12 @@ lines; "made things"/"work went on" filler removed; `dayDigest.why` feeds the mo
 things stand" (with day-of-year), "Recent nights", and a "Long ago" details block. Chapters years are unreliable in the old
 laptop world (clock changed mid-life) so the condensed list shows titles only.
 
+## Narrator + the card in the space (her ask "maybe we need a narrator and where are the tarot cards?"): DONE
+app.js: `narrateTick` every 1.5s picks the highest-ranked unseen event of today (NARR_RANK), adds the why line for deaths/
+strikes, dawn opener and the night chronicle; shows in `#narrator` over the map; `speak()` uses Web Speech when the
+Narrator button is on (localStorage `playinggod.narrate`). `drawCardOverlay()` in draw(): card face (procedural sigil per
+suit, name, rank), suit tint over the land while in effect (day drawn + next), text block "IN EFFECT / LAST CARD" beside it.
+
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to
   customers (different project, same instinct). Villagers must be able to refuse her; that's the game working.

@@ -590,6 +590,18 @@ hear, what they think, what they do, what they say, and at night what they write
 in the second person and updates every tick. You cannot speak there and they do not know you are
 watching. It works for anyone, yours or not, and it never shows the rules their body wrote.
 
+## The narrator, and the card in the space
+
+A narrator speaks over the map: the one thing that matters most this moment, with its reason
+when the village knows one (a death says who they were; a strike says the striker was wound
+tight), the day's opening at dawn, and the night's chronicle at night. Turn on the Narrator
+button and it is read aloud in the browser's voice. It never invents; it reads from the facts.
+
+The card the sky turned sits in the top corner of the map as a drawn card, sigil and name, with
+what it is doing to the space written beside it and a faint wash of its suit's colour over the
+land while it is in effect (the day it was turned and the next). After that it fades to "last
+card" until the next one is turned, so you always know what is in effect and what it did.
+
 ## The story: today, with reasons
 
 The nightly chronicle leads with what happened and why. A death says who they were (age, whose
