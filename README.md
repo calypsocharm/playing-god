@@ -590,6 +590,15 @@ hear, what they think, what they do, what they say, and at night what they write
 in the second person and updates every tick. You cannot speak there and they do not know you are
 watching. It works for anyone, yours or not, and it never shows the rules their body wrote.
 
+## Observing someone
+
+Click a villager and press **Observe**. The camera stays on them, close, wherever they go, and
+their life streams into the panel as it happens, one beat a tick: where they are and who is with
+them, what they think, what they do, what they say and hear, what happens to them, what their
+senses tell them, what their body feels, and what they write at night. Click another villager
+while observing and the eye moves to them. They do not know you are there and you cannot speak.
+Stop with the button, or open the same feed as its own page.
+
 ## The stones: funerals, closure, and things fading
 
 The afternoon after a death the whole village walks out to the stones, at the south edge of the

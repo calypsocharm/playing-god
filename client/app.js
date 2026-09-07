@@ -57,6 +57,7 @@ function onMessage(m) {
     case 'result': toast(m.text, 'good'); addSkyAct(m.text); break;
     case 'dilemma': showDilemma(m); break;
     case 'communeView': onCommuneView(m); break;
+    case 'eyes': onEyes(m); break;
     case 'communeLog': communeThreads.set(m.agentId, m.thread || []); if (selected === m.agentId) renderInspector(); renderBrainTab(); renderTalkBar(); break;
   }
 }
@@ -303,6 +304,12 @@ function draw() {
   t += 1 / 60;
   ctx.clearRect(0, 0, W, H);
   if (!state) return;
+  // Observing someone: the camera stays on them, close, wherever they go.
+  if (observing && !frozen) {
+    const oa = state.agents.find(x => x.id === observing);
+    if (oa && oa.alive) { const p = display.get(oa.id) || oa.pos; const r = canvas.getBoundingClientRect(); const scale = 2.6; camTarget = { scale, x: (r.width * devicePixelRatio) / 2 - (p.x + 1) * TILE * scale, y: (r.height * devicePixelRatio) / 2 - (p.y + 1) * TILE * scale }; }
+    else stopObserving();
+  }
   // Camera glides toward its target when a moment opens or closes.
   if (camTarget) {
     cam.scale += (camTarget.scale - cam.scale) * 0.12; cam.x += (camTarget.x - cam.x) * 0.12; cam.y += (camTarget.y - cam.y) * 0.12;
@@ -522,7 +529,8 @@ canvas.addEventListener('pointerup', (e) => {
     let best = null, bd = 1.2;
     for (const a of state.agents) { if (!a.alive) continue; const d = display.get(a.id) || a.pos; const dist = Math.hypot(d.x - p.x, d.y - p.y); if (dist < bd) { bd = dist; best = a; } }
     if (!best) { const hit = placeAt(p); if (hit) { dragging = null; openPlace(hit); return; } }
-    selected = best ? best.id : null; showTab('agent'); renderInspector();
+    selected = best ? best.id : null; showTab('agent');
+    if (observing && best && best.id !== observing) startObserving(best.id); else renderInspector();
   }
   dragging = null;
 });
@@ -785,6 +793,52 @@ function followTick() {
 }
 setInterval(followTick, 1000);
 let caption = null;
+
+// ---------- observing: be someone's eyes ----------
+// Click a villager, press Observe: the camera stays on them and their thoughts, doing, hearing and
+// what happens to them stream into the panel as it happens. You only watch; they do not know.
+let observing = null;
+const eyesFeed = [];
+function startObserving(id) {
+  observing = id; selected = id; eyesFeed.length = 0;
+  if (follow) { follow = false; $('btnFollow').textContent = 'Follow: off'; }
+  if (frozen) closeMoment();
+  send({ type: 'watch', agentId: id });
+  showTab('agent'); renderInspector();
+}
+function stopObserving() {
+  if (!observing) return;
+  observing = null; send({ type: 'unwatch' }); camTarget = { scale: 1, x: 0, y: 0 }; caption = null; renderInspector();
+}
+function onEyes(m) {
+  if (m.agentId !== observing) return;
+  const key = `${m.day}-${m.tick}`;
+  const last = eyesFeed[eyesFeed.length - 1];
+  if (last && last.key === key) { Object.assign(last, m); } else { eyesFeed.push({ key, ...m }); if (eyesFeed.length > 24) eyesFeed.shift(); }
+  caption = { text: `${m.name}${m.thought ? ` thinks: ${m.thought}` : m.doing ? `: ${m.doing}` : ''}`, until: performance.now() + 30000 };
+  const panel = $('eyesPanel'); if (panel) panel.innerHTML = eyesHtml(); else renderInspector();
+}
+const depl = (v) => /ies$/.test(v) ? v.slice(0, -3) + 'y' : /(ss|sh|ch|x|o)es$/.test(v) ? v.slice(0, -2) : /s$/.test(v) ? v.slice(0, -1) : v;
+function firstPerson(t, name) { const safe = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); return t.replace(new RegExp('^' + safe + ' (\\w+)'), (m, v) => 'You ' + depl(v)).replace(new RegExp('\\b' + safe + "'s\\b", 'g'), 'your'); }
+function eyesHtml() {
+  if (!eyesFeed.length) return '<div class="muted">Waiting for their next moment… (one every tick)</div>';
+  const beats = [...eyesFeed].reverse();
+  const k = (t) => `<span class="muted" style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;margin-right:6px">${t}</span>`;
+  return beats.map((f, i) => {
+    const now = i === 0;
+    const L = [`<div class="muted" style="font-size:11px;letter-spacing:.06em;text-transform:uppercase">Day ${f.day} · ${esc(f.tickName)}${now ? ' · now' : ''}</div>`];
+    if (now) L.push(`<div>You are ${esc(f.where)}.${(f.near || []).length ? ' ' + f.near.map(esc).join(' ') : ' No one is with you.'}</div>`);
+    if (f.thought) L.push(`<div style="color:#f0d9b0;font-style:italic;font-size:${now ? 15 : 13}px">${k('you think')}${esc(f.thought)}</div>`);
+    if (f.doing) L.push(`<div style="color:var(--good)">${k('you do')}${esc(firstPerson(f.doing, f.name))}</div>`);
+    if (f.said) L.push(`<div style="color:var(--warm)">${k('you say')}“${esc(f.said)}”</div>`);
+    if ((f.heard || []).length) L.push(`<div style="color:var(--warm)">${k('you hear')}${f.heard.map(esc).join(' ')}</div>`);
+    if ((f.happened || []).length) L.push(`<div style="color:#c8d6ee">${k('it happens')}${f.happened.map(esc).join(' ')}</div>`);
+    if (now && (f.senses || []).length) L.push(`<div style="color:#b9a6d9">${k('you know')}${f.senses.map(esc).join(' ')}</div>`);
+    if (now && (f.felt || []).length) L.push(`<div class="muted" style="font-size:12px">${k('body')}${f.felt.slice(0, 6).map(esc).join(' ')}</div>`);
+    if (f.diary) L.push(`<div style="color:#f0d9b0;font-style:italic">${k('tonight you write')}${esc(f.diary)}</div>`);
+    return `<div style="border-left:2px solid ${now ? 'var(--warm)' : 'var(--line)'};padding:4px 0 4px 10px;margin:0 0 10px;opacity:${now ? 1 : 0.7}">${L.join('')}</div>`;
+  }).join('');
+}
 
 // ---------- the moment ----------
 // Stop time for this viewer, slide the camera in, and show the whole of one person right now.
@@ -1117,6 +1171,8 @@ function noteBox(a) {
 for (const host of [$('inspector'), $('owned')]) host.addEventListener('click', (e) => {
   const look = e.target.closest('[data-moment]');
   if (look) { openMoment(look.dataset.moment); return; }
+  const ob = e.target.closest('[data-observe]'); if (ob) { startObserving(ob.dataset.observe); return; }
+  if (e.target.closest('[data-unobserve]')) { stopObserving(); return; }
   const step = e.target.closest('[data-diary]');
   if (step) { const id = step.dataset.diary; const a = state.agents.find(x => x.id === id); const cur = diaryPage.has(id) ? diaryPage.get(id) : a.diary.length - 1; diaryPage.set(id, cur + Number(step.dataset.step)); renderInspector(); return; }
   const cBtn = e.target.closest('[data-communesend]');
@@ -1163,7 +1219,9 @@ function renderInspector() {
   $('inspector').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:16px">${esc(a.name)}</b><span class="muted">${a.alive ? `${a.age} · ${a.stage} · ${a.branch}` : `died day ${a.diedDay}${a.ageAtDeath != null ? ' aged ' + a.ageAtDeath : ''}${a.causeOfDeath ? ' of ' + esc(a.causeOfDeath) : ''}`}</span></div>
     <a href="diaries.html?who=${a.id}" style="display:block;text-decoration:none;background:var(--warm);color:#1a1206;font-weight:700;text-align:center;padding:10px;border-radius:8px;margin:8px 0">📖 Read ${esc(a.name)}'s diary (${a.diary.length} night${a.diary.length === 1 ? '' : 's'})</a>
-    <a href="eyes.html?who=${a.id}" target="_blank" style="display:block;text-decoration:none;background:#2a3242;color:var(--ink);font-weight:600;text-align:center;padding:9px;border-radius:8px;margin:0 0 8px" title="follow their life moment by moment, from the inside; you only watch">👁 Live through ${esc(a.name)}'s eyes</a>
+    ${a.alive ? (observing === a.id
+      ? `<div style="background:#1d2430;border:1px solid var(--warm);border-radius:8px;padding:8px;margin:0 0 8px"><div class="row" style="justify-content:space-between;align-items:center"><b style="color:var(--warm)">👁 Observing ${esc(a.name)}</b><span class="muted">the camera stays on them · they do not know</span><button class="act" data-unobserve="1">Stop</button></div><div id="eyesPanel" style="margin-top:8px;max-height:46vh;overflow:auto">${eyesHtml()}</div><div class="muted" style="margin-top:4px"><a href="eyes.html?who=${a.id}" target="_blank" style="color:var(--dim)">open this as its own page</a></div></div>`
+      : `<button class="act" data-observe="${a.id}" style="display:block;width:100%;background:#2a3242;color:var(--ink);font-weight:600;text-align:center;padding:9px;border-radius:8px;margin:0 0 8px" title="the camera stays on them and their thoughts, doing and hearing stream here as they happen; you only watch">👁 Observe ${esc(a.name)} · follow them closely, hear their thoughts</button>`) : ''}
     <div class="row" style="margin:6px 0">${a.alive ? `<button class="act" data-moment="${a.id}">Look closer · stop time</button><span class="muted">${esc(expressionOf(a))}</span>` : ''}</div>
     ${a.destiny ? `<div class="quote" style="color:var(--warm)">${a.destiny.fulfilled ? 'Destiny come to pass' : 'Marked'}: "${esc(a.destiny.text)}"</div>` : ''}
     ${a.sense ? `<div class="quote" style="color:var(--warm)">Sense: ${esc(a.sense.label)} <span class="muted">· ${esc(a.sense.long)} · opened day ${a.sense.day}</span><br><span class="muted">${esc(a.sense.what)}</span></div>` : ''}

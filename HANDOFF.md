@@ -65,6 +65,12 @@ PLACES.graves (7,23), speaker = heaviest griever, words from FUNERAL_WORDS, grie
 trust +0.025/season, wounds older than 2y lose 0.03/season -> scar, memories older than 1y blur (weight*0.9).
 Smokes: scratchpad `smoke_rival.mjs`, `smoke_funeral.mjs`. NEXT: a second Creator holding the rival fire.
 
+## Observe mode (her ask: "click into someone and be their observer"): DONE
+In app.js: `observing`, `startObserving(id)` / `stopObserving()`, ws `watch`/`unwatch` -> `eyes` messages -> `onEyes` ->
+`eyesHtml()` rendered into `#eyesPanel` at the top of the Villager tab; the camera locks on them at scale 2.6 in `draw()`;
+clicking another villager while observing moves the eye; `caption` shows their thought on the canvas. The Observe button
+replaced the eyes.html link (still available as "open this as its own page"). Note: the `?select=` param already existed.
+
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to
   customers (different project, same instinct). Villagers must be able to refuse her; that's the game working.
