@@ -154,7 +154,7 @@ export function createWorld(saved) {
     saved.mod = saved.mod || { bannedIps: {}, bannedTokens: {}, muted: {} };
     saved.store.loans = saved.store.loans || {}; saved.store.project = saved.store.project ?? null; saved.store.wagesPaid = saved.store.wagesPaid || 0;
     if (saved.store.coin < 120 && !saved.store.funded) { saved.store.coin += 200; saved.store.funded = true; }
-    C.ensure(saved); Tarot.ensure(saved); Rv.ensure(saved); Fire.ensureGod(saved);
+    C.ensure(saved); Tarot.ensure(saved); Rv.ensure(saved); Fire.ensureGod(saved); backfillLegends(saved);
     if (saved.paused && saved.lastCard?.key === 'major:12' && !saved.ended) { saved.paused = false; saved.stillUntil = saved.day + 1; } if (saved.rival?.seen) reveal(saved, saved.rival.x, saved.rival.y, 5);
     for (const a of saved.agents) { if (a.inv && a.inv.coin == null) a.inv.coin = 3; a.upgrades = a.upgrades || {}; }
     if (!saved.threat && !saved.ended) rollThreat(saved);
@@ -2054,6 +2054,24 @@ function newDay(w) {
 // Some things are worth telling twice. A legend is a line the village keeps and tells at the fire,
 // and hearing one told puts a wonder in people: for a while afterward they want to go and look.
 // This is how anything found out in the pale ever becomes a reason for anyone else to walk out.
+// A village that walked out and found the lake before any of this existed still walked out and
+// found the lake. What they have already done is written up once, oldest first, so the fire has
+// something true to tell tonight rather than waiting for the next thing to happen.
+export function backfillLegends(w) {
+  const done = new Set((w.legends || []).map(l => l.text));
+  const found = Object.entries(w.found || {}).sort((a, b) => (a[1].day || 0) - (b[1].day || 0));
+  for (const [key, rec] of found) {
+    const f = I.FRONTIER.find(x => x.key === key); if (!f) continue;
+    const by = byId(w, rec.by);
+    const text = `${by ? by.name : 'Someone'} walked out past everything anyone knew and found ${f.found}. It is called ${f.label} now, because ${by ? by.name : 'they'} said so.`;
+    if (done.has(text)) continue;
+    w.legends = w.legends || [];
+    w.legends.push({ day: rec.day ?? 0, text, about: 'pale', told: 0 });
+    done.add(text);
+  }
+  if (w.legends) w.legends.sort((a, b) => a.day - b.day);
+  return (w.legends || []).length;
+}
 export function legend(w, text, about = 'pale') {
   w.legends = w.legends || [];
   if (w.legends.some(l => l.text === text)) return null;

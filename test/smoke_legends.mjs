@@ -87,6 +87,16 @@ const [t4, h4] = World.alive(w4);
 World.hearLegend(w4, h4, World.legend(w4, 'Someone walked out and came back changed.', 'pale'), t4);
 ok('and who is itching to go and look', (World.publicState(w4).wondering || []).includes(h4.name), JSON.stringify(World.publicState(w4).wondering));
 
+// ---- what the village already did is written up once ----
+const old = World.createWorld(JSON.parse(readFileSync(new URL('../data/world.json', import.meta.url), 'utf8')));
+const placesKnown = Object.keys(old.found || {}).length;
+ok('a world that walked out before legends existed gets them anyway', (old.legends || []).length >= placesKnown, `${(old.legends || []).length} legends for ${placesKnown} places found`);
+ok('and they carry the day it really happened', (old.legends || []).every(l => l.day > 0));
+ok('oldest first', (old.legends || []).every((l, i, arr) => !i || arr[i - 1].day <= l.day));
+const n1 = (old.legends || []).length;
+World.backfillLegends(old);
+ok('running it twice writes nothing twice', (old.legends || []).length === n1, `${n1} -> ${(old.legends || []).length}`);
+
 // ---- a world saved before legends existed picks them up ----
 const saved = JSON.parse(readFileSync(new URL('../data/world.json', import.meta.url), 'utf8'));
 const s = World.createWorld(saved);
