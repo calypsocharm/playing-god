@@ -188,7 +188,8 @@ export function scriptedDecide(a, s) {
   if (inv.food >= 2.5 && inv.wood >= 1 && inv.bread < 2 && Math.random() < 0.3) return { type: 'craft', item: 'bread', thought: 'Bread.' };
   if (inv.bread >= 1 && (br === 'open' || br === 'healed')) { const friend = s.near.find(n => n.trust > 0.3 && n.hungry); if (friend) return { type: 'share', target: friend.id, thought: 'Break bread.' }; }
   // The young and the restless walk out past the edge when the village can spare them.
-  if ((s.frontierLeft || 0) > 0 && isDay && age < 45 && b.energy > 0.6 && inv.food >= 1.5 && s.weather.season !== 'winter' && (br === 'open' || br === 'healed') && Math.random() < (a.traits?.need < 0.5 ? 0.08 : 0.04)) return { type: 'scout', thought: 'What is out there?' };
+  if (s.exploring && isDay && b.energy > 0.3 && b.warmth > 0.3) return { type: 'scout', thought: 'Keep walking. The land is not done.' };
+  if (((s.frontierLeft || 0) > 0 || (s.unexplored || 0) > 0.05) && isDay && age < 45 && b.energy > 0.6 && inv.food >= 1.5 && s.weather.season !== 'winter' && (br === 'open' || br === 'healed') && Math.random() < (a.traits?.need < 0.5 ? 0.08 : 0.04)) return { type: 'scout', thought: 'What is out there?' };
   // Fish, if there is a creek and the field is thin.
   if (s.found?.creek && isDay && inv.food < 1.5 && Math.random() < 0.4) return { type: 'forage', to: 'creek', thought: 'The creek.' };
   // Build when carrying a surplus.

@@ -191,7 +191,16 @@ let W = 0, H = 0, TILE = 24;
 function resize() {
   const r = canvas.parentElement.getBoundingClientRect();
   W = canvas.width = Math.floor(r.width * devicePixelRatio); H = canvas.height = Math.floor(r.height * devicePixelRatio);
-  if (state) TILE = Math.min(W / (state.map.w + 2), H / (state.map.h + 2));
+  if (state) { const b = showAll ? state.map : knownBounds(); TILE = Math.min(W / (b.w + 2), H / (b.h + 2)); }
+}
+// The land people know: the smallest box around every walked cell, so the view fits what matters.
+let showAll = false;
+function knownBounds() {
+  if (!state?.explored) return state.map;
+  const cell = state.cell || 2, cols = Math.ceil(state.map.w / cell), rows = Math.ceil(state.map.h / cell);
+  let mx = 0, my = 0;
+  for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if (state.explored[cy * cols + cx] === '1') { if (cx > mx) mx = cx; if (cy > my) my = cy; }
+  return { w: Math.min(state.map.w, (mx + 2) * cell), h: Math.min(state.map.h, (my + 2) * cell) };
 }
 addEventListener('resize', resize); resize();
 
@@ -289,6 +298,18 @@ function draw() {
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(PX.groundLayer(map, weather.season, weather.harvest), o.x, o.y, map.w * S, map.h * S);
   if (isWinter || cold > 0.45) { const sn = PX.snowLayer(map, isWinter ? 0.9 : (cold - 0.45)); if (sn) ctx.drawImage(sn, o.x, o.y, map.w * S, map.h * S); }
+  // the pale: land no one has walked is dark. Its edge softens where it meets known ground.
+  if (state.explored) {
+    const cell = state.cell || 2, cols = Math.ceil(map.w / cell), rows = Math.ceil(map.h / cell), ex = state.explored;
+    const known = (cx, cy) => cx < 0 || cy < 0 || cx >= cols || cy >= rows ? false : ex[cy * cols + cx] === '1';
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+      if (known(cx, cy)) continue;
+      const edge = known(cx - 1, cy) || known(cx + 1, cy) || known(cx, cy - 1) || known(cx, cy + 1);
+      const q = toScreen(cx * cell, cy * cell);
+      ctx.fillStyle = edge ? 'rgba(8,10,14,0.62)' : 'rgba(8,10,14,0.9)';
+      ctx.fillRect(q.x, q.y, cell * S + 0.5, cell * S + 0.5);
+    }
+  }
   // worn paths between the hearth and the places people go; a laid road once the store has paid for one
   const roadDone = !!state.builds?.road?.done;
   ctx.strokeStyle = roadDone ? 'rgba(155,139,106,.9)' : 'rgba(120,95,60,.28)'; ctx.lineWidth = S * (roadDone ? 0.55 : 0.35); ctx.lineCap = 'round';
@@ -834,6 +855,7 @@ function wholeVillage() {
   resize();
 }
 $('btnWhole').onclick = wholeVillage;
+$('btnBeyond').onclick = () => { showAll = !showAll; $('btnBeyond').textContent = showAll ? '⌂ known land' : '🧭 beyond the pale'; $('btnBeyond').title = showAll ? 'fit the view to the land people know' : 'see the whole land, walked or not'; wholeVillage(); };
 // Hide or show the side panel so the map can have the whole screen.
 $('btnPanel').onclick = () => { document.body.classList.toggle('mapOnly'); requestAnimationFrame(() => { resize(); camTarget = { scale: 1, x: 0, y: 0 }; }); };
 // Clicking the dark outside the card also lets time move again.
@@ -890,7 +912,7 @@ function renderPanels() {
   const shelf = s.store ? Object.entries(s.store.shelf).filter(([, n]) => n >= 1).map(([k, n]) => `${k} ${Math.floor(n)}`).join(', ') : '';
   const loans = (s.store?.loans || []).filter(l => l.owed > 0);
   const st = s.store ? `<br>Store: ${shelf || 'empty'} · ${s.store.coin} coin in the till${s.store.project ? ` · <b style="color:var(--warm)">paying wages for the ${esc(s.store.project)}</b>` : ''}${s.store.wagesPaid ? ` · ${s.store.wagesPaid} paid in wages so far` : ''}${loans.length ? `<br>Owe the store: ${loans.map(l => `${esc(l.name)} ${l.owed}${l.defaulted ? ' (not paying)' : ''}`).join(', ')}` : ''}` : '';
-  const frontier = `${st}<br>Known land: ${found.length ? found.join(', ') : 'only what you see'}${s.frontierLeft ? ` · ${s.frontierLeft} place${s.frontierLeft === 1 ? '' : 's'} still out past the edge` : ' · the frontier is mapped'}`;
+  const frontier = `${st}<br>Known land: ${found.length ? found.join(', ') : 'only what you see'} · ${Math.round((s.mapped || 0) * 100)}% of the land walked${s.frontierLeft ? ` · ${s.frontierLeft} place${s.frontierLeft === 1 ? '' : 's'} still out in the pale` : ' · every place is found'}`;
   const fam = `<br>${couples} couple${couples === 1 ? '' : 's'} · ${kids} child${kids === 1 ? '' : 'ren'}${expecting ? ` · ${expecting} expecting` : ''}${s.camp?.founded ? `<br><b style="color:var(--warm)">${esc(s.camp.name)}</b>, past the edge: ${campers} people, fire wood ${s.camp.wood}` : ''}`;
   $('villageSummary').innerHTML = `${alive.length} alive · ${s.weather.sky} · hearth wood ${s.hearth.wood}<br>` +
     Object.entries(branches).map(([k, v]) => `${v} ${k}`).join(' · ') + fam + frontier + `<br>${builds}${lessons}`;

@@ -11,6 +11,9 @@ export const FORAGE = {
   creek:  { fish: 2 },
   grove:  { berries: 3, herbs: 2 },
   claypit:{ clay: 2 },
+  lake:   { fish: 3 },
+  hills:  { stone: 3, herbs: 1 },
+  ruin:   { coin: 1, clay: 1 },
 };
 
 // What lies past the edge, in the order a scout can find it. Each takes luck and a few tries.
@@ -18,6 +21,9 @@ export const FRONTIER = [
   { key: 'creek',   label: 'the creek',    x: 4,  y: 22, found: 'a creek running fast and cold over stones, with fish in the shallows' },
   { key: 'grove',   label: 'the grove',    x: 38, y: 1,  found: 'an old grove heavy with berries, herbs thick underfoot' },
   { key: 'claypit', label: 'the clay pit', x: 1,  y: 2,  found: 'a bank of red clay by a spring' },
+  { key: 'lake',    label: 'the lake',     x: 60, y: 29, found: 'a wide grey lake, cold as iron, thick with fish' },
+  { key: 'hills',   label: 'the hills',    x: 64, y: 7,  found: 'bare hills of good stone, and herbs in the lee of them' },
+  { key: 'ruin',    label: 'the ruin',     x: 50, y: 31, found: 'old walls nobody built, with coins in the dirt and clay under them' },
 ];
 
 export const ITEMS = {

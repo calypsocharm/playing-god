@@ -16,7 +16,40 @@ export const TICKS_PER_DAY = 6;
 export const TICK_NAMES = ['dawn', 'morning', 'midday', 'afternoon', 'evening', 'night'];
 const DAY_MS = 86400000;
 
-export const MAP = { w: 54, h: 24 };   // x 0..39 is the village's land; past the edge at 39 is where a camp goes
+export const MAP = { w: 72, h: 36 };   // x 0..39, y 0..23 is the village's land. The rest is the pale: unmapped until someone walks it.
+// The map is known in cells of 2x2 tiles. A string of '0'/'1', row-major. Everyone sees what anyone has walked.
+export const CELL = 2;
+const COLS = Math.ceil(MAP.w / CELL), ROWS = Math.ceil(MAP.h / CELL);
+export function ensureExplored(w) {
+  if (typeof w.explored === 'string' && w.explored.length === COLS * ROWS) return w.explored;
+  let s = '';
+  for (let cy = 0; cy < ROWS; cy++) for (let cx = 0; cx < COLS; cx++) s += (cx * CELL < 41 && cy * CELL < 24) ? '1' : '0';
+  w.explored = s; return s;
+}
+export function isExploredAt(w, x, y) { ensureExplored(w); const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL); if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) return true; return w.explored[cy * COLS + cx] === '1'; }
+export function reveal(w, x, y, r = 3) {
+  ensureExplored(w);
+  const arr = w.explored.split('');
+  for (let cy = Math.max(0, Math.floor((y - r) / CELL)); cy <= Math.min(ROWS - 1, Math.floor((y + r) / CELL)); cy++)
+    for (let cx = Math.max(0, Math.floor((x - r) / CELL)); cx <= Math.min(COLS - 1, Math.floor((x + r) / CELL)); cx++) {
+      const mx = cx * CELL + CELL / 2, my = cy * CELL + CELL / 2;
+      if (Math.hypot(mx - x, my - y) <= r + 0.7) arr[cy * COLS + cx] = '1';
+    }
+  w.explored = arr.join('');
+}
+export function exploredFraction(w) { ensureExplored(w); let n = 0; for (const ch of w.explored) if (ch === '1') n++; return n / w.explored.length; }
+// The nearest unmapped cell to a point, with a little wander so two explorers do not walk the same line.
+function nearestUnexplored(w, p) {
+  ensureExplored(w);
+  let best = null, bd = Infinity;
+  for (let cy = 0; cy < ROWS; cy++) for (let cx = 0; cx < COLS; cx++) {
+    if (w.explored[cy * COLS + cx] === '1') continue;
+    const mx = cx * CELL + CELL / 2, my = cy * CELL + CELL / 2;
+    const d = Math.hypot(mx - p.x, my - p.y) + rnd(0, 5);
+    if (d < bd) { bd = d; best = { x: mx, y: my }; }
+  }
+  return best;
+}
 export const PLACES = {
   hearth: { x: 20, y: 12, label: 'the hearth', sheltered: false },
   well:   { x: 26, y: 13, label: 'the well',   sheltered: false },
@@ -81,6 +114,9 @@ export function createWorld(saved) {
     for (const a of saved.agents) { for (const m of I.MATERIALS) if (a.inv && a.inv[m] == null) a.inv[m] = 0; for (const k of Object.keys(I.ITEMS)) if (a.inv && a.inv[k] == null) a.inv[k] = 0; }
     saved.found = saved.found || {};
     restoreFound(saved);
+    ensureExplored(saved);
+    if (saved.camp?.founded) reveal(saved, PLACES.camp.x, PLACES.camp.y, 8);
+    for (const k of Object.keys(saved.found)) if (PLACES[k]) reveal(saved, PLACES[k].x, PLACES[k].y, 5);
     // Camps used to sit inside the village's own land. Move an old camp out past the edge.
     if (saved.camp?.founded) {
       const campers = saved.agents.filter(a => a.settlement === 'camp' && a.home && a.home.x < 41);
@@ -224,6 +260,7 @@ export const GOALS = {
   quietWinter:     'A whole winter passes with no one dying',
   oldAndMourned:   'Someone dies old, and at least three people grieve them',
   camp:            'A second fire is lit past the edge',
+  mapped:          'Half the land is walked and known',
   tenYears:        'The village sees its tenth year',
   namedKind:       'The village calls the sky the Kind One',
   frontier:        'A scout comes back from past the edge with news of new land',
@@ -236,6 +273,7 @@ function checkGoals(w) {
   if (w.agents.some(a => a.parents?.length)) done('firstChild');
   if (w.agents.some(a => a.parents?.length && a.upbringing === 'warm' && a.comeOfAgeDay != null)) done('raisedWarm');
   if (w.agents.some(a => a.upbringing === 'cold' && a.scars.length && !a.wounds.length)) done('healedLineage');
+  if (exploredFraction(w) >= 0.5) done('mapped');
   if (w.builds.granary?.done) done('granary');
   if (w.builds.hall?.done) done('hall');
   if (w.camp.founded) done('camp');
@@ -556,7 +594,7 @@ function dayPhase(w, remoteActions) {
     if (act.type === 'withdraw' || act.type === 'rest') dest = 'home';
     if (act.type === 'work') dest = act.to === 'forest' ? 'forest' : 'field';
     if (act.type === 'forage') dest = (I.FORAGE[act.to] && (PLACES[act.to] || isFound(w, act.to))) ? act.to : 'meadow';
-    if (act.type === 'scout') dest = 'edge';
+    if (act.type === 'scout') dest = null;   // explorers move themselves, into the pale
     if (act.type === 'build') dest = I.BUILDS[act.what]?.at || 'hearth';
     if (act.type === 'buy' || act.type === 'sell' || act.type === 'borrow' || act.type === 'repay') dest = 'store';
     if (act.type === 'upgrade') dest = 'home';
@@ -571,6 +609,9 @@ function dayPhase(w, remoteActions) {
     else if (dest) a.followDest = dest;
   }
   for (const a of living) { if (a.followDest) { moveTo(w, a, a.followDest); a.followDest = null; } }
+
+  // 2b. what anyone walks, everyone knows. The map grows under their feet.
+  for (const a of living) reveal(w, a.pos.x, a.pos.y, a.location.startsWith('wild:') ? 3.5 : 2);
 
   // 3. interactions
   for (const a of living) {
@@ -597,22 +638,33 @@ function dayPhase(w, remoteActions) {
         break;
       }
       case 'scout': {
-        // Out past the edge. Most days you find nothing but cold. Some days you come back with news.
-        a.body.energy = B.clamp(a.body.energy - 0.12);
-        a.body.warmth = B.clamp(a.body.warmth - 0.05);
-        const next = I.FRONTIER.find(f => !isFound(w, f.key));
+        // Exploring. Walk toward land no one has mapped; the map grows under your feet. Tiring, cold.
+        // Reach a place worth naming and the village learns of it.
+        if (!a.explore || isExploredAt(w, a.explore.x, a.explore.y)) a.explore = nearestUnexplored(w, a.pos);
+        if (!a.explore) { remember(w, a, 'There is nothing left out there you have not seen. The whole land is walked.', 0.4); a.location = 'edge'; a.pos = { ...PLACES.edge }; break; }
+        const dx = a.explore.x - a.pos.x, dy = a.explore.y - a.pos.y, dist = Math.hypot(dx, dy);
+        const stepLen = Math.min(dist, a.body.energy > 0.5 ? 4 : 2.5);
+        a.pos = { x: a.pos.x + (dist ? dx / dist : 0) * stepLen, y: a.pos.y + (dist ? dy / dist : 0) * stepLen };
+        a.location = `wild:${Math.round(a.pos.x)},${Math.round(a.pos.y)}`;
+        a.body.energy = B.clamp(a.body.energy - 0.07);
+        a.body.warmth = B.clamp(a.body.warmth - 0.03 - 0.05 * (w.weather.cold || 0));
+        reveal(w, a.pos.x, a.pos.y, 3.5);
         a.scouted = (a.scouted || 0) + 1;
-        if (next && Math.random() < 0.3 + a.scouted * 0.03) {
+        const found = I.FRONTIER.find(f => !isFound(w, f.key) && Math.hypot(f.x - a.pos.x, f.y - a.pos.y) <= 6);
+        if (found) {
           w.found = w.found || {};
-          w.found[next.key] = { day: w.day, by: a.id };
-          PLACES[next.key] = PLACES[next.key] || { x: next.x, y: next.y, label: next.label, sheltered: false };
-          event(w, `${a.name} comes back from past the edge with news: ${next.found}. They call it ${next.label}.`, 'healed', [a.id]);
-          remember(w, a, `You found ${next.label}: ${next.found}. You were the first.`, 1);
-          for (const o of alive(w)) if (o !== a) { remember(w, o, `${a.name} found ${next.label} past the edge. There is more out there than we knew.`, 0.7); bumpTrust(o, a, 0.06); }
+          w.found[found.key] = { day: w.day, by: a.id };
+          PLACES[found.key] = PLACES[found.key] || { x: found.x, y: found.y, label: found.label, sheltered: false };
+          reveal(w, found.x, found.y, 5);
+          event(w, `${a.name}, exploring, finds ${found.found}. They call it ${found.label}.`, 'healed', [a.id]);
+          remember(w, a, `You found ${found.label}: ${found.found}. You were the first.`, 1);
+          for (const o of alive(w)) if (o !== a) { remember(w, o, `${a.name} found ${found.label} out in the pale. There is more out there than we knew.`, 0.7); bumpTrust(o, a, 0.06); }
           a.body.tightness = B.clamp(a.body.tightness - 0.15);
+          a.explore = null;
           if (!w.goals.frontier) { w.goals.frontier = { done: w.day }; event(w, `A question answered: ${GOALS.frontier}.`, 'healed'); }
-        } else {
-          remember(w, a, next ? 'You walked past the edge and found only more of the same. Tomorrow, maybe.' : 'You walked past the edge. There is nothing left out there you have not seen.', 0.3);
+        } else if (dist - stepLen <= 1) {
+          remember(w, a, `You walked out where no one had been. ${pick(['Grass, wind, and the same sky.', 'Stones and a dead tree. Nothing to eat.', 'You could see the village smoke from there, small.', 'A hollow full of birds that did not know to be afraid of you.'])} You know a little more of the land.`, 0.4);
+          a.explore = null;
         }
         break;
       }
@@ -1577,7 +1629,7 @@ function narrate(w, a, act) {
   switch (act?.type) {
     case 'work': return a.location === 'field' ? s('at the field', `${a.name} works the field${a.inv.hoe > 0 ? ' with a hoe' : ''}.`, 'work') : s('cutting wood', `${a.name} cuts wood in the forest${a.inv.axe > 0 ? ' with an axe' : ''}.`, 'work');
     case 'forage': return s(`at ${place(a.location).replace('the ', '')}`, `${a.name} forages at ${place(a.location)}.`, 'work');
-    case 'scout': return s('scouting', `${a.name} walks out past the edge, looking for new land.`, 'work');
+    case 'scout': return s('exploring', `${a.name} walks out into land no one has mapped.`, 'work');
     case 'craft': return s(`making ${act.item}`, `${a.name} sits ${where} making ${I.ITEMS[act.item]?.label === 'bread' ? 'bread' : 'a ' + (I.ITEMS[act.item]?.label || act.item)}.`, 'work');
     case 'buy': return s('at the store', `${a.name} is at the store, buying ${act.item}.`, 'work');
     case 'trade': return s(`trading with ${tn}`, `${a.name} offers ${tn} ${act.n || 1} ${act.give} for ${act.m || 1} ${act.want}.`, 'work');
@@ -1631,6 +1683,7 @@ export function splitOff(w, L, why = 'soured') {
     for (const cid of p.children || []) { const c = byId(w, cid); if (c && c.alive && F.isChild(w, c) && !leavers.includes(c)) leavers.push(c); }
   }
   w.camp = { founded: true, name: `${L.name}'s camp`, wood: 4, leader: L.id, day: w.day };
+  reveal(w, PLACES.camp.x, PLACES.camp.y, 8);
   const spots = [...CAMP_SPOTS];
   for (const p of leavers) {
     p.settlement = 'camp';
@@ -1840,6 +1893,7 @@ export function snapshotFor(a, w) {
     weather: W.describe(w.day, w.weather),
     yieldToday: W.fieldYield(w.day, w.weather),
     hearthWood: fireStore(w, a).wood,
+    unexplored: +(1 - exploredFraction(w)).toFixed(3), exploring: !!a.explore,
     builds: w.builds, found: w.found || {}, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
     store: { shelf: w.store.shelf, coin: w.store.coin, prices: Object.fromEntries(Object.keys(I.STORE_PRICES).map(k => [k, { buy: I.buyPrice(w.store, k), sell: I.sellPrice(w.store, k) }])), loans: Object.values(w.store.loans || {}), project: w.store.project },
     location: a.location,
@@ -1878,7 +1932,7 @@ export function viewFor(a, w) {
   return {
     you: { name: a.name, age: Math.floor(age), stage: stageOf(age), chart: a.chart.summary, nature: describeChart(a.chart).slice(0, 3).map(d => d.text), upbringing: a.upbringing, selfSummary: a.selfSummary },
     when: `Day ${s.day}, ${s.tickName}. ${s.weather.season}, ${s.weather.sky}.`,
-    where: a.location === 'home' ? 'at home' : a.location.startsWith('visit') ? 'visiting someone' : 'at ' + (PLACES[a.location]?.label || a.location),
+    where: a.location === 'home' ? 'at home' : a.location.startsWith('visit') ? 'visiting someone' : a.location.startsWith('wild:') ? 'out in unmapped land, far from any fire' : 'at ' + (PLACES[a.location]?.label || a.location),
     felt,
     foodStored: a.inv.food < 0.3 ? 'none to spare' : a.inv.food < 1 ? 'a little' : 'enough',
     fieldToday: s.yieldToday < 0.1 ? 'the field gives nothing now' : s.yieldToday < 0.3 ? 'the field gives little' : 'the field is giving',
@@ -1908,7 +1962,7 @@ export function viewFor(a, w) {
       'go {to: hearth|well|field|forest|meadow|quarry|home|<person name>}',
       'work {to: field|forest}  (food for you, or wood for the hearth)',
       `forage {to: forest|meadow|quarry${Object.keys(w.found || {}).map(k => '|' + k).join('')}}  (forest: wood, herbs. meadow: fiber, berries. quarry: stone${isFound(w, 'creek') ? '. creek: fish' : ''}${isFound(w, 'grove') ? '. grove: berries, herbs' : ''}${isFound(w, 'claypit') ? '. claypit: clay' : ''})`,
-      'scout  (walk out past the edge looking for new land. Tiring, cold, usually nothing. Sometimes everything.)',
+      'explore  (walk out into land no one has mapped. The map grows under your feet. Tiring, cold. Sometimes you find a place worth naming.)',
       'craft {item: rope|axe|hoe|blanket|salve|charm}  (needs the materials, see recipes)',
       'give {target: <person name>, item: <thing you carry>}',
       'build {what: granary|hall|pool}  (go to the hearth, or the creek for the pool, and put in what you carry)',
@@ -1961,6 +2015,7 @@ export function publicState(w) {
     mod: { muted: Object.keys(w.mod?.muted || {}).length, banned: Object.keys(w.mod?.bannedTokens || {}).length + Object.keys(w.mod?.bannedIps || {}).length },
     builds: w.builds, buildSpecs: I.BUILDS, itemSpecs: I.ITEMS, lessons: w.lessons || [], due: w.due || [],
     map: MAP, places: visiblePlaces(w), found: w.found || {}, forage: I.FORAGE, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
+    explored: ensureExplored(w), cell: CELL, mapped: +exploredFraction(w).toFixed(3),
     agents: w.agents.map(a => ({
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
       body: a.body, visible: B.visibleState(a.body), branch: branch(a),
