@@ -545,3 +545,15 @@ strung with bunting, the name hangs over the fire, and everyone who is not starv
 to the hearth to dance, sing the song and share the food. Celebrating lifts joy, trust and faith,
 and shares grief. Brained villagers get `celebrate {say}` on the day and `holiday {name, decorate,
 song, dance, food}` when it is theirs to make.
+
+## The arts
+
+Sadness wants a shape. A villager can paint (berries or clay for pigment), write a poem or a
+story, throw a pot (clay), make a song, or invent an art of their own and name it, which the
+whole village can then take up. A work has a title and a line, and is kept: paintings and pots
+hang in the house and show in its room; poems, stories and songs are told at the fire, where
+someone says one most nights. Making eases the maker's chest and gives grief a place outside
+them; anyone who sees or hears a work is lifted, and if it is about their own dead, it is grief
+shared and they trust the maker more. Skill grows and a maker becomes known: a poet is asked for
+words at a wake. Brained villagers write their own titles and lines (`make`, `show`, `art`); the
+autopilot composes from what it has lived, reaching for an art by its Moon.

@@ -13,6 +13,7 @@ import * as F from './family.js';
 import * as G from './gifts.js';
 import * as A from './animals.js';
 import * as R from './rites.js';
+import * as Art from './arts.js';
 
 export const TICKS_PER_DAY = 6;
 export const TICK_NAMES = ['dawn', 'morning', 'midday', 'afternoon', 'evening', 'night'];
@@ -609,6 +610,8 @@ function dayPhase(w, remoteActions) {
     if (act.type === 'sit') dest = act.to && (PLACES[act.to] || act.to === 'home') ? act.to : null;
     if (act.type === 'walk') dest = act.to && PLACES[act.to] ? act.to : (isFound(w, 'creek') ? 'creek' : 'meadow');
     if (act.type === 'sing' || act.type === 'celebrate') dest = 'hearth';
+    if (act.type === 'make') dest = act.to && (PLACES[act.to] || act.to === 'home') ? act.to : null;   // make it where you are, or where the feeling is
+    if (act.type === 'show' || act.type === 'art') dest = null;
     if (act.type === 'treat') dest = act.target && act.target !== a.id ? act.target : (a.location === 'home' ? 'home' : null);
     if (act.type === 'hobby') dest = 'home';
     if (act.type === 'hunt') dest = act.to === 'meadow' ? 'meadow' : 'forest';
@@ -1141,6 +1144,25 @@ function dayPhase(w, remoteActions) {
         }
         break;
       }
+      case 'make': {
+        Art.make(w, a, act, near, remember, event, bumpTrust);
+        break;
+      }
+      case 'show': {
+        // Show or tell a work of yours to whoever is here.
+        const mine = (w.works || []).filter(x => x.by === a.id);
+        const work = (act.title && mine.find(x => x.title.toLowerCase() === String(act.title).toLowerCase())) || mine[mine.length - 1];
+        if (!work) { remember(w, a, 'You had nothing made to show.', 0.2); break; }
+        if (!near.length) { remember(w, a, `You said "${work.title}" to no one. It still helped.`, 0.3); B.gladden(a.body, 0.03); break; }
+        for (const o of near) Art.show(w, work, a, o, remember, bumpTrust, true);
+        B.gladden(a.body, 0.05);
+        event(w, `${a.name} ${work.kept === 'home' ? 'shows' : 'tells'} "${work.title}" to ${near.slice(0, 3).map(o => o.name).join(', ')}${near.length > 3 ? ' and others' : ''}.`, 'comfort', [a.id, ...near.map(o => o.id)]);
+        break;
+      }
+      case 'art': {
+        Art.invent(w, a, act, remember, event);
+        break;
+      }
       case 'treat': {
         const who = tgt || a;
         R.treat(w, a, who, bumpTrust, remember, event);
@@ -1421,6 +1443,7 @@ function nightPhase(w) {
   griefNightly(w);   // may move mourners to the hearth for a wake
   wakeSenses(w);     // the ones who listened, sang or sat still enough start to know things
   nightOwls(w);      // the young, the restless and the grieving sit up late at the fire
+  Art.nightlyTelling(w, at(w, 'hearth'), remember, bumpTrust, event);   // and someone says a poem, or sings what they made
   F.familyNightly(w); // bonds hold or fray, children are born and grow
   trySplit(w);        // and sometimes a few people walk out to light their own fire
   for (const a of alive(w)) {
@@ -1745,6 +1768,9 @@ function narrate(w, a, act) {
     case 'leave': return s('leaving', `${a.name} leaves their partner.`, 'hurt');
     case 'split': return s('leaving the village', `${a.name} walks out of the village.`, 'hurt');
     case 'pray': return s('praying', `${a.name} speaks to the sky: "${act.say || ''}"`, 'talk');
+    case 'make': { const art = Art.artOf(w, act.art); return s(art ? `making a ${art.label}` : 'making', `${a.name} ${art ? art.verb : 'makes something'} ${where}.`, 'care'); }
+    case 'show': return s('showing a work', `${a.name} shows what they made to whoever is ${where}.`, 'care');
+    case 'art': return s('inventing an art', `${a.name} is making up a new art.`, 'care');
     case 'treat': return T ? s(`treating ${tn}`, `${a.name} sits with ${tn} and treats their sickness.`, 'care') : s('taking medicine', `${a.name} takes something for the sickness.`, 'care');
     case 'celebrate': return s(w.holidayToday ? w.holidayToday.name : 'celebrating', `${a.name} ${w.holidayToday?.dance ? 'dances' : 'sings'} at the hearth${w.holidayToday ? ' for ' + w.holidayToday.name : ''}${act.say ? `: "${String(act.say).slice(0, 80)}"` : '.'}`, 'care');
     case 'cast': return T ? s(`gift on ${tn}`, `${a.name} turns their gift on ${tn}.`, 'care') : s('casting', `${a.name} reaches for their gift ${where}.`, 'care');
@@ -2001,7 +2027,7 @@ export function snapshotFor(a, w) {
     yieldToday: W.fieldYield(w.day, w.weather),
     hearthWood: fireStore(w, a).wood,
     pets: A.petsOf(w, a).map(x => ({ id: x.id, kind: x.kind, name: x.name, hungry: x.hungry })),
-    ill: !!a.ill, sickNear: near.filter(o => o.ill).map(o => o.id), holiday: w.holidayToday ? { name: w.holidayToday.name } : null, pendingHoliday: w.pendingHoliday && w.pendingHoliday.by === a.id,
+    ill: !!a.ill, sickNear: near.filter(o => o.ill).map(o => o.id), works: (a.works || []).length, arts: (w.arts || []).map(x => x.name), holiday: w.holidayToday ? { name: w.holidayToday.name } : null, pendingHoliday: w.pendingHoliday && w.pendingHoliday.by === a.id,
     infants: (a.children || []).map(id => byId(w, id)).filter(c => c && F.isInfant(w, c)).map(c => ({ id: c.id, name: c.name, minder: c.minder || null, otherParent: (c.parents || []).find(p => p !== a.id) || null })),
     infantsAlone: (w.infantsAlone || []).filter(x => !x.parents.includes(a.id)).map(x => ({ id: x.id, name: x.name })), strays: A.straysAt(w, a.location).map(x => ({ id: x.id, kind: x.kind, name: x.name })), deer: w.deer || 0,
     unexplored: +(1 - exploredFraction(w)).toFixed(3), exploring: !!a.explore,
@@ -2026,6 +2052,9 @@ export function viewFor(a, w) {
   const hobbyLines = Object.entries(a.skills || {}).filter(([k, n]) => I.HOBBIES[k] && n >= 8).map(([k]) => I.HOBBIES[k].line);
   if ((a.skills?.music || 0) >= 10) hobbyLines.push('You are the one who sings. People ask you to.');
   if (a.gift && G.GIFTS[a.gift.kind]) hobbyLines.push(`${G.GIFTS[a.gift.kind].felt} ${G.GIFTS[a.gift.kind].what}`);
+  hobbyLines.push(...Art.felt(w, a));
+  const mine = (w.works || []).filter(x => x.by === a.id).slice(-3);
+  if (mine.length) hobbyLines.push(`Things you have made: ${mine.map(x => `"${x.title}" (${x.art})`).join(', ')}.`);
   if (a.sense && G.SENSES[a.sense.kind]) hobbyLines.push(`${G.SENSES[a.sense.kind].felt} ${G.SENSES[a.sense.kind].what}`);
   const senses = [];
   if (a.sense?.kind === 'empath') for (const n of s.near) { const o = byId(w, n.id); if (!o) continue; const g = (o.grief || []).length; senses.push(`${n.name}: ${o.body.tightness > 0.7 ? 'their chest is locked and yours clamps with it' : o.body.tightness > 0.45 ? 'a tightness in them you feel under your own ribs' : 'easy; you breathe easier near them'}${g ? '. Grief, heavy as a wet coat' : ''}${o.body.hurt > 0.3 ? '. Pain, somewhere in the body' : ''}${o.body.food < 0.3 ? '. Hunger, gnawing' : ''}.`); }
@@ -2102,6 +2131,9 @@ export function viewFor(a, w) {
       'strike {target: <person name>}',
       'withdraw  (go home, be alone)',
       'treat {target: <person name or yourself>}  (sit with the sick and give herbs, salve or tonic; you need to carry one)',
+      `make {art: painting|poem|story|pottery|song${(w.arts || []).length ? '|' + w.arts.map(x => x.name).join('|') : ''}, title: "<its name>", line: "<one line of it, or what the painting shows>", about: "<who or what it is for>"}  (give a feeling a shape; painting needs berries or clay, a pot needs clay; it eases you, and whoever sees it)`,
+      'show {title: "<a work of yours>"}  (show or tell it to whoever is with you)',
+      'art {name: "<a new art>", what: "<what it is and how it is done>"}  (invent an art of your own; the village can take it up)',
       ...(w.holidayToday ? [`celebrate {say: "<a line to sing or shout>"}  (go to the hearth for ${w.holidayToday.name}: dance, sing, share; everyone there is lifted)`] : []),
       ...(w.pendingHoliday && w.pendingHoliday.by === a.id ? ['holiday {name: "<what you call the day>", decorate: "<how the village is dressed for it>", song: "<one line of its song>", dance: true|false, food: "<what is shared>"}  (make a day of your own; the village will keep it every year)'] : []),
       'hunt {to: meadow|forest}  (deer, if there are any: food if you are quick, tiring either way)',
@@ -2138,6 +2170,7 @@ export function publicState(w) {
     map: MAP, places: visiblePlaces(w), found: w.found || {}, forage: I.FORAGE, frontierLeft: I.FRONTIER.filter(f => !isFound(w, f.key)).length,
     explored: ensureExplored(w), cell: CELL, mapped: +exploredFraction(w).toFixed(3),
     animals: A.publicList(w), deer: w.deer || 0,
+    works: Art.publicWorks(w), arts: w.arts || [],
     holidays: w.holidays || [], holidayToday: w.holidayToday || null, pendingHoliday: w.pendingHoliday ? { by: w.pendingHoliday.by, reason: w.pendingHoliday.reason } : null, sick: alive(w).filter(a => a.ill).length,
     agents: w.agents.map(a => ({
       id: a.id, name: a.name, alive: a.alive, pos: a.pos, home: a.home, location: a.location,
@@ -2194,6 +2227,16 @@ export function normaliseAction(w, raw) {
     if (!act.to) return null;
   } else if (type === 'work') {
     act.to = place === 'forest' ? 'forest' : 'field';
+  } else if (['make', 'create', 'paint', 'write', 'compose', 'sculpt', 'pot', 'draw'].includes(type)) {
+    act.type = 'make';
+    const guess = type === 'paint' || type === 'draw' ? 'painting' : type === 'write' ? (/(story|tale)/i.test(String(raw.art || raw.what || '')) ? 'story' : 'poem') : type === 'compose' ? 'song' : type === 'sculpt' || type === 'pot' ? 'pottery' : null;
+    act.art = String(raw.art || raw.what || raw.kind || guess || '').toLowerCase().replace(/^a |^an /, '').replace(/poetry/, 'poem').replace(/painting|picture/, 'painting').replace(/pottery|pot$|bowl|jar/, 'pottery').replace(/tale/, 'story').replace(/music|tune/, 'song');
+    if (!Art.artOf(w, act.art)) act.art = guess || 'poem';
+    act.title = raw.title; act.line = raw.line || raw.text || raw.words || raw.verse; act.about = raw.about || raw.for || raw.subject; act.to = place;
+  } else if (type === 'show' || type === 'tell' || type === 'recite' || type === 'perform' || type === 'read') {
+    act.type = 'show'; act.title = raw.title || raw.work || null;
+  } else if (type === 'art' || type === 'invent' || type === 'new_art' || type === 'invent_art') {
+    act.type = 'art'; act.name = raw.name || raw.art; act.what = raw.what || raw.description || raw.how;
   } else if (type === 'treat' || type === 'nurse' || type === 'tend_sick' || type === 'medicine') {
     act.type = 'treat'; act.target = resolveTarget(w, raw.target) || null;
   } else if (type === 'celebrate' || type === 'dance' || type === 'feast' || type === 'holiday') {

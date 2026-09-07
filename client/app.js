@@ -831,7 +831,8 @@ function renderPlace(hit) {
     const visitors = alive.filter(a => residents.some(r => a.location === `visit:${r.id}`));
     $('moScene').hidden = false;
     const pets = (s.animals || []).filter(x => residents.some(r => r.id === x.owner));
-    Interior.drawHouse($('moScene'), { residents, inside, visitors, ups, inv: sumInv(residents), lit: inside.length > 0 || s.tick >= 4, night: s.tick >= 4, pets });
+    const works = (s.works || []).filter(x => x.kept === 'home' && residents.some(r => r.id === x.by));
+    Interior.drawHouse($('moScene'), { residents, inside, visitors, ups, inv: sumInv(residents), lit: inside.length > 0 || s.tick >= 4, night: s.tick >= 4, pets, works });
   } else {
     const k = hit.key, pl = hit.pos, label = pl.label || k;
     const here = alive.filter(a => a.location === k);
@@ -958,10 +959,11 @@ function renderPanels() {
   const shelf = s.store ? Object.entries(s.store.shelf).filter(([, n]) => n >= 1).map(([k, n]) => `${k} ${Math.floor(n)}`).join(', ') : '';
   const loans = (s.store?.loans || []).filter(l => l.owed > 0);
   const st = s.store ? `<br>Store: ${shelf || 'empty'} · ${s.store.coin} coin in the till${s.store.project ? ` · <b style="color:var(--warm)">paying wages for the ${esc(s.store.project)}</b>` : ''}${s.store.wagesPaid ? ` · ${s.store.wagesPaid} paid in wages so far` : ''}${loans.length ? `<br>Owe the store: ${loans.map(l => `${esc(l.name)} ${l.owed}${l.defaulted ? ' (not paying)' : ''}`).join(', ')}` : ''}` : '';
+  const arts = (s.works || []).length ? `<br>Works of the village: ${s.works.length}${(s.arts || []).length ? ` · arts of its own: ${s.arts.map(x => `<b style="color:var(--warm)">${esc(x.name)}</b> <span class="muted">(${esc(x.byName)})</span>`).join(', ')}` : ''} · latest: ${s.works.slice(-3).reverse().map(x => `${esc(x.byName)}, "${esc(x.title)}"`).join(' · ')}` : '';
   const hol = (s.holidays || []).length ? `<br>Days the village keeps: ${s.holidays.map(h => `<b style="color:var(--warm)">${esc(h.name)}</b> <span class="muted">(${esc(h.byName)}, year ${h.year}, kept ${h.kept}×)</span>`).join(' · ')}` : '';
   const today = s.holidayToday ? `<br><b style="color:var(--warm)">Today is ${esc(s.holidayToday.name)}.</b> ${esc(s.holidayToday.decorate)} Song: "${esc(s.holidayToday.song)}"` : '';
   const sick = s.sick ? `<br><span style="color:var(--bad)">${s.sick} sick</span>: ${s.agents.filter(a => a.alive && a.ill).map(a => esc(a.name) + ' (' + a.ill.kind + ')').join(', ')}` : '';
-  const frontier = `${st}${today}${hol}${sick}<br>Known land: ${found.length ? found.join(', ') : 'only what you see'} · ${Math.round((s.mapped || 0) * 100)}% of the land walked${s.frontierLeft ? ` · ${s.frontierLeft} place${s.frontierLeft === 1 ? '' : 's'} still out in the pale` : ' · every place is found'}`;
+  const frontier = `${st}${today}${hol}${arts}${sick}<br>Known land: ${found.length ? found.join(', ') : 'only what you see'} · ${Math.round((s.mapped || 0) * 100)}% of the land walked${s.frontierLeft ? ` · ${s.frontierLeft} place${s.frontierLeft === 1 ? '' : 's'} still out in the pale` : ' · every place is found'}`;
   const fam = `<br>${couples} couple${couples === 1 ? '' : 's'} · ${kids} child${kids === 1 ? '' : 'ren'}${expecting ? ` · ${expecting} expecting` : ''}${s.camp?.founded ? `<br><b style="color:var(--warm)">${esc(s.camp.name)}</b>, past the edge: ${campers} people, fire wood ${s.camp.wood}` : ''}`;
   $('villageSummary').innerHTML = `${alive.length} alive · ${s.weather.sky} · hearth wood ${s.hearth.wood}<br>` +
     Object.entries(branches).map(([k, v]) => `${v} ${k}`).join(' · ') + fam + frontier + `<br>${builds}${lessons}`;
@@ -1107,6 +1109,7 @@ function renderInspector() {
     ${Object.keys(a.skills || {}).length ? `<div class="muted">Takes up: ${Object.entries(a.skills).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${esc(k)} (${n})`).join(', ')}</div>` : ''}
     ${a.ill ? `<div style="color:var(--bad)">Sick: ${a.ill.kind} since day ${a.ill.day} · ${a.ill.severity > 0.6 ? 'bad' : a.ill.severity > 0.3 ? 'middling' : 'mending'}. Herbs, salve or tonic, and rest.</div>` : ''}
     <div class="muted">Looks ${esc(a.visible)}${b.overwhelmed ? ' · OVERWHELMED' : ''}</div>
+    ${(state.works || []).some(x => x.by === a.id) ? `<h3>Made</h3>${(state.works || []).filter(x => x.by === a.id).slice(-6).reverse().map(x => `<div class="mem"><b>"${esc(x.title)}"</b> <span class="muted">· ${esc(x.art)} · day ${x.day}${x.moved ? ` · moved ${x.moved}` : ''}</span><br><i>${esc(x.line)}</i></div>`).join('')}` : ''}
     ${(state.animals || []).some(x => x.owner === a.id) ? `<div class="muted" style="margin-top:4px">Keeps: ${(state.animals || []).filter(x => x.owner === a.id).map(x => `<b>${esc(x.name)}</b> the ${x.young ? (x.kind === 'cat' ? 'kitten' : x.kind === 'dog' ? 'pup' : x.kind) : x.kind}${x.hungry >= 2 ? ' (thin)' : ''}`).join(', ')}</div>` : ''}
     <h3>Carries</h3>
     <div class="muted">${esc(describeInv(a.inv))}</div>

@@ -60,7 +60,7 @@ function shelfRow(g, items, x, y, w, max = 8, sub = null) {
 }
 
 // A house. residents: those who live here; inside: those home now; visitors: at the door.
-export function drawHouse(canvas, { residents, inside, visitors, ups, inv, lit, night, pets = [] }) {
+export function drawHouse(canvas, { residents, inside, visitors, ups, inv, lit, night, pets = [], works = [] }) {
   const g = canvas.getContext('2d'); const W = canvas.width, H = canvas.height;
   g.imageSmoothingEnabled = false; g.clearRect(0, 0, W, H);
   const big = !!ups.bighouse;
@@ -97,6 +97,10 @@ export function drawHouse(canvas, { residents, inside, visitors, ups, inv, lit, 
   inside.forEach((a, i) => person(g, a, spots[i % spots.length][0], spots[i % spots.length][1]));
   visitors.forEach((a, i) => { person(g, a, W - 26, H - 12 - i * 2, 40); });
   if (!inside.length) label(g, 'nobody home', W / 2, 236, '#a9a290', 12);
+  // what the house has made: paintings on the wall, pots along the shelf's end
+  const paintings = works.filter(x => x.art === 'painting').slice(-3), pots = works.filter(x => x.art !== 'painting').slice(-4);
+  paintings.forEach((p, i) => { const px = 120 + i * 92, py = 74; g.fillStyle = '#4e3620'; g.fillRect(px, py, 76, 52); const hue = (p.title.length * 47) % 360; g.fillStyle = `hsl(${hue} 40% 45%)`; g.fillRect(px + 4, py + 4, 68, 44); g.fillStyle = `hsl(${(hue + 120) % 360} 45% 65%)`; g.fillRect(px + 12, py + 14, 30, 22); g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(px + 4, py + 36, 68, 12); label(g, p.title.slice(0, 18), px + 38, py + 46, '#e8e2d0', 9); });
+  pots.forEach((p, i) => { const px = W - 150 + i * 18, py = 70; g.fillStyle = '#9a4a2f'; g.fillRect(px, py - 12, 10, 12); g.fillStyle = '#6f5535'; g.fillRect(px + 2, py - 14, 6, 2); });
   // the animals of the house: cat by the fire, dog on the floor, hens and goat in the yard strip
   let yard = 20;
   for (const an of pets) {
