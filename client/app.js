@@ -522,7 +522,7 @@ function posOf(a) {
 
 // pointer: click selects, drag pans, wheel zooms
 canvas.addEventListener('pointerdown', (e) => { dragging = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, moved: false }; });
-canvas.addEventListener('pointermove', (e) => { if (!dragging) return; const dx = e.clientX - dragging.x, dy = e.clientY - dragging.y; if (Math.hypot(dx, dy) > 4) dragging.moved = true; cam.x = dragging.cx + dx * devicePixelRatio; cam.y = dragging.cy + dy * devicePixelRatio; });
+canvas.addEventListener('pointermove', (e) => { if (!dragging) return; const dx = e.clientX - dragging.x, dy = e.clientY - dragging.y; if (Math.hypot(dx, dy) > 4) { dragging.moved = true; if (observing && !ghostOn) { observing = null; send({ type: 'unwatch' }); camTarget = null; renderInspector(); } } cam.x = dragging.cx + dx * devicePixelRatio; cam.y = dragging.cy + dy * devicePixelRatio; });
 const bookHits = [];   // clickable book icons drawn beside names this frame
 canvas.addEventListener('pointerup', (e) => {
   if (ghostOn) { dragging = null; return; }
@@ -540,7 +540,7 @@ canvas.addEventListener('pointerup', (e) => {
   }
   dragging = null;
 });
-canvas.addEventListener('wheel', (e) => { e.preventDefault(); const f = e.deltaY < 0 ? 1.1 : 0.9; cam.scale = Math.max(0.5, Math.min(4, cam.scale * f)); }, { passive: false });
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); if (observing && !ghostOn) { observing = null; send({ type: 'unwatch' }); camTarget = null; renderInspector(); } const f = e.deltaY < 0 ? 1.1 : 0.9; cam.scale = Math.max(0.5, Math.min(4, cam.scale * f)); }, { passive: false });
 canvas.addEventListener('dblclick', (e) => {
   // Look closer at whoever or whatever is under the cursor, whether or not the first click selected them.
   if (!state) return;
@@ -1168,13 +1168,13 @@ function wholeVillage() {
   camTarget = { scale: 1, x: 0, y: 0 };
   resize();
 }
-$('btnWhole').onclick = wholeVillage;
-$('btnBeyond').onclick = () => { showAll = !showAll; $('btnBeyond').textContent = showAll ? '⌂ known land' : '🧭 beyond the pale'; $('btnBeyond').title = showAll ? 'fit the view to the land people know' : 'see the whole land, walked or not'; wholeVillage(); };
+$('btnWhole').onclick = () => { if (ghostOn) stopGhost(); if (observing) stopObserving(); wholeVillage(); };
+$('btnBeyond').onclick = () => { if (ghostOn) stopGhost(); if (observing) stopObserving(); showAll = !showAll; $('btnBeyond').textContent = showAll ? '⌂ known land' : '🧭 beyond the pale'; $('btnBeyond').title = showAll ? 'fit the view to the land people know' : 'see the whole land, walked or not'; wholeVillage(); };
 // Hide or show the side panel so the map can have the whole screen.
 $('btnPanel').onclick = () => { document.body.classList.toggle('mapOnly'); requestAnimationFrame(() => { resize(); camTarget = { scale: 1, x: 0, y: 0 }; }); };
 // Clicking the dark outside the card also lets time move again.
 $('moment').addEventListener('click', (e) => { if (e.target === $('moment')) closeMoment(); });
-addEventListener('keydown', (e) => { if (e.key === 'Escape') wholeVillage(); });
+addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (ghostOn) stopGhost(); if (observing) stopObserving(); wholeVillage(); } });
 
 function renderMoment(a) {
   const s = state;
