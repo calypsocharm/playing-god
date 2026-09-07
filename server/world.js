@@ -153,7 +153,8 @@ export function createWorld(saved) {
     saved.mod = saved.mod || { bannedIps: {}, bannedTokens: {}, muted: {} };
     saved.store.loans = saved.store.loans || {}; saved.store.project = saved.store.project ?? null; saved.store.wagesPaid = saved.store.wagesPaid || 0;
     if (saved.store.coin < 120 && !saved.store.funded) { saved.store.coin += 200; saved.store.funded = true; }
-    C.ensure(saved); Tarot.ensure(saved); Rv.ensure(saved); if (saved.rival?.seen) reveal(saved, saved.rival.x, saved.rival.y, 5);
+    C.ensure(saved); Tarot.ensure(saved); Rv.ensure(saved);
+    if (saved.paused && saved.lastCard?.key === 'major:12' && !saved.ended) { saved.paused = false; saved.stillUntil = saved.day + 1; } if (saved.rival?.seen) reveal(saved, saved.rival.x, saved.rival.y, 5);
     for (const a of saved.agents) { if (a.inv && a.inv.coin == null) a.inv.coin = 3; a.upgrades = a.upgrades || {}; }
     if (!saved.threat && !saved.ended) rollThreat(saved);
     return saved;
@@ -708,6 +709,7 @@ function dayPhase(w, remoteActions) {
   const decisions = new Map();
   for (const a of living) {
     if (a.body.overwhelmed > 0) { decisions.set(a.id, { type: 'rest' }); continue; }
+    if ((w.stillUntil ?? -1) >= w.day) { decisions.set(a.id, { type: 'rest', thought: 'Hang still. Look at it the other way up.' }); continue; }
     // Children are not asked. They do what children do.
     if (F.isChild(w, a)) { decisions.set(a.id, F.childDecide(w, a)); continue; }
     let act = remoteActions.get(a.id);

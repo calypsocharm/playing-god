@@ -108,6 +108,13 @@ bubble, top bar, bottom lines from the latest eyes beat). Both use setTransform(
 offscreen canvas, fit "contain" under the top bar, then drawOverlay). Buttons: `[data-ghost]` in the inspector (primary,
 above Observe), `#ghostExit` on the stage, Esc. Ticker hidden while ghostOn; stage clicks ignored.
 
+## Hanged Man deadlock (live bug 2026-09-07): FIXED
+The card used to set `w.paused = true`; a paused world never reaches a season turn, so attention never returns and no
+card can be drawn -> stuck forever. Now it sets `w.stillUntil = day+1` (everyone rests a day, decisions overridden in
+dayPhase) and createWorld unpauses a saved world whose lastCard is `major:12`. Rule for future cards: never pause the
+world; use `stillUntil` or a timed effect. Also: every way out of zoom (whole village / beyond / Esc / drag / wheel)
+now ends observing + ghost.
+
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to
   customers (different project, same instinct). Villagers must be able to refuse her; that's the game working.

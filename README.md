@@ -702,7 +702,7 @@ wakes a gift, the Knight brings a stranger up the road. Cups move the heart: the
 two people who trust each other most, the Five brings grief back fresh, the Queen sits with the
 grieving all night. The majors are the big turns: the Tower lands what was coming now and burns
 half the hearth pile, the Star loosens every wound, Death takes the oldest, the Sun makes a
-holiday on the spot, the Hanged Man stops time, the World gives the sky two attention back. The
+holiday on the spot, the Hanged Man holds the whole village still for a day, the World gives the sky two attention back. The
 card lies by the hearth for a day, the Weather tab keeps the last dozen, and every villager
 remembers what the sky turned.
 
