@@ -1231,7 +1231,7 @@ function dayPhase(w, remoteActions) {
       const k = a.sense.kind;
       if (k === 'empath') { const tightNear = sameSpot(w, a).filter(o => o !== a && (o.body.tightness > 0.5 || (o.grief || []).length)).length; if (tightNear) a.body.tightness = B.clamp(a.body.tightness + 0.02 * tightNear); }
       else if (k === 'clairvoyant') a.body.joy = B.clamp((a.body.joy ?? 0.5) - 0.006);
-      else if (k === 'claircognizant') a.body.openness = B.clamp(a.body.openness - 0.008);
+      else if (k === 'claircognizant') a.body.openness = B.clamp(a.body.openness - 0.004);
     }
     if (a.body.food < 0.45 && a.inv.bread >= 1) { a.inv.bread -= 1; B.eat(a.body, 0.5); }
     else if (a.body.food < 0.45 && a.inv.food >= 0.3) { a.inv.food -= 0.3; B.eat(a.body, 0.3); }

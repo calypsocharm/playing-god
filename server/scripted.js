@@ -115,7 +115,7 @@ export function scriptedDecide(a, s) {
   if (isDay && inv.food < 1.5 && (s.deer || 0) > 0 && b.energy > 0.5 && ['meadow', 'forest'].includes(a.location) && Math.random() < 0.3) return { type: 'hunt', to: a.location, thought: 'Deer.' };
   if (a.location === 'store' && (inv.coin || 0) >= 8 && (s.store?.shelf?.hen || 0) > 0 && !(s.pets || []).some(p => p.kind === 'hen') && inv.food >= 2 && Math.random() < 0.15) return { type: 'buy', item: 'hen', thought: 'Eggs every morning.' };
   // A gift, used when it plainly fits and the body can pay for it.
-  if (a.gift && b.energy > 0.55 && (a.castsToday || 0) < 2 && Math.random() < 0.35) {
+  if (a.gift && b.energy > 0.7 && (a.castsToday || 0) < 1 && Math.random() < 0.25) {
     const k = a.gift.kind;
     const hurt = s.near.find(n => n.visible?.includes('injured'));
     const cold = s.near.find(n => n.visible?.includes('shivering'));
