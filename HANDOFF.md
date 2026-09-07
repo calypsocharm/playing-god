@@ -134,8 +134,11 @@ found the lake, hills and ruin on their own - but **nothing had ever been found 
   heard it, 93 across three that did.
 - `test/smoke_legends.mjs`. The find is measured on a **grown** village (data/world.json with the magic cleared),
   because a fresh nine-person village of half children does not reliably turn anything up and should not have to.
-- **Still open, her idea, not built:** a Jesus type - one villager who carries the good news rather than the fire
-  telling it round-robin. Ask her before building it.
+- **A prophet was considered and refused (2026-09-07, her call).** She floated a "Jesus type" to carry the good
+  news, then decided against it: *"no if they find faith and create legends without it its fine."* The point is
+  that faith and legends arise on their own. **Do not build an appointed prophet, a chosen one, or a teller class**
+  - the fire tells the legends round-robin, by whoever is sitting there with a story in them or faith over 0.3, and
+  that is the design. If it ever needs to be stronger, make the telling better, not the teller special.
 
 ## NEXT (her list, in order)
 1. ~~A second Creator holding the rival fire~~ **DONE, see above.** What is left of it:  set a real `FIRE_TOKEN` on box 2 before
