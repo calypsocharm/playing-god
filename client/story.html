@@ -38,7 +38,7 @@
 </head>
 <body>
 <header>
-  <h1>The Story</h1>
+  <h1>The History Book</h1>
   <a href="/">← the village</a>
   <a href="diaries.html">diaries</a>
   <span class="spacer"></span>
@@ -55,39 +55,64 @@ async function load() {
   try { story = await (await fetch('/api/story')).json(); render(); }
   catch { $('book').innerHTML = '<div class="empty">The village is not answering.</div>'; }
 }
+// A history book: only what mattered. The frontispiece, where things stand today, the important
+// things kept from all the years, the seasons worth a title, and the last days in full.
 function render() {
   if (!story) return;
   const q = $('q').value.trim().toLowerCase();
   const quotesOn = $('quotesOn').checked, quietOn = $('quietOn').checked;
   const hl = (t) => q ? esc(t).replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), m => `<mark>${m}</mark>`) : esc(t);
-  const chapters = [...story.chapters].sort((a, b) => a.index - b.index);
-  const byIdx = new Map(chapters.map(c => [c.index, c]));
-  // Nights not covered by a chapter (older than the chapter log) get a plain heading.
-  const yd = story.yearDays / 4;
-  const nights = story.chronicle;
-  if (!nights.length) { $('book').innerHTML = '<div class="empty">Nothing has been written yet. The village writes at night.</div>'; return; }
-  const groups = new Map();
-  for (const n of nights) { const idx = Math.floor(n.day / yd); if (!groups.has(idx)) groups.set(idx, []); groups.get(idx).push(n); }
+  const yd = story.yearDays, yearOf = (d) => Math.floor((d || 0) / yd) + 1;
+  const hs = story.history || {}, st = story.standing || {};
+  const nights = story.chronicle || [];
   const isQuiet = (n) => (/A quiet day\. People worked/.test(n.text) || /^Nothing much\./.test(n.text)) && n.by !== 'told';
   const answered = story.goals.filter(g => g.done != null).length;
-  let html = `<div class="frontis"><h2>The Village</h2>${story.day} days · year ${Math.floor(story.day / story.yearDays) + 1} · ${answered} of ${story.goals.length} questions answered · they call the sky <b style="color:var(--warm)">${esc(story.skyName)}</b>${story.ended ? `<br><b style="color:var(--bad)">The book is closed.</b> Day ${story.ended.day}: ${esc(story.ended.why)}.` : ''}</div>`;
-  html += `<nav class="toc">` + [...groups.keys()].sort((a, b) => a - b).map(idx => { const ch = byIdx.get(idx); const yr = Math.floor(idx / 4) + 1; return `<a href="#ch${idx}">${ch ? esc(ch.title) : `Season ${idx + 1}`} <span style="opacity:.6">· year ${yr}</span></a>`; }).join('') + `</nav>`;
-  for (const idx of [...groups.keys()].sort((a, b) => a - b)) {
-    const ch = byIdx.get(idx);
-    let ns = groups.get(idx);
-    if (!quietOn) ns = ns.filter(n => !isQuiet(n) || ns.length <= 2);
-    if (q) ns = ns.filter(n => n.text.toLowerCase().includes(q) || (story.quotes[n.day] || []).some(x => x.text.toLowerCase().includes(q)));
-    if (!ns.length) continue;
-    const season = ch?.season || ['spring', 'summer', 'autumn', 'winter'][idx % 4];
-    const yr = Math.floor(idx / 4) + 1;
-    html += `<section class="chapter" id="ch${idx}"><h3>${ch ? esc(ch.title) : `An ordinary ${season}`}</h3><div class="sub">year ${yr} · ${season} · days ${idx * yd} to ${idx * yd + yd - 1}</div>`;
-    for (const n of ns) {
-      html += `<p class="${n.by === 'told' ? 'told' : ''}"><span class="daymark">day ${n.day}</span>${hl(n.text)}</p>`;
-      if (quotesOn) for (const qt of (story.quotes[n.day] || []).slice(0, 1)) html += `<blockquote>${hl(qt.text.length > 320 ? qt.text.slice(0, 317) + '…' : qt.text)}<cite>${esc(qt.name)}, that night</cite></blockquote>`;
-    }
-    html += `</section>`;
+  const sec = (title, body) => body ? `<section class="chapter"><h3>${title}</h3>${body}</section>` : '';
+  const li = (items) => `<p style="text-indent:0">${items.join('<br>')}</p>`;
+  let html = `<div class="frontis"><h2>The Village</h2>${story.day} days · year ${yearOf(story.day)} · ${answered} of ${story.goals.length} questions answered · they call the sky <b style="color:var(--warm)">${esc(story.skyName)}</b>${story.ended ? `<br><b style="color:var(--bad)">The book is closed.</b> Day ${story.ended.day}: ${esc(story.ended.why)}.` : ''}</div>`;
+  // where things stand
+  const stand = [];
+  for (const r of (st.recentDead || [])) stand.push(`<b>${esc(r.name)}</b> died on day ${r.day}, aged ${r.age ?? '?'}, of ${esc(r.cause || '')}${r.buried ? ', and lies at the stones' : ''}.`);
+  for (const l of (st.why || [])) if (!/was \d+.*died of/.test(l)) stand.push(esc(l));
+  if (st.council) stand.push(`The council: ${esc(st.council)}.`);
+  if (st.card) stand.push(`The sky turned ${esc(st.card)}`);
+  if (st.rival) stand.push(`${esc(st.rival[0].toUpperCase() + st.rival.slice(1))} toward the village.`);
+  html += sec(`Where things stand <span class="sub" style="display:inline;margin-left:8px">day ${st.dayOfYear ?? ''} of year ${yearOf(story.day)}, ${esc(st.season || '')}</span>`, li(stand.length ? stand : ['Everyone is fed, warm and whole. Nothing hangs over the village.']));
+  // the important things
+  const imp = [];
+  if ((hs.holidays || []).length) imp.push(`<b>Days the village keeps.</b> ${hs.holidays.map(x => `${esc(x.name)}, made by ${esc(x.by)} in year ${x.year} for ${esc(x.why || 'a reason no one wrote down')}, kept ${x.kept} time${x.kept === 1 ? '' : 's'}`).join('; ')}.`);
+  if ((hs.builds || []).length) imp.push(`<b>Raised.</b> ${hs.builds.map(x => `the ${esc(x.what)}${x.day != null ? ` in year ${yearOf(x.day)}` : ''}`).join(', ')}${(hs.raised || []).length ? `; chosen by vote at the meeting house: ${hs.raised.map(x => esc(x.what)).join(', ')}` : ''}.`);
+  if ((hs.answered || []).length) imp.push(`<b>Questions the village answered.</b> ${hs.answered.map(x => `${esc(x.what)} (year ${yearOf(x.day)})`).join('; ')}.`);
+  if ((hs.destinies || []).length) imp.push(`<b>Destinies come to pass.</b> ${hs.destinies.map(x => `${esc(x.name)}: "${esc(x.text)}" (day ${x.day})`).join('; ')}.`);
+  if ((hs.arts || []).length) imp.push(`<b>Arts of the village's own.</b> ${hs.arts.map(x => `${esc(x.name)} (${esc(x.by)})`).join(', ')}.`);
+  if ((hs.threats || []).length) imp.push(`<b>What came out of the pale.</b> ${hs.threats.map(x => `${esc(x.name)} in year ${yearOf(x.day)}, met ${x.ready ? 'ready' : 'unready'}`).join('; ')}.`);
+  if (hs.founded) imp.push(`<b>${esc(hs.founded.name)}</b> was founded past the edge on day ${hs.founded.day}, year ${yearOf(hs.founded.day)}.`);
+  html += sec('The important things', imp.length ? li(imp) : '');
+  // seasons worth a title
+  const notable = (story.chapters || []).filter(c => c.title && !/^An ordinary |^Season \d+|^A (spring|summer|autumn|winter) the sky moved$/.test(c.title));
+  const yds = yd / 4;
+  const byIdx = new Map(); for (const n of nights) { const idx = Math.floor(n.day / yds); if (!byIdx.has(idx)) byIdx.set(idx, []); byIdx.get(idx).push(n); }
+  let chapHtml = '';
+  for (const ch of notable.slice(-40)) {
+    let ns = (byIdx.get(ch.index) || []).filter(n => !isQuiet(n));
+    if (q) ns = ns.filter(n => n.text.toLowerCase().includes(q));
+    if (q && !ns.length && !ch.title.toLowerCase().includes(q)) continue;
+    const firstDay = ns[0]?.day ?? ch.index * yds;
+    chapHtml += `<div style="margin:0 0 22px"><h3 style="font-size:20px;margin:0">${hl(ch.title)}</h3><div class="sub">year ${yearOf(firstDay)} · ${esc(ch.season || '')}</div>${ns.slice(0, 2).map(n => `<p class="${n.by === 'told' ? 'told' : ''}"><span class="daymark">day ${n.day}</span>${hl(n.text)}</p>`).join('')}</div>`;
   }
-  if (story.dead.length) html += `<div class="gone">Gone: ${story.dead.map(d => `<b>${esc(d.name)}</b> (day ${d.day}, aged ${d.age ?? '?'}, ${esc(d.cause || '')})`).join(' · ')}</div>`;
+  html += sec('Seasons worth a name', chapHtml || (q ? '' : '<p style="text-indent:0" class="sub">Nothing yet worth a title.</p>'));
+  // the last days
+  let recent = nights.slice(-14);
+  if (!quietOn) recent = recent.filter(n => !isQuiet(n));
+  if (q) recent = recent.filter(n => n.text.toLowerCase().includes(q) || (story.quotes[n.day] || []).some(x => x.text.toLowerCase().includes(q)));
+  let recHtml = '';
+  for (const n of recent.reverse()) {
+    recHtml += `<p class="${n.by === 'told' ? 'told' : ''}"><span class="daymark">day ${n.day} · year ${yearOf(n.day)}</span>${hl(n.text)}</p>`;
+    if (quotesOn) for (const qt of (story.quotes[n.day] || []).slice(0, 1)) recHtml += `<blockquote>${hl(qt.text.length > 320 ? qt.text.slice(0, 317) + '…' : qt.text)}<cite>${esc(qt.name)}, that night</cite></blockquote>`;
+  }
+  html += sec('The last days', recHtml || '<p style="text-indent:0" class="sub">Nothing written yet. The village writes at night.</p>');
+  // gone, by year
+  if ((hs.deadByYear || []).length) html += `<div class="gone">Gone: ${hs.deadByYear.map(y => `<b>year ${y.year}</b> ${y.names.map(esc).join(', ')}`).join(' · ')}</div>`;
   $('book').innerHTML = html;
 }
 for (const id of ['quotesOn', 'quietOn']) $(id).addEventListener('change', render);

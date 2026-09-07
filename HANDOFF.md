@@ -115,6 +115,13 @@ dayPhase) and createWorld unpauses a saved world whose lastCard is `major:12`. R
 world; use `stillUntil` or a timed effect. Also: every way out of zoom (whole village / beyond / Esc / drag / wheel)
 now ends observing + ghost.
 
+## story.html is now "The History Book": DONE
+No season TOC, no "An ordinary X" chapters. Sections: frontispiece (year = day/yearDays, not chapter index/4), Where
+things stand (`standing`), The important things (`history`), Seasons worth a name (chapters whose title is not
+ordinary/"Season N"/"the sky moved", last 40, up to 2 non-quiet nights each), The last days (last 14 nights, quotes),
+Gone by year. `/api/story` now returns `history` + `standing`. Chapter year numbers come from night days, so they are
+right even where the clock was changed mid-life.
+
 ## Standing preferences / lessons
 - She wants to SEE things, not read cards (drawn scenes over text). "Claim" not "adopt". No prices/inventory counts to
   customers (different project, same instinct). Villagers must be able to refuse her; that's the game working.

@@ -60,7 +60,7 @@ const server = http.createServer(async (req, res) => {
     const quotes = {};
     for (const a of remote) for (const d of a.diary) if (d.by === 'remote') (quotes[d.day] = quotes[d.day] || []).push({ name: a.name, text: d.text });
     res.writeHead(200, { 'content-type': 'application/json' });
-    return res.end(JSON.stringify({ name: world.camp?.name || '', day: world.day, yearDays: World.yearDays(world), chapters: world.chapters || [], chronicle: world.chronicle, quotes, skyName: world.god.name, ended: world.ended || null, reports: world.reports || [], goals: Object.entries(World.GOALS).map(([k, label]) => ({ key: k, label, done: world.goals[k]?.done ?? null })), dead: world.agents.filter(a => !a.alive).map(a => ({ name: a.name, day: a.diedDay, age: a.ageAtDeath, cause: a.causeOfDeath })) }));
+    return res.end(JSON.stringify({ name: world.camp?.name || '', day: world.day, yearDays: World.yearDays(world), chapters: world.chapters || [], chronicle: world.chronicle, quotes, skyName: world.god.name, ended: world.ended || null, reports: world.reports || [], history: World.condensedHistory(world), standing: World.standingNow(world), goals: Object.entries(World.GOALS).map(([k, label]) => ({ key: k, label, done: world.goals[k]?.done ?? null })), dead: world.agents.filter(a => !a.alive).map(a => ({ name: a.name, day: a.diedDay, age: a.ageAtDeath, cause: a.causeOfDeath })) }));
   }
   if (url.pathname === '/api/state') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(World.publicState(world))); }
   let file = url.pathname === '/' ? '/index.html' : url.pathname;
