@@ -529,7 +529,12 @@ Answer the voice in your own words, and answer what it actually said or asked. I
 }
 function renderCommune(a, compact = false) {
   if (!a.alive) return a.guidance ? `<div class="muted">Guided: "${esc(a.guidance)}"</div>` : '';
-  if (!owned.has(a.id)) return `<div class="muted" style="margin:6px 0">Only ${esc(a.name)}'s higher self can speak to them: the tab whose model runs them. ${a.brain === 'remote' ? 'Someone else is their higher self.' : 'Claim them in the Higher Self tab to become theirs.'}${a.guidance ? ` They are guided: "${esc(a.guidance)}"` : ''}</div>`;
+  if (!owned.has(a.id)) {
+    const canTake = a.claimable || (a.owned && godOk);
+    const who = !a.owned ? 'No one is their higher self yet.' : a.connected ? 'Someone else is their higher self, and is here now.' : `Their higher self has been away ${a.ownerAway} day${a.ownerAway === 1 ? '' : 's'}. If that was you in another browser, the claim lives in that browser; claim them again here${godOk ? ' (as the Creator you can take anyone back)' : a.claimable ? '' : ` after ${state.yearDays} days away`}.`;
+    return `<div class="muted" style="margin:6px 0">Only ${esc(a.name)}'s higher self can speak to them: the browser whose model runs them. ${who}${a.guidance ? ` They are guided: "${esc(a.guidance)}"` : ''}</div>
+      ${canTake && a.alive ? `<div class="row" style="margin:4px 0 8px"><button class="act" data-adopt="${a.id}">Claim ${esc(a.name)} here</button></div>` : ''}`;
+  }
   const thread = communeThreads.get(a.id) || [];
   const lines = thread.map(t => `<div class="mem" style="${t.from === 'self' ? 'color:var(--warm)' : ''}"><span class="muted">${t.from === 'self' ? 'you' : esc(a.name)} · d${t.day}</span><br>${esc(t.text)}</div>`).join('');
   return `<div data-communebox="${a.id}">${compact ? '' : '<h3>You are their higher self <span class="muted">· the voice they have always had. They answer as themselves.</span></h3>'}
@@ -951,6 +956,8 @@ for (const host of [$('inspector'), $('owned')]) host.addEventListener('click', 
   if (step) { const id = step.dataset.diary; const a = state.agents.find(x => x.id === id); const cur = diaryPage.has(id) ? diaryPage.get(id) : a.diary.length - 1; diaryPage.set(id, cur + Number(step.dataset.step)); renderInspector(); return; }
   const cBtn = e.target.closest('[data-communesend]');
   if (cBtn) { const id = cBtn.dataset.communesend; const inp = cBtn.closest('[data-communebox]').querySelector('[data-commune]'); const text = inp.value.trim(); if (text) { send({ type: 'commune', agentId: id, text }); inp.value = ''; inp.blur(); } return; }
+  const claimBtn = e.target.closest('[data-adopt]');
+  if (claimBtn && $('inspector').contains(claimBtn)) { readBrainForm(); send({ type: 'adopt', agentId: claimBtn.dataset.adopt }); return; }
   const askBtn = e.target.closest('[data-communeask]');
   if (askBtn) { send({ type: 'commune', agentId: askBtn.dataset.communeask, text: askBtn.dataset.q }); return; }
   const mkBtn = e.target.closest('[data-communeguide]');
@@ -1156,8 +1163,8 @@ function renderBrainTab() {
   const per = brainCfg.perAgent || {};
   const provOpts = (sel) => `<option value="">(default brain)</option>` + Object.entries(Brain.PROVIDERS).map(([k, p]) => `<option value="${k}" ${sel === k ? 'selected' : ''}>${esc(p.label.split(' (')[0])}</option>`).join('');
   const ownedHtml = mine.length ? mine.map(a => `<div class="agentrow" style="flex-wrap:wrap;gap:6px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px"><span style="flex:1 1 100%"><b style="font-size:15px">${esc(a.name)}</b> ${a.alive ? `<button class="act" data-talkto="${a.id}" style="margin-left:6px">Open ${esc(a.name)}'s page</button>` : ''} <span class="muted">${a.alive ? `${a.age} · ${a.branch}` : 'dead'}${a.autopilot ? ' · autopilot' : ''} · mind: ${esc(cfgFor(a.id).provider)} ${esc(cfgFor(a.id).model || '')}</span></span>${a.alive ? `<div style="flex:1 1 100%">${renderCommune(a, true)}</div>` : ''}<select data-pa-prov="${a.id}" style="flex:1">${provOpts(per[a.id]?.provider || '')}</select><input data-pa-model="${a.id}" placeholder="model for ${esc(a.name)}" value="${esc(per[a.id]?.model || '')}" style="flex:1"><button class="act" data-release="${a.id}" title="stop being their higher self; they go on autopilot">Release</button></div>`).join('') : '<span class="muted">None yet. Claim one below, or birth a new villager.</span>';
-  const free = state.agents.filter(a => a.alive && !a.owned);
-  const freeHtml = free.length ? free.map(a => `<div class="agentrow"><span>${esc(a.name)} <span class="muted">${a.branch} · raised ${a.upbringing}</span></span><button class="act" data-adopt="${a.id}">Claim</button></div>`).join('') : '<span class="muted">Everyone has an owner.</span>';
+  const free = state.agents.filter(a => a.alive && !owned.has(a.id) && (a.claimable || (a.owned && godOk)));
+  const freeHtml = free.length ? free.map(a => `<div class="agentrow"><span>${esc(a.name)} <span class="muted">${a.branch} · raised ${a.upbringing}${a.owned ? ` · higher self away ${a.ownerAway} days` : ''}</span></span><button class="act" data-adopt="${a.id}">Claim</button></div>`).join('') : '<span class="muted">Everyone has a higher self who is here or has not been gone long.</span>';
   // Only touch the DOM when the lists actually change, so buttons stay clickable between ticks.
   // Leave the list alone while someone is editing a villager's mind.
   const editing = document.activeElement && $('owned').contains(document.activeElement);

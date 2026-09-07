@@ -149,7 +149,7 @@ wss.on('connection', (ws, req) => {
     try { handle(ws, c, m); } catch (e) { send(ws, { type: 'error', error: String(e.message || e) }); }
   });
   ws.on('close', () => {
-    for (const id of c.owned) { const a = World.byId(world, id); if (a) a.connected = false; }
+    for (const id of c.owned) { const a = World.byId(world, id); if (a) { a.connected = false; a.ownerSeen = world.day; } }
     clients.delete(ws);
     perIp.set(ip, Math.max(0, (perIp.get(ip) || 1) - 1));
   });
@@ -162,7 +162,7 @@ function handle(ws, c, m) {
       if (m.token) c.token = String(m.token).slice(0, 40);
       if (c.token && world.mod.bannedTokens[c.token]) { ws.close(4003, 'banned'); return; }
       // Reconnect any agents this token owns.
-      if (c.token) for (const a of world.agents) if (a.owner === c.token && a.alive) { a.connected = true; c.owned.add(a.id); send(ws, { type: 'adopted', agentId: a.id, token: c.token }); send(ws, { type: 'communeLog', agentId: a.id, thread: (a.commune || []).slice(-20) }); }
+      if (c.token) for (const a of world.agents) if (a.owner === c.token && a.alive) { a.connected = true; a.ownerSeen = world.day; c.owned.add(a.id); send(ws, { type: 'adopted', agentId: a.id, token: c.token }); send(ws, { type: 'communeLog', agentId: a.id, thread: (a.commune || []).slice(-20) }); }
       break;
     }
     case 'god': {
@@ -180,7 +180,13 @@ function handle(ws, c, m) {
       if (!allow(c, 'claim', 3, 60000)) return send(ws, { type: 'error', error: 'slow down: three claims a minute' });
       const a = World.byId(world, m.agentId);
       if (!a || !a.alive) return send(ws, { type: 'error', error: 'no such villager' });
-      if (a.owner && a.owner !== c.token) return send(ws, { type: 'error', error: `${a.name} already has an owner` });
+      if (a.owner && a.owner !== c.token) {
+        // A higher self who has been gone a village year has let go, whether they meant to or not. The Creator may always take someone back.
+        const away = a.connected ? 0 : world.day - (a.ownerSeen ?? world.day);
+        if (!c.godOk && away < World.yearDays(world)) return send(ws, { type: 'error', error: `${a.name} already has a higher self${away ? `, away ${away} days; after ${World.yearDays(world)} they can be claimed` : ''}` });
+        const old = [...clients.values()].find(x => x.token === a.owner); if (old) old.owned.delete(a.id);
+        World.remember(world, a, 'The voice you had went quiet a long time ago. A different one is there now, or the same one changed.', 0.8);
+      }
       // Nobody may be the higher self of more than five at once; the village is not one person's.
       if (c.token && world.agents.filter(x => x.alive && x.owner === c.token).length >= 5 && a.owner !== c.token) return send(ws, { type: 'error', error: 'You already hold five. Release one first.' });
       // Children cannot be adopted; a grown child's family has first claim for two seasons.
