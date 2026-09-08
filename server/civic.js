@@ -18,6 +18,32 @@ export function newBank() { return { coin: 150, savings: {}, loans: {}, civic: {
 export function newCouncil() { return { project: null, ballot: null, coin: 0, wagesPaid: 0, income: 0, built: [], lastBallot: -99, votesCast: 0 }; }
 
 // Older worlds had a store that was also the bank and the builder. Split it.
+// An old world whose bank was allowed to promise more than it held is put right once: what people
+// keep there is scaled back to the coin actually in the box, largest balances taking the loss
+// first. It is not a kindness, it is the truth, and it lets the bank lend to the hungry again.
+export function reconcileBank(w, event) {
+  const owed = owedToSavers(w), have = Math.max(0, Math.floor(w.bank.coin));
+  if (owed <= have) return 0;
+  const short = owed - have;
+  const ids = Object.keys(w.bank.savings).sort((a, b) => w.bank.savings[b] - w.bank.savings[a]);
+  let left = short;
+  for (const id of ids) {                     // proportional, but the biggest balances carry it
+    if (left <= 0) break;
+    const n = Math.floor(w.bank.savings[id] || 0);
+    const cut = Math.min(n, Math.ceil(n * (short / owed)));
+    w.bank.savings[id] = n - cut; left -= cut;
+    if (w.bank.savings[id] <= 0) delete w.bank.savings[id];
+  }
+  for (const id of Object.keys(w.bank.savings)) {   // any rounding remainder off the top
+    if (left <= 0) break;
+    const n = Math.floor(w.bank.savings[id] || 0), cut = Math.min(n, left);
+    w.bank.savings[id] = n - cut; left -= cut;
+    if (w.bank.savings[id] <= 0) delete w.bank.savings[id];
+  }
+  if (event) event(w, `The bank opens its box and there is not what it said there was. What everyone keeps there is written down to the ${have} coin that is really in it; ${short} coin that was only ever ink is gone.`, 'trade');
+  return short;
+}
+
 export function ensure(w) {
   if (!w.bank) {
     w.bank = newBank();
@@ -67,7 +93,7 @@ export function borrow(w, a, n, remember, event) {
   n = Math.max(1, Math.min(LOAN_CAP, Math.floor(n || 5)));
   const loan = w.bank.loans[a.id]; const owed = loan?.owed || 0;
   if (loan?.defaulted) { remember(w, a, 'The bank will not lend to you. You did not pay last time.', 0.5); return false; }
-  const room = Math.min(n, LOAN_CAP - owed, Math.floor(w.bank.coin));
+  const room = Math.min(n, LOAN_CAP - owed, lendable(w));
   if (room < 1) { remember(w, a, owed >= LOAN_CAP ? 'You already owe the bank all it will lend.' : 'The bank had nothing to lend.', 0.4); return false; }
   w.bank.coin -= room; a.inv.coin = (a.inv.coin || 0) + room;
   w.bank.loans[a.id] = { owed: owed + room, since: loan?.since ?? w.day, name: a.name, lastPaid: loan?.lastPaid };
@@ -96,12 +122,32 @@ export function loansNightly(w, a, seasonStart, daysPerSeason, remember, event, 
   if (loan.owed <= 0) delete w.bank.loans[a.id];
 }
 // When the season turns, savings grow, if the bank can pay it.
+// A bank that lends out other people's savings and then eats a default has quietly spent money it
+// was only holding. Do that for six hundred days and it owes 10,735 coin, holds none, can give
+// nobody their savings back and can lend nothing to anyone who is hungry - which is exactly how her
+// village came to bury a one-year-old for hunger in a summer with forty food on the shelf.
+// So: what people keep here is kept, not lent. The bank lends only what it owns outright - the
+// interest it has earned on its own loans - and a default costs the bank, never a saver.
+export const RESERVE = 1;
+export const outstanding = (w) => Object.values(w.bank.loans || {}).reduce((n, l) => n + Math.floor(l?.owed || 0), 0) + Math.floor(w.bank.civic?.owed || 0);
+export const lendable = (w) => Math.max(0, Math.floor(w.bank.coin - owedToSavers(w)));   // its own money only
+export const owedToSavers = (w) => Object.values(w.bank.savings || {}).reduce((n, x) => n + Math.floor(x || 0), 0);
+// What the bank has made and does not owe anybody: the till, less every coin it is holding for
+// somebody else. Interest is paid out of this and nothing else.
+export const freeReserve = (w) => Math.floor(w.bank.coin) - owedToSavers(w);
+
 export function interest(w, byId, remember) {
+  // This used to pay savers by moving coin out of the till - the same till that holds the savers'
+  // own money - so every payment made the bank less able to honour the balance it had just raised.
+  // At 5% a season, with a season every three days, it ended owing 10,735 coin and holding none,
+  // and then it could neither give anyone their savings back nor lend to anyone who was hungry.
+  // A season's interest now comes only out of what the bank has actually earned and does not owe.
   let paid = 0;
+  let free = freeReserve(w);
   for (const [id, n] of Object.entries(w.bank.savings)) {
     const gain = Math.floor(n * INTEREST);
-    if (gain < 1 || w.bank.coin < gain) continue;
-    w.bank.savings[id] = n + gain; w.bank.coin -= gain; paid += gain;
+    if (gain < 1 || free < gain) continue;
+    w.bank.savings[id] = n + gain; free -= gain; paid += gain;
     const a = byId(w, id); if (a && a.alive) remember(w, a, `The bank added ${gain} coin to what you keep there. It is ${w.bank.savings[id]} now.`, 0.3);
   }
   w.bank.interestPaid = (w.bank.interestPaid || 0) + paid;
@@ -111,8 +157,10 @@ export function interest(w, byId, remember) {
 export function inherit(w, a, heir) {
   const n = Math.floor(w.bank.savings[a.id] || 0); if (!n) return 0;
   delete w.bank.savings[a.id];
-  if (heir) w.bank.savings[heir.id] = (w.bank.savings[heir.id] || 0) + n; else { w.bank.coin -= n; w.council.coin += n; }
-  return n;
+  if (heir) { w.bank.savings[heir.id] = (w.bank.savings[heir.id] || 0) + n; return n; }
+  const pay = Math.max(0, Math.min(n, Math.floor(w.bank.coin)));   // never more than is in the box
+  w.bank.coin -= pay; w.council.coin += pay;
+  return pay;
 }
 
 // ---------- the council ----------

@@ -155,6 +155,7 @@ export function createWorld(saved) {
     saved.store.loans = saved.store.loans || {}; saved.store.project = saved.store.project ?? null; saved.store.wagesPaid = saved.store.wagesPaid || 0;
     if (saved.store.coin < 120 && !saved.store.funded) { saved.store.coin += 200; saved.store.funded = true; }
     C.ensure(saved); Tarot.ensure(saved); Rv.ensure(saved); Fire.ensureGod(saved); backfillLegends(saved);
+    C.reconcileBank(saved, event);   // a bank that promised more than it held is put right once
     if (saved.paused && saved.lastCard?.key === 'major:12' && !saved.ended) { saved.paused = false; saved.stillUntil = saved.day + 1; } if (saved.rival?.seen) reveal(saved, saved.rival.x, saved.rival.y, 5);
     for (const a of saved.agents) { if (a.inv && a.inv.coin == null) a.inv.coin = 3; a.upgrades = a.upgrades || {}; }
     if (!saved.threat && !saved.ended) rollThreat(saved);
@@ -697,6 +698,7 @@ export function step(w, remoteActions) {
   if (isNight) nightPhase(w);
   else dayPhase(w, remoteActions);
   if (w.tick === 3) funeralIfDue(w);
+  feedTheStarving(w);   // before anyone dies of hunger with food on the shelf
   w.tick = (w.tick + 1) % TICKS_PER_DAY;
   if (w.tick === 0) newDay(w);
 }
@@ -2047,6 +2049,27 @@ function newDay(w) {
   if (w.threat && !w.threat.landed) {
     T.readiness(w, alive(w), A.alive(w), w.builds, w.store);
     if (w.day >= w.threat.lands) landThreat(w);
+  }
+}
+
+// ---------- the shelf of last resort ----------
+// The store is the village's, not a shop that happens to stand in it. Anyone with nothing to eat,
+// nothing to spend and nothing coming is given bread off the shelf before they starve. This is the
+// answer to a village burying a one-year-old for hunger in a summer the chronicle calls "the fields
+// full", with forty food sitting on the shelf and no way for a broke child to reach it.
+function feedTheStarving(w) {
+  const shelf = w.store?.shelf; if (!shelf) return;
+  for (const a of alive(w)) {
+    if (a.body.food > 0.3 || (a.inv.food || 0) >= 0.5) continue;         // not starving, or has food
+    if ((a.inv.coin || 0) >= (I.buyPrice(w.store, 'food') || 2)) continue;  // can buy, let them
+    const from = (shelf.food || 0) >= 1 ? 'food' : (shelf.bread || 0) >= 1 ? 'bread' : null;
+    if (!from) continue;                                                 // the shelf is bare; nothing to give
+    shelf[from] -= 1; a.inv.food = (a.inv.food || 0) + 1;
+    w.store.given = (w.store.given || 0) + 1;
+    event(w, `${a.name} has nothing and is given ${from} off the shelf. The store is the village's before it is a shop.`, 'share', [a.id]);
+    remember(w, a, `You had nothing at all and they gave you ${from} off the shelf without asking anything for it. You will not forget that either.`, 0.85);
+    a.faith = B.clamp((a.faith || 0) + 0.02, -1, 1);
+    for (const o of alive(w)) if (o !== a && Math.random() < 0.3) remember(w, o, `${a.name} had nothing, so the shelf fed them. That is what it is for.`, 0.4);
   }
 }
 

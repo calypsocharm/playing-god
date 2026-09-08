@@ -148,6 +148,32 @@ found the lake, hills and ruin on their own - but **nothing had ever been found 
   - the fire tells the legends round-robin, by whoever is sitting there with a story in them or faith over 0.3, and
   that is the design. If it ever needs to be stronger, make the telling better, not the teller special.
 
+## The famine of day 1941, and the bank that caused it (fixed 2026-09-08)
+She reported everyone starving "even though the fields were full and winter was less harsh". She was right,
+and it was the bank.
+
+- `interest()` paid savers **out of the bank's own till** - the till holding the savers' coin. Assets fell as
+  liabilities rose, every season. At 5% a season with a season every 3 days and ~200 seasons run at `tickMs 3000`,
+  the bank ended **owing 10,735 and holding 0**, with only 240 real coin in every living hand combined.
+- `borrow()` then lent down to the last coin, and defaults ate the rest. So: `withdraw` told savers *"the bank has
+  lent your coin out and cannot give it back today"*, and `borrow` - **the scripted brain's entire safety net for
+  a hungry, broke villager** (scripted.js: `b.food < 0.35 && inv.food < 0.3 && coin < 2` -> borrow) - failed too.
+  A starving villager in a village with 40 food on the shelf had no path to it at all. Eight hunger deaths in
+  fifteen days, including a one-year-old, in a summer the chronicle calls "the fields full".
+- **Fixes.** `RESERVE = 1`: what people keep in the bank is *kept, not lent*. `lendable(w) = coin - owedToSavers(w)`,
+  so the bank lends only its own capital (it is founded with 150) and a default costs the bank, never a saver.
+  `interest()` pays only out of `freeReserve(w)` and no longer moves the till at all. `inherit()` with no heir pays
+  out at most what is in the box.
+- **`C.reconcileBank(w, event)`** runs once on load: an already-broken bank is written down to the coin actually in
+  the box, largest balances taking the loss first, announced as an event. Idempotent.
+- **`feedTheStarving(w)`** in world.js, every tick: anyone with an empty belly, no food and no coin is given food or
+  bread off the shelf, as an event, and remembers it. The store is the village's before it is a shop. It cannot
+  invent food - a bare shelf feeds nobody - and anyone who can afford to buy is left to buy.
+- `test/smoke_bank.mjs`. The headline check: **300 days of full fields and a mild winter buries nobody for hunger**,
+  and the bank ends owing exactly what it holds.
+- **Still open:** her world is `ended` ("two seasons of loss", day 1941) and therefore paused. Reviving it means
+  clearing `w.ended`, `w.paused` and `w.despair`; "Begin again" instead throws away 1941 days. **Ask her which.**
+
 ## NEXT (her list, in order)
 1. ~~A second Creator holding the rival fire~~ **DONE, see above.** What is left of it:  set a real `FIRE_TOKEN` on box 2 before
    handing the key to anybody, and decide whether the second player gets their own page.
