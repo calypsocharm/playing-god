@@ -171,6 +171,20 @@ and it was the bank.
   invent food - a bare shelf feeds nobody - and anyone who can afford to buy is left to buy.
 - `test/smoke_bank.mjs`. The headline check: **300 days of full fields and a mild winter buries nobody for hunger**,
   and the bank ends owing exactly what it holds.
+- **Where the interest comes from now (her call, 2026-09-08).** Savers earn, but out of money the bank
+  actually made. `BANK_SHARE = 0.25` of the **nightly tithe** (store -> council) goes to the bank instead - the one
+  flow that runs every night whether or not anyone trades or builds, and what makes the payment steady. Plus
+  `FEE = 0.02` on the store counter (tiny; villagers rarely trade) and `CIVIC_RATE = 0.04` a season on what the
+  council owes, charged only when the council can pay so a public works programme is never chased into a spiral.
+  `INTEREST` dropped **0.05 -> 0.03**: a higher rate is *unaffordable*, so it gets skipped, and paradoxically pays
+  savers less often. At 0.03 it pays on roughly 40% of season turns (was 12%).
+- Two more leaks found while balancing: **civic lending** took from `w.bank.coin` directly, so the council could
+  borrow the villagers' deposits (now `lendable(w) - BANK_FLOAT`), and personal loan **defaults** ate savers'
+  money. Both closed by `RESERVE = 1`.
+- **Not guaranteed, on purpose:** how often savers are paid tracks how the village is doing, and a village whose
+  council borrows hard can honestly pay nothing that season - the bank's own money is either lent out earning or
+  free to pay interest, never both. About one village in ten never gets rich enough to pay at all. `smoke_bank.mjs`
+  prints the frequency rather than asserting it; asserting it makes a flaky test.
 - **Still open:** her world is `ended` ("two seasons of loss", day 1941) and therefore paused. Reviving it means
   clearing `w.ended`, `w.paused` and `w.despair`; "Begin again" instead throws away 1941 days. **Ask her which.**
 

@@ -2057,7 +2057,7 @@ function newDay(w) {
 // nothing to spend and nothing coming is given bread off the shelf before they starve. This is the
 // answer to a village burying a one-year-old for hunger in a summer the chronicle calls "the fields
 // full", with forty food sitting on the shelf and no way for a broke child to reach it.
-function feedTheStarving(w) {
+export function feedTheStarving(w) {
   const shelf = w.store?.shelf; if (!shelf) return;
   for (const a of alive(w)) {
     if (a.body.food > 0.3 || (a.inv.food || 0) >= 0.5) continue;         // not starving, or has food
@@ -2223,7 +2223,8 @@ function closeSeason(w) {
   const prayers = (w.prayers || []).filter(p => p.day >= since).length;
   const report = T.seasonReport(w, endedSeason, year, alive(w), w.seasonBorn || [], w.seasonDeaths || [], w.seasonHealed || 0, questions, w.seasonHolidays || 0, works, prayers);
   if (w.seasonBuilt) { report.earned = Math.min(6, report.earned + 1); report.why.push(`1 for ${w.seasonBuilt === 1 ? 'a building' : w.seasonBuilt + ' buildings'} the village chose and raised`); }
-  const interest = C.interest(w, byId, remember); if (interest) event(w, `The bank pays ${interest} coin on what people keep there.`, 'trade');
+  const fee = C.storeFee(w);   // the bank's keeping-fee on the season's trade: what it pays savers out of
+  const interest = C.interest(w, byId, remember); if (interest) event(w, `The bank pays ${interest} coin on what people keep there${fee ? `, out of the ${fee} it took for keeping the store's money` : ''}.`, 'trade');
   w.god.attention = Math.max(0, Math.min(w.god.max, w.god.attention + report.earned));
   Fire.weighFire(w);   // the far fire is weighed too, on its own terms, in its own log
   event(w, `The ${endedSeason} is weighed: ${report.earned >= 0 ? '+' : ''}${report.earned} attention. ${report.why.join('; ')}.`, 'season');

@@ -11,7 +11,7 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 export const BALLOT_DAYS = 3;          // how long a ballot stays open
 export const LOAN_CAP = 20;            // most a person may owe the bank
-export const INTEREST = 0.05;          // paid on savings when the season turns
+export const INTEREST = 0.03;         // a season's interest on savings, paid only out of what the bank earned
 export const BANK_FLOAT = 30;          // the bank keeps this much back from the council
 
 export function newBank() { return { coin: 150, savings: {}, loans: {}, civic: { owed: 0, lent: 0, repaid: 0 }, ledger: [], interestPaid: 0 }; }
@@ -136,6 +136,32 @@ export const owedToSavers = (w) => Object.values(w.bank.savings || {}).reduce((n
 // somebody else. Interest is paid out of this and nothing else.
 export const freeReserve = (w) => Math.floor(w.bank.coin) - owedToSavers(w);
 
+// Where the interest actually comes from. The store keeps the village's money at the bank, and the
+// bank takes a penny in the pound of what passes over the counter for keeping it safe. It is the
+// bank's own earnings, so it is the bank's own to pay out - and when trade is slow, savers earn
+// less, which is the truth of the thing. The store always keeps its float of 10 to pay a wage.
+export const FEE = 0.02;          // of what passes over the store counter
+export const BANK_SHARE = 0.25;   // of the nightly tithe, for keeping the village's books
+export const CIVIC_RATE = 0.04;   // a season's interest on what the council owes the bank
+export function storeFee(w) {
+  let earned = 0;
+  // The counter. Villagers trade at the store rarely, so this alone funds almost nothing.
+  const since = w.bank.feeDay ?? -1;
+  const turnover = (w.store.ledger || []).filter(x => (x.day ?? 0) > since).reduce((n, x) => n + Math.floor(x.coin || 0), 0);
+  w.bank.feeDay = w.day;
+  const fee = Math.min(Math.floor(turnover * FEE), Math.max(0, Math.floor(w.store.coin - 10)));
+  if (fee >= 1) { w.store.coin -= fee; w.bank.coin += fee; earned += fee; }
+  // The council, which is the bank's real debtor: it borrows to pay wages on whatever the village
+  // voted to raise, and it used to repay the principal and not a penny more. It pays a season's
+  // interest now, and only when it can - a public works programme is not chased into a debt spiral.
+  const due = Math.floor((w.bank.civic?.owed || 0) * CIVIC_RATE);
+  const spare = Math.max(0, Math.floor(w.council.coin - 5));
+  const pay = Math.min(due, spare);
+  if (pay >= 1) { w.council.coin -= pay; w.bank.coin += pay; w.bank.civic.paidInterest = (w.bank.civic.paidInterest || 0) + pay; earned += pay; }
+  w.bank.earned = (w.bank.earned || 0) + earned;
+  return earned;
+}
+
 export function interest(w, byId, remember) {
   // This used to pay savers by moving coin out of the till - the same till that holds the savers'
   // own money - so every payment made the bank less able to honour the balance it had just raised.
@@ -216,7 +242,9 @@ export function commission(w, key, event, remember, living) {
   const coinNeed = Math.max(0, (spec.cost.coin || 0) - (b.have.coin || 0));
   const units = Object.entries(spec.cost).filter(([m]) => m !== 'coin').reduce((s, [m, n]) => s + Math.max(0, n - (b.have[m] || 0)), 0);
   const want = coinNeed + Math.min(units, 60) - c.coin;
-  const lend = Math.max(0, Math.min(want, Math.floor(w.bank.coin) - BANK_FLOAT));
+  // The council borrows from the bank's own money, never from what the village keeps there. Public
+  // works are not a reason to spend somebody's savings without asking them.
+  const lend = Math.max(0, Math.min(want, lendable(w) - BANK_FLOAT));
   if (lend > 0) { w.bank.coin -= lend; c.coin += lend; w.bank.civic.owed += lend; w.bank.civic.lent += lend; note(w, { who: 'the council', lent: lend }); }
   if (coinNeed > 0 && c.coin >= coinNeed) { c.coin -= coinNeed; b.have.coin = (b.have.coin || 0) + coinNeed; }
   event(w, `The council takes on the ${spec.label}${lend ? ` and borrows ${lend} coin from the bank` : ''}: a coin for every material brought to the work${c.coin ? '' : ', once the council has coin to pay'}.`, 'build');
@@ -234,7 +262,15 @@ export function payWage(w, a, units, remember) {
 export function nightly(w, living, isFound, event, remember, isChild) {
   const c = w.council;
   // the tithe
-  if (w.store.coin > 40) { const t = Math.max(1, Math.floor(w.store.coin * 0.02)); w.store.coin -= t; c.coin += t; c.income = (c.income || 0) + t; }
+  if (w.store.coin > 40) {
+    const t = Math.max(1, Math.floor(w.store.coin * 0.02)); w.store.coin -= t;
+    // The bank takes a small share of the tithe for keeping the village's books and its money. It is
+    // the one flow that runs every night whether or not anyone is trading or building, so it is what
+    // makes the interest on savings steady instead of a thing that happens twice a year.
+    const keep = Math.floor(t * BANK_SHARE);
+    if (keep >= 1) { w.bank.coin += keep; w.bank.earned = (w.bank.earned || 0) + keep; }
+    c.coin += t - keep; c.income = (c.income || 0) + (t - keep);
+  }
   // the project
   if (c.project && w.builds[c.project]?.done) {
     const spec = I.BUILDS[c.project];
